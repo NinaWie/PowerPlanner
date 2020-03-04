@@ -1,0 +1,6 @@
+powerenv/
+.DS_Store
+*.png
+.ipynb_checkpoints/
+.vscode/
+power_planner.code-workspace
