@@ -1,7 +1,6 @@
 # import matplotlib.pyplot as plt
 import numpy as np
 import time
-import os
 import datetime
 import json
 
@@ -35,7 +34,7 @@ print("defined pylon distances in raster:", PYLON_DIST_MIN, PYLON_DIST_MAX)
 
 # READ IN FILES
 data = DataReader(PATH_FILES)
-## read all tif files in main folder and sum up:
+# prev version: read all tif files in main folder and sum up:
 # tifs, files = data.read_in_tifs(PATH_FILES)
 # instance = np.sum(tifs, axis=0)
 instance_corr = data.get_hard_constraints(CORR_PATH, HARD_CONS_PATH)

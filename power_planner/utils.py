@@ -51,21 +51,21 @@ def reduce_instance(img, square):
             new_img[i, j] = np.mean(patch)
     return new_img
 
+
 def get_shift_transformed(shifts):
-    
     shift_tuples = []
     for shift in shifts:
-        if shift[0]<0:
-            tup1 = (0,-shift[0])
+        if shift[0] < 0:
+            tup1 = (0, -shift[0])
         else:
-            tup1 = (shift[0],0)
-        if shift[1]<0:
-            tup2 = (0,-shift[1])
+            tup1 = (shift[0], 0)
+        if shift[1] < 0:
+            tup2 = (0, -shift[1])
         else:
-            tup2 = (shift[1],0)
-        shift_tuples.append((tup1,tup2))
-    
+            tup2 = (shift[1], 0)
+        shift_tuples.append((tup1, tup2))
     return shift_tuples
+
 
 def plot_path(instance, path, out_path=None):
     # expand to greyscale

@@ -74,6 +74,7 @@ class WeightedGraph():
         print("cost_rest", self.cost_rest.shape)
 
         for i in range(len(shift_tuples)):
+            tic = time.time()
             costs_shifted = np.pad(
                 self.cost_rest, shift_tuples[i], mode='constant'
             )
@@ -98,9 +99,11 @@ class WeightedGraph():
             out = np.swapaxes(
                 np.asarray([inds_orig, inds_shifted, weights_list]), 1, 0
             )[pos_inds]
+            print("finished number", i, "of defining edge list", time.time()-tic)
 
             # add edges
             self.graph.add_edge_list(out, eprops=[self.weight])
+            print("finished", i, "of adding edges to graph", time.time()-tic)
 
     def shortest_path(self, source_ind, target_ind):
         # ### Compute shortest path
