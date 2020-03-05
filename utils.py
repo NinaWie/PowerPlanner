@@ -19,7 +19,7 @@ def normalize(instance):
 
 
 def get_donut(radius_low, radius_high):
-    img_size = radius_high + 10
+    img_size = int(radius_high + 10)
     # xx and yy are 200x200 tables containing the x and y coordinates as values
     # mgrid is a mesh creation helper
     xx, yy = np.mgrid[-img_size:img_size, -img_size:img_size]
@@ -51,18 +51,36 @@ def reduce_instance(img, square):
             new_img[i, j] = np.mean(patch)
     return new_img
 
+def get_shift_transformed(shifts):
+    
+    shift_tuples = []
+    for shift in shifts:
+        if shift[0]<0:
+            tup1 = (0,-shift[0])
+        else:
+            tup1 = (shift[0],0)
+        if shift[1]<0:
+            tup2 = (0,-shift[1])
+        else:
+            tup2 = (shift[1],0)
+        shift_tuples.append((tup1,tup2))
+    
+    return shift_tuples
 
-def plot_path(instance, path):
+def plot_path(instance, path, out_path=None):
     # expand to greyscale
     expanded = np.expand_dims(instance, axis=2)
     expanded = np.tile(expanded, (1, 1, 3))  # overwrite instance by tiled one
     # colour nodes in path in red
     for (x, y) in path:
-        expanded[x, y] = [0.9, 0.2, 0.2]  # colour red
+        expanded[x - 2:x + 2, y - 2:y + 2] = [0.9, 0.2, 0.2]  # colour red
 
-    plt.figure(figsize=(20, 10))
+    plt.figure(figsize=(25, 15))
     plt.imshow(expanded)
-    plt.show()
+    if out_path is not None:
+        plt.savefig(out_path)
+    else:
+        plt.show()
 
 
 def plot_graph(g):

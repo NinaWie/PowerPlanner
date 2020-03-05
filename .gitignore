@@ -1,6 +1,9 @@
 powerenv/
+__pycache__/
 .DS_Store
 *.png
 .ipynb_checkpoints/
 .vscode/
 power_planner.code-workspace
+outputs/
+test_file.py

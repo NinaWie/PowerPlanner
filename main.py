@@ -1,94 +1,73 @@
 # import matplotlib.pyplot as plt
 import numpy as np
 import time
-from graph_tool.all import Graph, shortest_path  # *
 import os
+import datetime
+import json
 
-from data_reader import read_in_tifs, get_hard_constraints
-from utils import reduce_instance, normalize, get_half_donut, plot_path
+from data_reader import DataReader
+# read_in_tifs, get_hard_constraints, get_cost_surface
+from utils import reduce_instance, normalize, get_half_donut, plot_path, get_shift_transformed
+
+from weighted_graph import WeightedGraph
 
 # define paths:
 PATH_FILES = "/Users/ninawiedemann/Downloads/tif_ras_buf"
-HARD_CONS_PATH = os.path.join(PATH_FILES, "hard_constraints")
-CORR_PATH = os.path.join(PATH_FILES, "corridor")
+HARD_CONS_PATH = "hard_constraints"
+CORR_PATH = "corridor/Corridor_BE.tif"
+
+OUT_PATH = "outputs/path_result" + str(datetime.datetime.utcnow())
 
 # define hyperparameters:
 RASTER = 10
 PYLON_DIST_MIN = 150
 PYLON_DIST_MAX = 250
 
-DOWNSCALE = True
+DOWNSCALE = False
 SCALE_PARAM = 5
 
-# get tifs and constraints
-tifs, files = read_in_tifs(PATH_FILES)
-instance_corr = get_hard_constraints(CORR_PATH, HARD_CONS_PATH)
+PYLON_DIST_MIN /= RASTER
+PYLON_DIST_MAX /= RASTER
+if DOWNSCALE:
+    PYLON_DIST_MIN /= SCALE_PARAM
+    PYLON_DIST_MAX /= SCALE_PARAM
+print("defined pylon distances in raster:", PYLON_DIST_MIN, PYLON_DIST_MAX)
 
-# TODO: next part is not finalized
-instance = np.sum(tifs, axis=0)
-print("shappe of summed tifs", instance.shape)
+# READ IN FILES
+data = DataReader(PATH_FILES)
+## read all tif files in main folder and sum up:
+# tifs, files = data.read_in_tifs(PATH_FILES)
+# instance = np.sum(tifs, axis=0)
+instance_corr = data.get_hard_constraints(CORR_PATH, HARD_CONS_PATH)
+instance = data.get_cost_surface("corridor/COSTSURFACE.tif")
+print("shape of instance", instance.shape)
 
 # scale down to simplify
 if DOWNSCALE:
+    print("Image downscaled by ", SCALE_PARAM)
     instance = reduce_instance(instance, SCALE_PARAM)
     instance_corr = reduce_instance(instance_corr, SCALE_PARAM)
 
 instance_norm = normalize(instance)
 
-x_len, y_len = instance_norm.shape
+donut_tuples = get_half_donut(PYLON_DIST_MIN, PYLON_DIST_MAX)
 
-# node to pos mapping
-node_pos = [
-    (i, j) for i in range(x_len) for j in range(y_len) if instance_corr[i, j]
-]
-# pos to node mapping
-pos_node = {node_pos[i]: i for i in range(len(node_pos))}
+# Define graph
+graph = WeightedGraph(instance_norm, instance_corr)
+graph.add_nodes()
 
-# ### Define edges
-tic = time.time()
-donut_tuples = get_half_donut(2.5, 5)
-edge_list = []
+# old version: graph.add_edges_old(donut_tuples)
+shift_tuples = get_shift_transformed(donut_tuples)
+graph.add_edges(donut_tuples, shift_tuples)
 
-for n, (i, j) in enumerate(node_pos):
-    # n is the name of the node in the graph (=index), (i,j) the position
-    weight_node = 1 - instance_norm[i, j]
-    for (x, y) in donut_tuples:
-        new_x = i + x
-        new_y = j + y
-        if new_x >= 0 and new_x < x_len and new_y >= 0 and new_y < y_len:
-            if instance_corr[new_x, new_y]:  # inside corridor
-                weight = 1 - instance_norm[new_x, new_y] + weight_node
-                edge_list.append(
-                    [n, pos_node[(new_x, new_y)],
-                     round(weight, 3)]
-                )
-print("time to build edge list:", time.time() - tic)
-
-# ### Add nodes and edges to graph
-G = Graph(directed=False)
-weight = G.new_edge_property("float")
-
-# add nodes to graph
-vlist = G.add_vertex(len(node_pos))
-print("added nodes:", len(list(vlist)))
-
-# add edges and properties to the graph
-G.add_edge_list(edge_list, eprops=[weight])
-print("added edges:", len(list(G.edges())))
-
-# ### Compute shortest path
-tic = (time.time())
-SOURCE = 0
-TARGET = len(node_pos) - 1
-vertices_path, edges_path = shortest_path(
-    G,
-    G.vertex(SOURCE),
-    G.vertex(TARGET),
-    weights=weight,
-    negative_weights=True
-)
-path = [node_pos[G.vertex_index[v]] for v in vertices_path]
-print("time for shortest path", time.time() - tic)
+# Compute path
+SOURCE_IND = 0
+TARGET_IND = graph.n_vertices - 1
+path = graph.shortest_path(SOURCE_IND, TARGET_IND)
 
 # plot the result
-plot_path(instance_norm, path)
+plot_path(instance_norm, path, out_path=OUT_PATH + ".png")
+
+# save the path as a json:
+with open(OUT_PATH + ".json", "w") as outfile:
+    json.dump(path, outfile)
