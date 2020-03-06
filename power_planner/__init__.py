@@ -1,0 +1,1 @@
+from .utils import reduce_instance

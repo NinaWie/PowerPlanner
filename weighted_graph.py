@@ -5,7 +5,7 @@ import time
 
 class WeightedGraph():
 
-    def __init__(self, cost_instance, hard_constraints):
+    def __init__(self, cost_instance, hard_constraints, verbose=1):
         assert cost_instance.shape == hard_constraints.shape
         # , "Cost size must be equal to corridor definition size!"
 
@@ -32,12 +32,19 @@ class WeightedGraph():
         self.graph = Graph(directed=False)
         self.weight = self.graph.new_edge_property("float")
 
+        # print statements:
+        self.verbose = verbose
+
     def add_nodes(self):
         tic = time.time()
         # add nodes to graph
         vlist = self.graph.add_vertex(len(self.node_pos))
         self.n_vertices = len(list(vlist))
-        print("Added nodes:", self.n_vertices, "in time:", time.time() - tic)
+        if self.verbose:
+            print(
+                "Added nodes:", self.n_vertices, "in time:",
+                time.time() - tic
+            )
 
     def add_edges_old(self, shifts):
         # Define edges
@@ -57,24 +64,27 @@ class WeightedGraph():
                                 round(weight, 3)
                             ]
                         )
-        print("time to build edge list:", time.time() - tic)
+        if self.verbose:
+            print("time to build edge list:", time.time() - tic)
 
         tic = time.time()
         # add edges and properties to the graph
         self.graph.add_edge_list(edge_list, eprops=[self.weight])
-        print("added edges:", len(list(self.graph.edges())))
+        if self.verbose:
+            print("added edges:", len(list(self.graph.edges())))
 
-        print("finished adding edges", time.time() - tic)
+            print("finished adding edges", time.time() - tic)
 
     def add_edges(self, shifts, shift_tuples):
+        tic_function = time.time()
         inds_orig = self.pos2node[self.hard_constraints > 0]
 
         self.cost_rest = self.cost_instance * (self.hard_constraints >
                                                0).astype(int)
-        print("cost_rest", self.cost_rest.shape)
+        n_edges = 0
 
         for i in range(len(shift_tuples)):
-            tic = time.time()
+            tic_edges = time.time()
             costs_shifted = np.pad(
                 self.cost_rest, shift_tuples[i], mode='constant'
             )
@@ -99,14 +109,29 @@ class WeightedGraph():
             out = np.swapaxes(
                 np.asarray([inds_orig, inds_shifted, weights_list]), 1, 0
             )[pos_inds]
-            print("finished number", i, "of defining edge list", time.time()-tic)
+
+            if self.verbose:
+                print(
+                    "finished number", i, "of defining edge list",
+                    time.time() - tic_edges
+                )
+            n_edges += len(out)
 
             # add edges
+            tic_graph = time.time()
             self.graph.add_edge_list(out, eprops=[self.weight])
-            print("finished", i, "of adding edges to graph", time.time()-tic)
+            if self.verbose:
+                print(
+                    "finished", i, "of adding edges to graph",
+                    time.time() - tic_graph
+                )
+        if self.verbose:
+            print("DONE adding", n_edges, "edges:", time.time() - tic_function)
 
     def shortest_path(self, source_ind, target_ind):
-        # ### Compute shortest path
+        """
+        Compute shortest path
+        """
         tic = (time.time())
         vertices_path, _ = shortest_path(
             self.graph,
@@ -119,5 +144,7 @@ class WeightedGraph():
         path = [
             self.node_pos[self.graph.vertex_index[v]] for v in vertices_path
         ]
-        print("time for shortest path", time.time() - tic)
+        if self.verbose:
+            print("time for shortest path", time.time() - tic)
+
         return path

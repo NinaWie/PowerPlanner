@@ -4,10 +4,11 @@ import time
 import datetime
 import json
 
-from data_reader import DataReader
-# read_in_tifs, get_hard_constraints, get_cost_surface
-from utils import reduce_instance, normalize, get_half_donut, plot_path, get_shift_transformed
+import warnings
+warnings.filterwarnings("ignore")
 
+from power_planner.data_reader import DataReader
+from power_planner.utils import reduce_instance, normalize, get_half_donut, plot_path, get_shift_transformed
 from weighted_graph import WeightedGraph
 
 # define paths:
@@ -15,14 +16,14 @@ PATH_FILES = "/Users/ninawiedemann/Downloads/tif_ras_buf"
 HARD_CONS_PATH = "hard_constraints"
 CORR_PATH = "corridor/Corridor_BE.tif"
 
-OUT_PATH = "outputs/path_result" + str(datetime.datetime.utcnow())
+OUT_PATH = "outputs/path_" + str(round(time.time()))[-5:]
 
 # define hyperparameters:
 RASTER = 10
 PYLON_DIST_MIN = 150
 PYLON_DIST_MAX = 250
 
-DOWNSCALE = False
+DOWNSCALE = True
 SCALE_PARAM = 5
 
 PYLON_DIST_MIN /= RASTER
@@ -33,11 +34,11 @@ if DOWNSCALE:
 print("defined pylon distances in raster:", PYLON_DIST_MIN, PYLON_DIST_MAX)
 
 # READ IN FILES
-data = DataReader(PATH_FILES)
+data = DataReader(PATH_FILES, CORR_PATH)
 # prev version: read all tif files in main folder and sum up:
 # tifs, files = data.read_in_tifs(PATH_FILES)
 # instance = np.sum(tifs, axis=0)
-instance_corr = data.get_hard_constraints(CORR_PATH, HARD_CONS_PATH)
+instance_corr = data.get_hard_constraints(HARD_CONS_PATH)
 instance = data.get_cost_surface("corridor/COSTSURFACE.tif")
 print("shape of instance", instance.shape)
 
@@ -52,7 +53,7 @@ instance_norm = normalize(instance)
 donut_tuples = get_half_donut(PYLON_DIST_MIN, PYLON_DIST_MAX)
 
 # Define graph
-graph = WeightedGraph(instance_norm, instance_corr)
+graph = WeightedGraph(instance_norm, instance_corr, verbose=0)
 graph.add_nodes()
 
 # old version: graph.add_edges_old(donut_tuples)
@@ -68,5 +69,4 @@ path = graph.shortest_path(SOURCE_IND, TARGET_IND)
 plot_path(instance_norm, path, out_path=OUT_PATH + ".png")
 
 # save the path as a json:
-with open(OUT_PATH + ".json", "w") as outfile:
-    json.dump(path, outfile)
+data.save_json(path, OUT_PATH)
