@@ -23,12 +23,13 @@ RASTER = 10
 PYLON_DIST_MIN = 150
 PYLON_DIST_MAX = 250
 
-DOWNSCALE = True
-SCALE_PARAM = 5
+VERBOSE = 1
+
+SCALE_PARAM = 2
 
 PYLON_DIST_MIN /= RASTER
 PYLON_DIST_MAX /= RASTER
-if DOWNSCALE:
+if SCALE_PARAM > 1:
     PYLON_DIST_MIN /= SCALE_PARAM
     PYLON_DIST_MAX /= SCALE_PARAM
 print("defined pylon distances in raster:", PYLON_DIST_MIN, PYLON_DIST_MAX)
@@ -43,7 +44,7 @@ instance = data.get_cost_surface("corridor/COSTSURFACE.tif")
 print("shape of instance", instance.shape)
 
 # scale down to simplify
-if DOWNSCALE:
+if SCALE_PARAM > 1:
     print("Image downscaled by ", SCALE_PARAM)
     instance = reduce_instance(instance, SCALE_PARAM)
     instance_corr = reduce_instance(instance_corr, SCALE_PARAM)
@@ -53,7 +54,7 @@ instance_norm = normalize(instance)
 donut_tuples = get_half_donut(PYLON_DIST_MIN, PYLON_DIST_MAX)
 
 # Define graph
-graph = WeightedGraph(instance_norm, instance_corr, verbose=0)
+graph = WeightedGraph(instance_norm, instance_corr, verbose=VERBOSE)
 graph.add_nodes()
 
 # old version: graph.add_edges_old(donut_tuples)
@@ -61,12 +62,13 @@ shift_tuples = get_shift_transformed(donut_tuples)
 graph.add_edges(donut_tuples, shift_tuples)
 
 # Compute path
-SOURCE_IND = 0
-TARGET_IND = graph.n_vertices - 1
-path = graph.shortest_path(SOURCE_IND, TARGET_IND)
+# SOURCE_IND = 0
+# TARGET_IND = graph.n_vertices - 1
+source, target = graph.add_start_end_vertices()  # give lists as parameters
+path = graph.shortest_path(source, target)
 
 # plot the result
 plot_path(instance_norm, path, out_path=OUT_PATH + ".png")
 
 # save the path as a json:
-data.save_json(path, OUT_PATH)
+data.save_json(path, OUT_PATH, SCALE_PARAM)

@@ -50,8 +50,8 @@ class DataReader():
         # get cost surface
         with rasterio.open(os.path.join(self.path, cost_path), 'r') as ds:
             arr = ds.read()
-        cost_img = Image.fromarray(arr[0])
         print("read in cost array", arr.shape)
+        cost_img = Image.fromarray(arr[0])
         cost_img = self._resize_raster(cost_img)
         return np.array(cost_img)
 
@@ -70,10 +70,20 @@ class DataReader():
 
     def _resize_raster(self, raster):
         if raster.size != self.raster_size:
+            print("RESIZING: from", raster.size, "to", self.raster_size)
             raster = raster.resize(self.raster_size, resample=Image.BILINEAR)
         return raster
 
-    def save_json(self, power_path, out_path):
+    def save_json(self, power_path, out_path, scale_factor):
+        """
+        Save the path as a json file:
+        @param power_path: List of path indices [[x1, y1], [x2,y2] ...]
+        @patam out_path: path and filename (without .json) where to write to
+        @param scale_factor: if the instance was scaled down, 
+        the coordinates have to be scaled up again
+        """
+        power_path = (np.asarray(power_path) * scale_factor).tolist()
+
         # save pixel value path
         with open(out_path + ".json", "w") as outfile:
             json.dump(power_path, outfile)

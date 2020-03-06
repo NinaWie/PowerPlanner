@@ -128,22 +128,53 @@ class WeightedGraph():
         if self.verbose:
             print("DONE adding", n_edges, "edges:", time.time() - tic_function)
 
-    def shortest_path(self, source_ind, target_ind):
+    def add_start_end_vertices(self, start_list=None, end_list=None):
+        # defaults if no start and end list are given:
+        topbottom, leftright = np.where(self.hard_constraints)
+        if start_list is None:
+            nr_start = len(topbottom) // 100
+            start_list = zip(topbottom[:nr_start], leftright[:nr_start])
+        if end_list is None:
+            nr_end = len(topbottom) // 100
+            end_list = zip(topbottom[-nr_end:], leftright[-nr_end:])
+
+        # iterate over start and end and over neighbors
+        neighbor_lists = [start_list, end_list]
+        start_and_end = []
+
+        for k in [0, 1]:
+            v = self.graph.add_vertex()
+            v_index = self.graph.vertex_index[v]
+            start_and_end.append(v)
+            print("index of start/end vertex", v_index)
+            edges = []
+            for (i, j) in neighbor_lists[k]:
+                neighbor_ind = self.pos2node[i, j]
+                edges.append([v_index, neighbor_ind, 0])
+            self.graph.add_edge_list(edges, eprops=[self.weight])
+
+        return start_and_end[0], start_and_end[1]
+
+    def shortest_path(self, source, target):
         """
-        Compute shortest path
+        Compute shortest path from source vertex to target vertex
         """
         tic = (time.time())
+        # #if source and target are given as indices:
+        # source = self.graph.vertex(source)
+        # target = self.graph.vertex(target)
         vertices_path, _ = shortest_path(
             self.graph,
-            self.graph.vertex(source_ind),
-            self.graph.vertex(target_ind),
+            source,
+            target,
             weights=self.weight,
             negative_weights=True
         )
 
-        path = [
-            self.node_pos[self.graph.vertex_index[v]] for v in vertices_path
-        ]
+        # exclude auxiliary start and end
+        actual_path = vertices_path[1:-1]
+
+        path = [self.node_pos[self.graph.vertex_index[v]] for v in actual_path]
         if self.verbose:
             print("time for shortest path", time.time() - tic)
 
