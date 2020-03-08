@@ -1,7 +1,6 @@
 # import matplotlib.pyplot as plt
 import numpy as np
 import time
-import datetime
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -25,9 +24,11 @@ PYLON_DIST_MIN = 150
 PYLON_DIST_MAX = 250
 
 VERBOSE = 1
+GTNX = 1
 
-SCALE_PARAM = 5
+SCALE_PARAM = 2
 
+# compute pylon distances:
 PYLON_DIST_MIN /= RASTER
 PYLON_DIST_MAX /= RASTER
 if SCALE_PARAM > 1:
@@ -35,7 +36,7 @@ if SCALE_PARAM > 1:
     PYLON_DIST_MAX /= SCALE_PARAM
 print("defined pylon distances in raster:", PYLON_DIST_MIN, PYLON_DIST_MAX)
 
-# READ IN FILES
+# read in files
 data = DataReader(PATH_FILES, CORR_PATH)
 # prev version: read all tif files in main folder and sum up:
 # tifs, files = data.read_in_tifs(PATH_FILES)
@@ -44,31 +45,36 @@ instance_corr = data.get_hard_constraints(HARD_CONS_PATH)
 instance = data.get_corridor()  # data.get_cost_surface(COST_PATH)
 print("shape of instance", instance.shape)
 
-# scale down to simplify
+# scale down instance
 if SCALE_PARAM > 1:
-    print("Image downscaled by ", SCALE_PARAM)
     instance = reduce_instance(instance, SCALE_PARAM)
     instance_corr = reduce_instance(instance_corr, SCALE_PARAM)
+    print("Image downscaled by ", SCALE_PARAM, instance.shape)
 
+# normalize instance values (0-1)
 instance_norm = normalize(instance)
 
+# get donut around each cell
 donut_tuples = get_half_donut(PYLON_DIST_MIN, PYLON_DIST_MAX)
 
 # Define graph
-graph = WeightedGraph(instance_norm, instance_corr, verbose=VERBOSE)
+graph = WeightedGraph(
+    instance_norm, instance_corr, graphtool=GTNX, verbose=VERBOSE
+)
 graph.add_nodes()
-
 # old version: graph.add_edges_old(donut_tuples)
 graph.add_edges(donut_tuples)
 
-# Compute path
-# SOURCE_IND = 0
-# TARGET_IND = graph.n_vertices - 1
-source, target = graph.add_start_end_vertices()  # give lists as parameters
+# compute shortestpath
+source, target = graph.add_start_end_vertices()  # TODO
 path = graph.shortest_path(source, target)
 
 # plot the result
 plot_path(instance_norm, path, out_path=OUT_PATH + ".png")
 
+print(graph.time_logs)
+
 # save the path as a json:
-data.save_json(path, OUT_PATH, SCALE_PARAM)
+data.save_json(
+    path, OUT_PATH, scale_factor=SCALE_PARAM, time_logs=graph.time_logs
+)

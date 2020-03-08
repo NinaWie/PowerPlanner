@@ -72,7 +72,7 @@ class DataReader():
             raster = raster.resize(self.raster_size, resample=Image.BILINEAR)
         return raster
 
-    def save_json(self, power_path, out_path, scale_factor):
+    def save_json(self, power_path, out_path, scale_factor=1, time_logs={}):
         """
         Save the path as a json file:
         @param power_path: List of path indices [[x1, y1], [x2,y2] ...]
@@ -81,12 +81,14 @@ class DataReader():
         the coordinates have to be scaled up again
         """
         power_path = (np.asarray(power_path) * scale_factor).tolist()
-
-        # save pixel value path
-        with open(out_path + ".json", "w") as outfile:
-            json.dump(power_path, outfile)
-
         coordinates = [self.transform_matrix * p for p in power_path]
-        # save coordinates
-        with open(out_path + "_coordinates.json", "w") as outfile:
-            json.dump(coordinates, outfile)
+
+        out_dict = {
+            "path_cells": power_path,
+            "path_coordinates": coordinates,
+            "time_logs": time_logs
+        }
+
+        # save as json
+        with open(out_path + "_infos.json", "w") as outfile:
+            json.dump(out_dict, outfile)

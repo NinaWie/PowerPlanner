@@ -14,11 +14,21 @@ def node2pos(node, length):
 
 
 def normalize(instance):
+    """
+    0-1 normalization of values of instance
+    """
     return (instance -
             np.min(instance)) / (np.max(instance) - np.min(instance))
 
 
 def get_donut(radius_low, radius_high):
+    """
+    Compute all indices of points in donut around (0,0)
+    :param radius_low: minimum radius
+    :param radius_high: maximum radius
+    :returns: tuples of indices of points with radius between radius_low 
+    and radius_high around (0, 0)
+    """
     img_size = int(radius_high + 10)
     # xx and yy are 200x200 tables containing the x and y coordinates as values
     # mgrid is a mesh creation helper
@@ -33,6 +43,13 @@ def get_donut(radius_low, radius_high):
 
 
 def get_half_donut(radius_low, radius_high):
+    """
+    Returns only the points with x >= 0 of the donut points (see above)
+    :param radius_low: minimum radius
+    :param radius_high: maximum radius
+    :returns: tuples of indices of points with radius between radius_low 
+    and radius_high around (0, 0)
+    """
     pos_x, pos_y = get_donut(radius_low, radius_high)
     new_tuples = []
     for i, j in zip(pos_x, pos_y):
@@ -42,6 +59,13 @@ def get_half_donut(radius_low, radius_high):
 
 
 def shift_surface_general(costs, shift):
+    """
+    Shifts a numpy array and pads with zeros
+    :param costs: 2-dim numpy array
+    :param shift: tuple of shift in x and y direction
+    (negative value for left / up shift)
+    :returns shifted array of same size
+    """
     if shift[0] < 0:
         tup1 = (0, -shift[0])
     else:
@@ -66,6 +90,13 @@ def shift_surface_general(costs, shift):
 
 
 def shift_surface(costs, shift):
+    """
+    Shifts a numpy array and pads with zeros
+    :param costs: 2-dim numpy array
+    :param shift: tuple of shift in x and y direction 
+    BUT: ONLY WORKS FOR (+,+) or (+,-) shift tuples
+    :returns shifted array of same size
+    """
     rolled_costs = np.roll(costs, shift, axis=(0, 1))
     rolled_costs[:shift[0], :] = 0
     if shift[1] >= 0:
@@ -75,18 +106,31 @@ def shift_surface(costs, shift):
     return rolled_costs
 
 
-def reduce_instance(img, square):
+def reduce_instance(img, factor):
+    """
+    Scale down an instance by a factor
+    :param img: instance, 2 dim array
+    :param factor: scaling factor (positive integer value)
+    :returns: array of sizes img.size/factor
+    """
     x_len, y_len = img.shape
-    new_img = np.zeros((x_len // square, y_len // square))
-    for i in range(x_len // square):
-        for j in range(y_len // square):
-            patch = img[i * square:(i + 1) * square,
-                        j * square:(j + 1) * square]
+    new_img = np.zeros((x_len // factor, y_len // factor))
+    for i in range(x_len // factor):
+        for j in range(y_len // factor):
+            patch = img[i * factor:(i + 1) * factor,
+                        j * factor:(j + 1) * factor]
             new_img[i, j] = np.mean(patch)
     return new_img
 
 
 def plot_path(instance, path, out_path=None):
+    """
+    Colour points on path red on the instance image
+    :param instance: cost surface (numpy array)
+    :param path: list of indices to colour red
+    :param out_path: file path where to save the figure (if None, then show)
+    :return coloured image (same shape as instance)
+    """
     # expand to greyscale
     expanded = np.expand_dims(instance, axis=2)
     expanded = np.tile(expanded, (1, 1, 3))  # overwrite instance by tiled one
@@ -103,6 +147,10 @@ def plot_path(instance, path, out_path=None):
 
 
 def plot_graph(g):
+    """
+    Plot networkx graph with edge attributes
+    :param g: graph object
+    """
     labels = nx.get_edge_attributes(g, 'weight')  # returns dictionary
     pos = nx.get_node_attributes(g, 'pos')
     plt.figure(figsize=(20, 10))

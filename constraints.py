@@ -7,7 +7,6 @@ def bresenham_line(x0, y0, x1, y1):
     """
     find pixels on line between two pixels
     https://stackoverflow.com/questions/50995499/generating-pixel-values-of-line-connecting-2-points
-
     """
     steep = abs(y1 - y0) > abs(x1 - x0)
     if steep:
@@ -71,6 +70,15 @@ def get_kernel(shifts):
 
 
 def convolve(img, kernel, neg=0):
+    """
+    Convolve a 2d img with a kernel, storing the output in the cell 
+    corresponding the the left or right upper corner 
+    :param img: 2d numpy array
+    :param kernel: kernel (must have equal size and width)
+    :param neg: if neg=0, store in upper left corner, if neg=1, store in upper 
+    right corner
+    :return convolved image of same size
+    """
     k_size = len(kernel)
     if neg:
         padded = np.pad(img, ((0, k_size - 1), (k_size - 1, 0)))
