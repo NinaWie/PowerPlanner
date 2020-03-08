@@ -41,6 +41,40 @@ def get_half_donut(radius_low, radius_high):
     return new_tuples
 
 
+def shift_surface_general(costs, shift):
+    if shift[0] < 0:
+        tup1 = (0, -shift[0])
+    else:
+        tup1 = (shift[0], 0)
+    if shift[1] < 0:
+        tup2 = (0, -shift[1])
+    else:
+        tup2 = (shift[1], 0)
+
+    costs_shifted = np.pad(costs, (tup1, tup2), mode='constant')
+
+    if shift[0] > 0 and shift[1] > 0:
+        costs_shifted = costs_shifted[:-shift[0], :-shift[1]]
+    elif shift[0] > 0 and shift[1] <= 0:
+        costs_shifted = costs_shifted[:-shift[0], -shift[1]:]
+    elif shift[0] <= 0 and shift[1] > 0:
+        costs_shifted = costs_shifted[-shift[0]:, :-shift[1]]
+    elif shift[0] <= 0 and shift[1] <= 0:
+        costs_shifted = costs_shifted[-shift[0]:, -shift[1]:]
+
+    return costs_shifted
+
+
+def shift_surface(costs, shift):
+    rolled_costs = np.roll(costs, shift, axis=(0, 1))
+    rolled_costs[:shift[0], :] = 0
+    if shift[1] >= 0:
+        rolled_costs[:, :shift[1]] = 0
+    else:
+        rolled_costs[:, shift[1]:] = 0
+    return rolled_costs
+
+
 def reduce_instance(img, square):
     x_len, y_len = img.shape
     new_img = np.zeros((x_len // square, y_len // square))
@@ -50,21 +84,6 @@ def reduce_instance(img, square):
                         j * square:(j + 1) * square]
             new_img[i, j] = np.mean(patch)
     return new_img
-
-
-def get_shift_transformed(shifts):
-    shift_tuples = []
-    for shift in shifts:
-        if shift[0] < 0:
-            tup1 = (0, -shift[0])
-        else:
-            tup1 = (shift[0], 0)
-        if shift[1] < 0:
-            tup2 = (0, -shift[1])
-        else:
-            tup2 = (shift[1], 0)
-        shift_tuples.append((tup1, tup2))
-    return shift_tuples
 
 
 def plot_path(instance, path, out_path=None):
@@ -91,3 +110,44 @@ def plot_graph(g):
     nx.draw_networkx_edge_labels(g, pos, edge_labels=labels)
     # plt.savefig("first_graph.png")
     plt.show()
+
+
+def bresenham_line(x0, y0, x1, y1):
+    """
+    Finds the cell indices on a straight line between two raster cells
+    """
+    steep = abs(y1 - y0) > abs(x1 - x0)
+    if steep:
+        x0, y0 = y0, x0
+        x1, y1 = y1, x1
+
+    switched = False
+    if x0 > x1:
+        switched = True
+        x0, x1 = x1, x0
+        y0, y1 = y1, y0
+
+    if y0 < y1:
+        ystep = 1
+    else:
+        ystep = -1
+
+    deltax = x1 - x0
+    deltay = abs(y1 - y0)
+    error = -deltax / 2
+    y = y0
+
+    line = []
+    for x in range(x0, x1 + 1):
+        if steep:
+            line.append([y, x])
+        else:
+            line.append([x, y])
+
+        error = error + deltay
+        if error > 0:
+            y = y + ystep
+            error = error - deltax
+    if switched:
+        line.reverse()
+    return line

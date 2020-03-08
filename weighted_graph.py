@@ -1,6 +1,9 @@
 import numpy as np
-from graph_tool.all import Graph, shortest_path
+from graph_tool.all import Graph, shortest_path, load_graph
 import time
+
+from constraints import convolve, get_kernel
+from power_planner.utils import shift_surface
 
 
 class WeightedGraph():
@@ -75,7 +78,7 @@ class WeightedGraph():
 
             print("finished adding edges", time.time() - tic)
 
-    def add_edges(self, shifts, shift_tuples):
+    def add_edges(self, shifts):
         tic_function = time.time()
         inds_orig = self.pos2node[self.hard_constraints > 0]
 
@@ -83,22 +86,17 @@ class WeightedGraph():
                                                0).astype(int)
         n_edges = 0
 
-        for i in range(len(shift_tuples)):
-            tic_edges = time.time()
-            costs_shifted = np.pad(
-                self.cost_rest, shift_tuples[i], mode='constant'
-            )
-            shift = shifts[i]
-            if shift[0] > 0 and shift[1] > 0:
-                costs_shifted = costs_shifted[:-shift[0], :-shift[1]]
-            elif shift[0] > 0 and shift[1] <= 0:
-                costs_shifted = costs_shifted[:-shift[0], -shift[1]:]
-            elif shift[0] <= 0 and shift[1] > 0:
-                costs_shifted = costs_shifted[-shift[0]:, :-shift[1]]
-            elif shift[0] <= 0 and shift[1] <= 0:
-                costs_shifted = costs_shifted[-shift[0]:, -shift[1]:]
+        kernels, posneg = get_kernel(shifts)
 
-            weights = (costs_shifted + self.cost_rest) / 2
+        for i in range(len(shifts)):
+
+            tic_edges = time.time()
+            costs_shifted = shift_surface(self.cost_rest, shifts[i])
+
+            # weights = (costs_shifted + self.cost_rest) / 2
+            # new version: edge weights
+            weights = convolve(self.cost_rest, kernels[i], posneg[i])
+
             inds_shifted = self.pos2node[costs_shifted > 0]
 
             # delete the ones where inds_shifted is zero
@@ -179,3 +177,11 @@ class WeightedGraph():
             print("time for shortest path", time.time() - tic)
 
         return path
+
+    def save_graph(self, OUT_PATH):
+        self.graph.save(OUT_PATH + ".xml.gz")
+
+    def load_graph(self, IN_PATH):
+        self.graph = load_graph(IN_PATH + ".xml.gz")
+        self.weight = self.graph.ep.weight
+        # weight = G2.ep.weight[G2.edge(66, 69)]

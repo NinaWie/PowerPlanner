@@ -38,13 +38,11 @@ class DataReader():
         print("shape of tif array:", tif_arr.shape)
         return tif_arr, file_list
 
-    def get_corridor(self, corr_path):
-        with rasterio.open(os.path.join(self.path, corr_path), 'r') as ds:
-            arr = ds.read()
-        corr_img = Image.fromarray(arr[0])
-        corr_img = self._resize_raster(corr_img)
-        corridor = (np.array(corr_img) < 9900).astype(int)
-        return corridor
+    def get_corridor(self):
+        self.instance = np.array(self.instance)
+        minimum = np.min(self.instance)
+        self.instance[self.instance == 9999] = minimum - 1  # TODO: scaling?
+        return self.instance
 
     def get_cost_surface(self, cost_path):
         # get cost surface

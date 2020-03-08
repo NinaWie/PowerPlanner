@@ -2,19 +2,20 @@
 import numpy as np
 import time
 import datetime
-import json
-
 import warnings
 warnings.filterwarnings("ignore")
 
 from power_planner.data_reader import DataReader
-from power_planner.utils import reduce_instance, normalize, get_half_donut, plot_path, get_shift_transformed
+from power_planner.utils import reduce_instance, normalize, get_half_donut, plot_path
 from weighted_graph import WeightedGraph
+
+import json
 
 # define paths:
 PATH_FILES = "/Users/ninawiedemann/Downloads/tif_ras_buf"
 HARD_CONS_PATH = "hard_constraints"
 CORR_PATH = "corridor/Corridor_BE.tif"
+COST_PATH = "corridor/COSTSURFACE.tif"
 
 OUT_PATH = "outputs/path_" + str(round(time.time()))[-5:]
 
@@ -25,7 +26,7 @@ PYLON_DIST_MAX = 250
 
 VERBOSE = 1
 
-SCALE_PARAM = 2
+SCALE_PARAM = 5
 
 PYLON_DIST_MIN /= RASTER
 PYLON_DIST_MAX /= RASTER
@@ -40,7 +41,7 @@ data = DataReader(PATH_FILES, CORR_PATH)
 # tifs, files = data.read_in_tifs(PATH_FILES)
 # instance = np.sum(tifs, axis=0)
 instance_corr = data.get_hard_constraints(HARD_CONS_PATH)
-instance = data.get_cost_surface("corridor/COSTSURFACE.tif")
+instance = data.get_corridor()  # data.get_cost_surface(COST_PATH)
 print("shape of instance", instance.shape)
 
 # scale down to simplify
@@ -58,8 +59,7 @@ graph = WeightedGraph(instance_norm, instance_corr, verbose=VERBOSE)
 graph.add_nodes()
 
 # old version: graph.add_edges_old(donut_tuples)
-shift_tuples = get_shift_transformed(donut_tuples)
-graph.add_edges(donut_tuples, shift_tuples)
+graph.add_edges(donut_tuples)
 
 # Compute path
 # SOURCE_IND = 0
