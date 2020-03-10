@@ -49,8 +49,10 @@ def get_kernel(shifts):
     """
     Get all kernels describing the path of the edges in a discrete raster
     :param shifts: possible circle points
-    :returns kernel: all possible kernels (number of circle points x upper x upper)
-    :returns posneg: a list indicating whether it is a path to the left (=1) or to the right(=0)
+    :returns kernel: all possible kernels 
+     shape: (number of circle points x upper x upper)
+    :returns posneg: a list indicating whether it is a path to the left (=1) 
+    or to the right(=0)
     """
     upper = np.amax(np.absolute(shifts)) + 1
     posneg = []
@@ -69,13 +71,36 @@ def get_kernel(shifts):
     return kernel, posneg
 
 
-def convolve(img, kernel, neg=0):
+def convolve_faster(img, kernel, neg):
     """
-    Convolve a 2d img with a kernel, storing the output in the cell 
-    corresponding the the left or right upper corner 
+    Convolve a 2d img with a kernel, storing the output in the cell
+    corresponding the the left or right upper corner
     :param img: 2d numpy array
     :param kernel: kernel (must have equal size and width)
-    :param neg: if neg=0, store in upper left corner, if neg=1, store in upper 
+    :param neg: if neg=0, store in upper left corner, if neg=1, store in upper
+    right corner
+    :return convolved image of same size
+    """
+    k_size = len(kernel)
+    # a = np.pad(img, ((0, k_size-1), (0, k_size-1)))
+    if neg:
+        padded = np.pad(img, ((0, k_size - 1), (k_size - 1, 0)))
+    else:
+        padded = np.pad(img, ((0, k_size - 1), (0, k_size - 1)))
+
+    s = kernel.shape + tuple(np.subtract(padded.shape, kernel.shape) + 1)
+    strd = np.lib.stride_tricks.as_strided
+    subM = strd(padded, shape=s, strides=padded.strides * 2)
+    return np.einsum('ij,ijkl->kl', kernel, subM)
+
+
+def convolve(img, kernel, neg=0):
+    """
+    Convolve a 2d img with a kernel, storing the output in the cell
+    corresponding the the left or right upper corner
+    :param img: 2d numpy array
+    :param kernel: kernel (must have equal size and width)
+    :param neg: if neg=0, store in upper left corner, if neg=1, store in upper
     right corner
     :return convolved image of same size
     """
@@ -92,18 +117,6 @@ def convolve(img, kernel, neg=0):
             patch = padded[i:i + k_size, j:j + k_size]
             convolved[i, j] = np.sum(patch * kernel)
     return convolved
-
-
-def angle(path):
-    path = np.asarray(path)
-    for p, (i, j) in enumerate(path[:-2]):
-        v1 = path[p + 1] - path[p]
-        v2 = path[p + 1] - path[p + 2]
-        v1_norm = np.linalg.norm(v1)
-        v2_norm = np.linalg.norm(v2)
-        angle = np.arccos(np.dot(v1, v2))
-        if angle < np.pi:
-            pass
 
 
 # Questions:

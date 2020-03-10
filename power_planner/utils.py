@@ -42,7 +42,20 @@ def get_donut(radius_low, radius_high):
     return pos_x - img_size, pos_y - img_size
 
 
-def get_half_donut(radius_low, radius_high):
+def angle(vec1, vec2):
+    # path = np.asarray(path)
+    # for p, (i, j) in enumerate(path[:-2]):
+    #     v1 = path[p + 1] - path[p]
+    #     v2 = path[p + 1] - path[p + 2]
+    v1_norm = np.linalg.norm(vec1)
+    v2_norm = np.linalg.norm(vec2)
+    v1 = np.asarray(vec1) / v1_norm
+    v2 = np.asarray(vec2) / v2_norm
+    angle = np.arccos(np.dot(v1, v2))
+    return angle
+
+
+def get_half_donut(radius_low, radius_high, vec, angle_max=0.5 * np.pi):
     """
     Returns only the points with x >= 0 of the donut points (see above)
     :param radius_low: minimum radius
@@ -53,12 +66,14 @@ def get_half_donut(radius_low, radius_high):
     pos_x, pos_y = get_donut(radius_low, radius_high)
     new_tuples = []
     for i, j in zip(pos_x, pos_y):
-        if i > 0 or i == 0 and j > 0:
+        # if i > 0 or i == 0 and j > 0:
+        # if i * vec[0] + j * vec[1] >= 0:
+        if angle([i, j], vec) <= angle_max:
             new_tuples.append((i, j))
     return new_tuples
 
 
-def shift_surface_general(costs, shift):
+def shift_surface_old(costs, shift):
     """
     Shifts a numpy array and pads with zeros
     :param costs: 2-dim numpy array
@@ -98,29 +113,15 @@ def shift_surface(costs, shift):
     :returns shifted array of same size
     """
     rolled_costs = np.roll(costs, shift, axis=(0, 1))
-    rolled_costs[:shift[0], :] = 0
+    if shift[0] >= 0:
+        rolled_costs[:shift[0], :] = 0
+    else:
+        rolled_costs[shift[0]:, :] = 0
     if shift[1] >= 0:
         rolled_costs[:, :shift[1]] = 0
     else:
         rolled_costs[:, shift[1]:] = 0
     return rolled_costs
-
-
-def reduce_instance(img, factor):
-    """
-    Scale down an instance by a factor
-    :param img: instance, 2 dim array
-    :param factor: scaling factor (positive integer value)
-    :returns: array of sizes img.size/factor
-    """
-    x_len, y_len = img.shape
-    new_img = np.zeros((x_len // factor, y_len // factor))
-    for i in range(x_len // factor):
-        for j in range(y_len // factor):
-            patch = img[i * factor:(i + 1) * factor,
-                        j * factor:(j + 1) * factor]
-            new_img[i, j] = np.mean(patch)
-    return new_img
 
 
 def plot_path(instance, path, out_path=None):
@@ -139,7 +140,7 @@ def plot_path(instance, path, out_path=None):
         expanded[x - 2:x + 2, y - 2:y + 2] = [0.9, 0.2, 0.2]  # colour red
 
     plt.figure(figsize=(25, 15))
-    plt.imshow(expanded)
+    plt.imshow(expanded, origin="lower")
     if out_path is not None:
         plt.savefig(out_path)
     else:

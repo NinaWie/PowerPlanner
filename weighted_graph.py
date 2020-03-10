@@ -3,14 +3,19 @@ from graph_tool.all import Graph, shortest_path, load_graph
 import time
 import networkx as nx
 
-from constraints import convolve, get_kernel
+from constraints import convolve, get_kernel, convolve_faster
 from power_planner.utils import shift_surface
 
 
 class WeightedGraph():
 
     def __init__(
-        self, cost_instance, hard_constraints, graphtool=1, verbose=1
+        self,
+        cost_instance,
+        hard_constraints,
+        directed=True,
+        graphtool=1,
+        verbose=1
     ):
         assert cost_instance.shape == hard_constraints.shape
         # , "Cost size must be equal to corridor definition size!"
@@ -44,7 +49,7 @@ class WeightedGraph():
 
         # declare graph
         if graphtool:
-            self.graph = Graph(directed=False)
+            self.graph = Graph(directed=directed)
             self.weight = self.graph.new_edge_property("float")
         else:
             self.graph = nx.Graph()
@@ -122,6 +127,8 @@ class WeightedGraph():
         times_edge_list = []
         times_add_edges = []
 
+        edge_array = []
+
         for i in range(len(shifts)):
 
             tic_edges = time.time()
@@ -129,7 +136,7 @@ class WeightedGraph():
 
             weights = (costs_shifted + self.cost_rest) / 2
             # new version: edge weights
-            # weights = convolve(self.cost_rest, kernels[i], posneg[i])
+            # weights = convolve_faster(self.cost_rest, kernels[i], posneg[i])
 
             inds_shifted = self.pos2node[costs_shifted > 0]
 
@@ -142,41 +149,49 @@ class WeightedGraph():
                 np.asarray([inds_orig, inds_shifted, weights_list]), 1, 0
             )[pos_inds]
 
-            if self.verbose:
-                print(
-                    "finished number", i, "of defining edge list",
-                    time.time() - tic_edges
-                )
             n_edges += len(out)
             times_edge_list.append(round(time.time() - tic_edges, 3))
 
-            # add edges
+            # add edges to graph
             tic_graph = time.time()
             if self.graphtool:
                 self.graph.add_edge_list(out, eprops=[self.weight])
             else:
                 nx_edge_list = [(e[0], e[1], {"weight": e[2]}) for e in out]
                 self.graph.add_edges_from(nx_edge_list)
-            if self.verbose:
-                print(
-                    "finished", i, "of adding edges to graph",
-                    time.time() - tic_graph
-                )
             times_add_edges.append(round(time.time() - tic_graph, 3))
+
+            # alternative: collect edges here and add alltogether
+            # edge_array.append(out)
+
+        # # alternative: add edges all in one go
+        # tic_concat = time.time()
+        # edge_lists_concat = np.concatenate(edge_array, axis=0)
+        # self.time_logs["concatenate"] = round(time.time() - tic_concat, 3)
+        # print("time for concatenate:", self.time_logs["concatenate"])
+        # tic_graph = time.time()
+        # self.graph.add_edge_list(edge_lists_concat, eprops=[self.weight])
+        # self.time_logs["add_edges"] = round(
+        #     (time.time() - tic_graph) / len(shifts), 3
+        # )
+        self.time_logs["add_edges"] = round(np.mean(times_add_edges), 3)
+        self.time_logs["add_edges_times"] = times_add_edges
+
+        self.time_logs["edge_list"] = round(np.mean(times_edge_list), 3)
+        self.time_logs["edge_list_times"] = times_edge_list
+
         if self.verbose:
             print("DONE adding", n_edges, "edges:", time.time() - tic_function)
-        self.time_logs["edge_list"] = np.mean(times_edge_list)
-        self.time_logs["add_edges"] = np.mean(times_add_edges)
 
     def add_start_end_vertices(self, start_list=None, end_list=None):
         tic = time.time()
         # defaults if no start and end list are given:
         topbottom, leftright = np.where(self.hard_constraints)
         if start_list is None:
-            nr_start = len(topbottom) // 100
+            nr_start = len(topbottom) // 1000
             start_list = zip(topbottom[:nr_start], leftright[:nr_start])
         if end_list is None:
-            nr_end = len(topbottom) // 100
+            nr_end = len(topbottom) // 1000
             end_list = zip(topbottom[-nr_end:], leftright[-nr_end:])
 
         # iterate over start and end and over neighbors
@@ -210,14 +225,19 @@ class WeightedGraph():
         self.time_logs["start_end_vertex"] = round(time.time() - tic, 3)
         return start_and_end[0], start_and_end[1]
 
+    def cells_to_vertices(self, pos):
+        node_ind = self.pos2node[pos[0], pos[1]]
+        if self.graphtool:
+            return self.graph.vertex(node_ind)
+        else:
+            return node_ind
+
     def shortest_path(self, source, target):
         """
         Compute shortest path from source vertex to target vertex
         """
         tic = (time.time())
         # #if source and target are given as indices:
-        # source = self.graph.vertex(source)
-        # target = self.graph.vertex(target)
         if self.graphtool:
             vertices_path, _ = shortest_path(
                 self.graph,

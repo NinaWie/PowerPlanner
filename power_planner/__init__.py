@@ -1,1 +1,1 @@
-from .utils import reduce_instance
+from .utils import shift_surface
