@@ -1,13 +1,14 @@
+from constraints import convolve, get_kernel, convolve_faster
+from power_planner.utils import shift_surface, get_donut_vals
+from general_graph import GeneralGraph
+
 import numpy as np
-from graph_tool.all import Graph, shortest_path, load_graph
+from graph_tool.all import Graph, shortest_path
 import time
 import networkx as nx
 
-from constraints import convolve, get_kernel, convolve_faster
-from power_planner.utils import shift_surface
 
-
-class WeightedGraph():
+class WeightedGraph(GeneralGraph):
 
     def __init__(
         self,
@@ -47,32 +48,24 @@ class WeightedGraph():
             self.pos2node[i, j] = n
         print("initialized weighted graph (pos2node and node_pos)")
 
-        # declare graph
-        if graphtool:
-            self.graph = Graph(directed=directed)
-            self.weight = self.graph.new_edge_property("float")
-        else:
-            self.graph = nx.Graph()
+        # initialize graph:
+        GeneralGraph.__init__(self)
 
         # print statements
         self.verbose = verbose
 
         self.time_logs["init_graph"] = round(time.time() - tic, 3)
 
+    def set_shift(self, lower, upper, vec, max_angle):
+        GeneralGraph.set_shift(self, lower, upper, vec, max_angle)
+        self.shift_vals = get_donut_vals(self.shifts, vec)
+
     def add_nodes(self):
-        tic = time.time()
         # add nodes to graph
         if self.graphtool:
-            _ = self.graph.add_vertex(len(self.node_pos))
+            GeneralGraph.add_nodes(self, len(self.node_pos))
         else:
-            self.graph.add_nodes_from(np.arange(len(self.node_pos)))
-        # verbose
-        if self.verbose:
-            print(
-                "Added nodes:", len(self.node_pos), "in time:",
-                time.time() - tic
-            )
-        self.time_logs["add_nodes"] = round(time.time() - tic, 3)
+            GeneralGraph.add_nodes(self, np.arange(len(self.node_pos)))
 
     def add_edges_old(self, shifts):
         # Define edges
@@ -114,7 +107,7 @@ class WeightedGraph():
             (time.time() - tic) / len(shifts), 3
         )
 
-    def add_edges(self, shifts):
+    def add_edges(self):
         tic_function = time.time()
         inds_orig = self.pos2node[self.hard_constraints > 0]
 
@@ -122,21 +115,27 @@ class WeightedGraph():
                                                0).astype(int)
         n_edges = 0
 
-        kernels, posneg = get_kernel(shifts)
+        kernels, posneg = get_kernel(self.shifts, self.shift_vals)
 
         times_edge_list = []
         times_add_edges = []
 
         edge_array = []
 
-        for i in range(len(shifts)):
+        for i in range(len(self.shifts)):
 
             tic_edges = time.time()
-            costs_shifted = shift_surface(self.cost_rest, shifts[i])
+            costs_shifted = shift_surface(self.cost_rest, self.shifts[i])
 
             weights = (costs_shifted + self.cost_rest) / 2
             # new version: edge weights
             # weights = convolve_faster(self.cost_rest, kernels[i], posneg[i])
+            # weights = weights1 + 2 * weights2
+            # print(
+            #     "max node weights", np.max(weights1), "max edge weights:",
+            #     np.max(weights2), "min node weights", np.min(weights1),
+            #     "min edge weights:", np.min(weights2)
+            # )
 
             inds_shifted = self.pos2node[costs_shifted > 0]
 
@@ -232,7 +231,7 @@ class WeightedGraph():
         else:
             return node_ind
 
-    def shortest_path(self, source, target):
+    def get_shortest_path(self, source, target):
         """
         Compute shortest path from source vertex to target vertex
         """
@@ -261,11 +260,3 @@ class WeightedGraph():
 
         self.time_logs["shortest_path"] = round(time.time() - tic, 3)
         return path
-
-    def save_graph(self, OUT_PATH):
-        self.graph.save(OUT_PATH + ".xml.gz")
-
-    def load_graph(self, IN_PATH):
-        self.graph = load_graph(IN_PATH + ".xml.gz")
-        self.weight = self.graph.ep.weight
-        # weight = G2.ep.weight[G2.edge(66, 69)]

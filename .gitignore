@@ -4,6 +4,7 @@ power_planner.code-workspace
 outputs/
 test_file.py
 
+notebooks/Function*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

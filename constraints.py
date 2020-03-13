@@ -1,7 +1,5 @@
 import numpy as np
 
-from power_planner.utils import get_half_donut
-
 
 def bresenham_line(x0, y0, x1, y1):
     """
@@ -45,7 +43,7 @@ def bresenham_line(x0, y0, x1, y1):
     return line
 
 
-def get_kernel(shifts):
+def get_kernel(shifts, shift_vals):
     """
     Get all kernels describing the path of the edges in a discrete raster
     :param shifts: possible circle points
@@ -58,6 +56,8 @@ def get_kernel(shifts):
     posneg = []
     kernel = np.zeros((len(shifts), upper, upper))
 
+    max_val = np.max(shift_vals)
+
     for i, shift in enumerate(shifts):
         if shift[1] < 0:
             posneg.append(1)
@@ -66,8 +66,9 @@ def get_kernel(shifts):
             posneg.append(0)
             line = bresenham_line(0, 0, shift[0], shift[1])
         # add points of line to the kernel
+        normed_val = shift_vals[i] / (len(line) * max_val)
         for (j, k) in line:
-            kernel[i, j, k] += 1
+            kernel[i, j, k] = normed_val
     return kernel, posneg
 
 

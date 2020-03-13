@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import networkx as nx
+import pwlf
 
 
 def pos2node(pos, length):
@@ -37,9 +38,29 @@ def get_donut(radius_low, radius_high):
     circle = (xx)**2 + (yy)**2
     # donuts contains 1's and 0's organized in a donut shape
     # you apply 2 thresholds on circle to define the shape
-    donut = np.logical_and(circle < (radius_high**2), circle > (radius_low**2))
+    donut = np.logical_and(
+        circle <= (radius_high**2), circle >= (radius_low**2)
+    )
     pos_x, pos_y = np.where(donut > 0)
     return pos_x - img_size, pos_y - img_size
+
+
+def piecewise_linear_fit(path, segments=5, out_path=None):
+    x = path[:, 0]
+    y = path[:, 1]
+    my_pwlf = pwlf.PiecewiseLinFit(x, y)
+    breaks = my_pwlf.fit(segments)
+    print("breaks", breaks)
+    x_hat = np.linspace(x.min(), x.max(), 100)
+    y_hat = my_pwlf.predict(x_hat)
+
+    plt.figure(figsize=(20, 10))
+    plt.plot(x, y, 'o')
+    plt.plot(x_hat, y_hat, '-')
+    if out_path is None:
+        plt.show()
+    else:
+        plt.savefig(out_path)
 
 
 def angle(vec1, vec2):
@@ -55,6 +76,10 @@ def angle(vec1, vec2):
     return angle
 
 
+def get_donut_vals(donut_tuples, vec):
+    return [angle(tup, vec) + 0.1 for tup in donut_tuples]
+
+
 def get_half_donut(radius_low, radius_high, vec, angle_max=0.5 * np.pi):
     """
     Returns only the points with x >= 0 of the donut points (see above)
@@ -68,9 +93,34 @@ def get_half_donut(radius_low, radius_high, vec, angle_max=0.5 * np.pi):
     for i, j in zip(pos_x, pos_y):
         # if i > 0 or i == 0 and j > 0:
         # if i * vec[0] + j * vec[1] >= 0:
-        if angle([i, j], vec) <= angle_max:
+        ang = angle([i, j], vec)
+        if ang <= angle_max:
             new_tuples.append((i, j))
     return new_tuples
+
+
+def get_lg_donut(radius_low, radius_high, vec, min_angle=3 * np.pi / 4):
+    """
+    Compute all possible combinations of edges in restricted angle
+    :param radius_low: minimum radius
+    :param radius_high: maximum radius
+    :param vec: direction vector
+    :returns: list with entries [[edge1, edge2, cost of angle between them]]
+    where costs are normalized values between 0 and 1
+    """
+    donut = get_donut(radius_low, radius_high)
+    tuple_zip = list(zip(donut[0], donut[1]))
+    linegraph_tuples = []
+    for (i, j) in tuple_zip:
+        # if in incoming half
+        if i * vec[0] + j * vec[1] <= 0:
+            for (k, l) in tuple_zip:
+                ang = angle([k, l], [i, j])
+                # min angle and general outgoing edges half
+                if ang >= min_angle and k * vec[0] + l * vec[1] >= 0:
+                    angle_norm = round(1 - (ang / min_angle), 2)
+                    linegraph_tuples.append([[i, j], [k, l], angle_norm])
+    return linegraph_tuples
 
 
 def shift_surface_old(costs, shift):
@@ -124,7 +174,7 @@ def shift_surface(costs, shift):
     return rolled_costs
 
 
-def plot_path(instance, path, out_path=None):
+def plot_path(instance, path, out_path=None, buffer=2):
     """
     Colour points on path red on the instance image
     :param instance: cost surface (numpy array)
@@ -137,7 +187,8 @@ def plot_path(instance, path, out_path=None):
     expanded = np.tile(expanded, (1, 1, 3))  # overwrite instance by tiled one
     # colour nodes in path in red
     for (x, y) in path:
-        expanded[x - 2:x + 2, y - 2:y + 2] = [0.9, 0.2, 0.2]  # colour red
+        expanded[x - buffer:x + buffer + 1,
+                 y - buffer:y + buffer + 1] = [0.9, 0.2, 0.2]  # colour red
 
     plt.figure(figsize=(25, 15))
     plt.imshow(expanded, origin="lower")
