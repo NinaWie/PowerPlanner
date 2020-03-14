@@ -6,6 +6,7 @@ import numpy as np
 from graph_tool.all import Graph, shortest_path
 import time
 import networkx as nx
+from collections import deque
 
 
 class WeightedGraph(GeneralGraph):
@@ -49,7 +50,9 @@ class WeightedGraph(GeneralGraph):
         print("initialized weighted graph (pos2node and node_pos)")
 
         # initialize graph:
-        GeneralGraph.__init__(self)
+        GeneralGraph.__init__(
+            self, directed=directed, graphtool=graphtool, verbose=verbose
+        )
 
         # print statements
         self.verbose = verbose
@@ -62,10 +65,7 @@ class WeightedGraph(GeneralGraph):
 
     def add_nodes(self):
         # add nodes to graph
-        if self.graphtool:
-            GeneralGraph.add_nodes(self, len(self.node_pos))
-        else:
-            GeneralGraph.add_nodes(self, np.arange(len(self.node_pos)))
+        GeneralGraph.add_nodes(self, len(self.node_pos))
 
     def add_edges_old(self, shifts):
         # Define edges
@@ -182,7 +182,19 @@ class WeightedGraph(GeneralGraph):
         if self.verbose:
             print("DONE adding", n_edges, "edges:", time.time() - tic_function)
 
-    def add_start_end_vertices(self, start_list=None, end_list=None):
+    def add_start_and_dest(self, start_inds, dest_inds):
+        start_node_ind = self.pos2node[start_inds[0], start_inds[1]]
+        dest_node_ind = self.pos2node[dest_inds[0], dest_inds[1]]
+        if self.graphtool:
+            return self.graph.vertex(start_node_ind
+                                     ), self.graph.vertex(dest_node_ind)
+        else:
+            return start_node_ind, dest_node_ind
+
+    def old_add_start_end_vertices(self, start_list=None, end_list=None):
+        """
+        old version: connect to a list of start and a list of end vertices
+        """
         tic = time.time()
         # defaults if no start and end list are given:
         topbottom, leftright = np.where(self.hard_constraints)
@@ -224,13 +236,6 @@ class WeightedGraph(GeneralGraph):
         self.time_logs["start_end_vertex"] = round(time.time() - tic, 3)
         return start_and_end[0], start_and_end[1]
 
-    def cells_to_vertices(self, pos):
-        node_ind = self.pos2node[pos[0], pos[1]]
-        if self.graphtool:
-            return self.graph.vertex(node_ind)
-        else:
-            return node_ind
-
     def get_shortest_path(self, source, target):
         """
         Compute shortest path from source vertex to target vertex
@@ -246,17 +251,162 @@ class WeightedGraph(GeneralGraph):
                 negative_weights=True
             )
             # exclude auxiliary start and end
-            actual_path = vertices_path[1:-1]
+            # actual_path = vertices_path[1:-1]
             path = [
-                self.node_pos[self.graph.vertex_index[v]] for v in actual_path
+                self.node_pos[self.graph.vertex_index[v]]
+                for v in vertices_path
             ]
         else:
             vertices_path = nx.dijkstra_path(self.graph, source, target)
             # vertices_path = nx.bellman_ford_path(self.graph, source, target)
-            path = [self.node_pos[int(v)] for v in vertices_path[1:-1]]
+            path = [self.node_pos[int(v)] for v in vertices_path]  # [1:-1]]
 
         if self.verbose:
             print("time for shortest path", time.time() - tic)
 
         self.time_logs["shortest_path"] = round(time.time() - tic, 3)
-        return path
+        return path, []
+
+    def get_shortest_path_nx(self, source, target):
+        # define cutoff
+        cutoff = 4 * np.linalg.norm(vec) / PYLON_DIST_MIN
+
+        tic = time.time()
+        if source == target:
+            return (0, [source])
+
+        weight = lambda u, v, data: data.get("weight", 1)
+
+        # paths = {source: [source]}  # dictionary of paths
+        # dist = self._bellman_ford(
+        #     self.graph, [source], weight, cutoff, paths=paths, target=target
+        # )
+        # if target is None:
+        #     return (dist, paths)
+        # try:
+        #     vertices_path = paths[target]
+        # except KeyError:
+        #     msg = f"Node {target} not reachable from {source}"
+        #     raise nx.NetworkXNoPath(msg)
+        vertices_path = self.bellman_ford(source, target, cutoff)
+
+        print(vertices_path)
+
+        out_path = [self.node_pos[int(v)] for v in vertices_path]  # [1:-1]]
+
+        self.time_logs["shortest_path"] = round(time.time() - tic, 3)
+        return out_path, []
+
+    def bellman_ford(self, source, target, cutoff):
+        """
+        Actual BF algorithm, not SPFA
+        """
+        pred = {}
+        dist = {source: 0}
+
+        inf = float('inf')
+
+        for i in range(int(cutoff)):
+            print(i)
+            for (u, v, w_dict) in self.graph.edges(data=True):
+                w = w_dict["weight"]
+                if dist.get(u, inf) + w < dist.get(v, inf):
+                    dist[v] = dist[u] + w
+                    pred[v] = u
+        path = [target]
+        curr = target
+        while curr != source:
+            curr = pred[curr]
+            path.append(curr)
+        path.append(source)
+        return list(reversed(path))
+
+    def _bellman_ford(
+        self,
+        G,
+        source,
+        weight,
+        cutoff,
+        pred=None,
+        paths=None,
+        dist=None,
+        target=None
+    ):
+        """Relaxation loop for Bellman–Ford algorithm.
+        This is an implementation of the SPFA variant.
+        See https://en.wikipedia.org/wiki/Shortest_Path_Faster_Algorithm
+        Parameters
+        SEE https://github.com/networkx/networkx/blob/02a1721276b3a84d3be8558e4
+        79a9cb6b0715488/networkx/algorithms/shortest_paths/weighted.py#L1203
+        """
+        for s in source:
+            if s not in G:
+                raise nx.NodeNotFound(f"Source {s} not in G")
+
+        if pred is None:
+            pred = {v: [] for v in source}
+
+        if dist is None:
+            dist = {v: 0 for v in source}
+
+        G_succ = G.succ if G.is_directed() else G.adj
+        inf = float('inf')
+        n = len(G)
+
+        # count = {}
+        q = deque(source)
+        in_q = set(source)
+        iteration = 0
+        while q:
+            u = q.popleft()
+            in_q.remove(u)
+
+            # Skip relaxations if any of the predecessors of u is in the queue.
+            if all(pred_u not in in_q for pred_u in pred[u]):
+                dist_u = dist[u]
+                for v, e in G_succ[u].items():
+                    dist_v = dist_u + weight(u, v, e)  # TODO:replace function
+
+                    if dist_v < dist.get(v, inf):
+                        if v not in in_q:
+                            q.append(v)
+                            in_q.add(v)
+                            # count_v = count.get(v, 0) + 1
+                            # if count_v == n:
+                            #     raise nx.NetworkXUnbounded(
+                            #         "Negative cost cycle detected."
+                            #     )
+                            # count[v] = count_v
+                        dist[v] = dist_v
+                        pred[v] = [u]
+
+                    elif dist.get(v) is not None and dist_v == dist.get(v):
+                        pred[v].append(u)
+
+            iteration += 1
+
+            # TODO
+            # if u == target:
+            #     print("early stopping")
+            #     break
+            if iteration > cutoff and dist.get(target, inf) < inf:
+                # print("iteration more than cutoff")
+                # if dist.get(target, inf) < inf:
+                print("early stopping")
+                break
+
+        if paths is not None:
+            dsts = [target] if target is not None else pred
+            for dst in dsts:
+
+                path = [dst]
+                cur = dst
+
+                while pred[cur]:
+                    cur = pred[cur][0]
+                    path.append(cur)
+
+                path.reverse()
+                paths[dst] = path
+
+        return dist

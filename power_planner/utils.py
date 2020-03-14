@@ -27,7 +27,7 @@ def get_donut(radius_low, radius_high):
     Compute all indices of points in donut around (0,0)
     :param radius_low: minimum radius
     :param radius_high: maximum radius
-    :returns: tuples of indices of points with radius between radius_low 
+    :returns: tuples of indices of points with radius between radius_low
     and radius_high around (0, 0)
     """
     img_size = int(radius_high + 10)
@@ -85,7 +85,7 @@ def get_half_donut(radius_low, radius_high, vec, angle_max=0.5 * np.pi):
     Returns only the points with x >= 0 of the donut points (see above)
     :param radius_low: minimum radius
     :param radius_high: maximum radius
-    :returns: tuples of indices of points with radius between radius_low 
+    :returns: tuples of indices of points with radius between radius_low
     and radius_high around (0, 0)
     """
     pos_x, pos_y = get_donut(radius_low, radius_high)
@@ -111,14 +111,15 @@ def get_lg_donut(radius_low, radius_high, vec, min_angle=3 * np.pi / 4):
     donut = get_donut(radius_low, radius_high)
     tuple_zip = list(zip(donut[0], donut[1]))
     linegraph_tuples = []
+    norm_factor = np.pi - min_angle  # here: 1/4 pi
     for (i, j) in tuple_zip:
         # if in incoming half
         if i * vec[0] + j * vec[1] <= 0:
             for (k, l) in tuple_zip:
-                ang = angle([k, l], [i, j])
+                ang = angle([k, l], [i, j]) - min_angle
                 # min angle and general outgoing edges half
-                if ang >= min_angle and k * vec[0] + l * vec[1] >= 0:
-                    angle_norm = round(1 - (ang / min_angle), 2)
+                if ang >= 0 and k * vec[0] + l * vec[1] >= 0:
+                    angle_norm = round(1 - (ang / norm_factor), 2)
                     linegraph_tuples.append([[i, j], [k, l], angle_norm])
     return linegraph_tuples
 
@@ -158,7 +159,7 @@ def shift_surface(costs, shift):
     """
     Shifts a numpy array and pads with zeros
     :param costs: 2-dim numpy array
-    :param shift: tuple of shift in x and y direction 
+    :param shift: tuple of shift in x and y direction
     BUT: ONLY WORKS FOR (+,+) or (+,-) shift tuples
     :returns shifted array of same size
     """
@@ -192,6 +193,28 @@ def plot_path(instance, path, out_path=None, buffer=2):
 
     plt.figure(figsize=(25, 15))
     plt.imshow(expanded, origin="lower")
+    if out_path is not None:
+        plt.savefig(out_path)
+    else:
+        plt.show()
+
+
+def plot_path_costs(instance, path, edgecosts, out_path=None, buffer=1):
+    expanded = np.expand_dims(instance, axis=2)
+    expanded = np.tile(expanded, (1, 1, 3))  # overwrite instance by tiled one
+
+    edgecosts = np.asarray(edgecosts)
+    env_costs = edgecosts[:, 1]  # np.sum(edgecosts, axis=1) #
+    normed_env_costs = (env_costs - np.min(env_costs)
+                        ) / (np.max(env_costs) - np.min(env_costs))
+    # colour nodes in path in red
+    for i, (x, y) in enumerate(path):
+        # print(edgecosts[i])
+        expanded[x - buffer:x + buffer + 1, y - buffer:y + buffer +
+                 1] = [0.9, 1 - normed_env_costs[i], 0.2]  # colour red
+
+    plt.figure(figsize=(25, 15))
+    plt.imshow(np.swapaxes(expanded, 1, 0), origin="upper")
     if out_path is not None:
         plt.savefig(out_path)
     else:

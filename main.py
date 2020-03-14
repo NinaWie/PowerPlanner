@@ -32,7 +32,7 @@ GTNX = 1
 
 SCALE_PARAM = 5
 
-GRAPH_TYPE = "LINE"
+GRAPH_TYPE = "NORM"
 
 LOAD = 1
 SAVE_PICKLE = 1
@@ -82,49 +82,40 @@ if GRAPH_TYPE == "NORM":
     graph = WeightedGraph(
         instance, instance_corr, graphtool=GTNX, verbose=VERBOSE
     )
-    graph.set_shift(PYLON_DIST_MIN, PYLON_DIST_MAX, vec, MAX_ANGLE)
-    graph.add_nodes()
-    graph.add_edges()
 
-    source = graph.cells_to_vertices(start_inds)
-    target = graph.cells_to_vertices(dest_inds)
-    path = graph.get_shortest_path(source, target)
-    path.insert(0, start_inds)
-    path.append(dest_inds)
-    # # Alternative: with list of start and end nodes:
-    # source, target = graph.add_start_end_vertices()
-    # path = graph.shortest_path(source, target)
 elif GRAPH_TYPE == "LINE":
     # Define LINE GRAPH
     graph = LineGraph(instance, instance_corr, graphtool=GTNX, verbose=VERBOSE)
-    graph.set_shift(PYLON_DIST_MIN, PYLON_DIST_MAX, vec, MAX_ANGLE)
-    graph.add_nodes()
-    graph.add_edges()
 
-    source_v, target_v = graph.add_start_and_dest(start_inds, dest_inds)
-    path = graph.get_shortest_path(source_v, target_v)
 elif GRAPH_TYPE == "LINE_FILE":
     # Load file and derive line graph
     graph_file = "outputs/path_02852_graph"
     graph = LineGraphFromGraph(
         graph_file, instance, instance_corr, graphtool=GTNX, verbose=VERBOSE
     )
-    graph.add_nodes()
-    graph.add_edges()
 
-    source_v, target_v = graph.add_start_and_dest(start_inds, dest_inds)
-    path = graph.get_shortest_path(source_v, target_v)
+# ADD NODES AND EDGES:
+graph.set_shift(PYLON_DIST_MIN, PYLON_DIST_MAX, vec, MAX_ANGLE)
+graph.add_nodes()
+graph.add_edges()
 
-# plot the result
+# SHORTEST PATH
+# # Alternative: with list of start and end nodes:
+# source, target = graph.add_start_end_vertices()
+# path = graph.shortest_path(source, target)
+source_v, target_v = graph.add_start_and_dest(start_inds, dest_inds)
+path, path_costs = graph.get_shortest_path(source_v, target_v)
+
+# PLOT RESULT
 plot_path(instance * instance_corr, path, buffer=0, out_path=OUT_PATH + ".png")
 
 # SAVE stuff
 # save the path as a json:
-# data.save_json(
-#     path, OUT_PATH, scale_factor=SCALE_PARAM, time_logs=graph.time_logs
-# )
 # graph.save_graph(OUT_PATH + "_graph")
 # np.save(OUT_PATH + "_pos2node.npy", graph.pos2node)
+
+# data.save_coordinates(path, OUT_PATH, scale_factor=SCALE_PARAM)
+DataReader.save_json(OUT_PATH, path, path_costs, graph.time_logs, SCALE_PARAM)
 
 if VERBOSE:
     del graph.time_logs['edge_list_times']
