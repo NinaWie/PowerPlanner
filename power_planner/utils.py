@@ -2,6 +2,39 @@ import matplotlib.pyplot as plt
 import numpy as np
 import networkx as nx
 import pwlf
+from csv import writer
+# from numba import jit, njit
+
+
+def append_to_csv(file_name, list_of_elem):
+    """
+    Append a row to a csv file
+    :param file_name: filename to open csv file
+    :param list_of_elem: list corresponding to new row
+    """
+    # Open file in append mode
+    with open(file_name, 'a+', newline='') as write_obj:
+        # Create a writer object from csv module
+        csv_writer = writer(write_obj)
+        # Add contents of list as last row in the csv file
+        csv_writer.writerow(list_of_elem)
+
+
+def time_test_csv(CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, notes):
+    if GTNX:
+        n_nodes = len(list(graph.graph.vertices()))
+    else:
+        n_nodes = len(graph.graph.nodes())
+    # --> csv columns:
+    # scale,graphtool,graphtype,n_nodes,n_edges,add_nodes_time,add_edge_time,
+    # shortest_path_time, notes
+    param_list = [
+        SCALE_PARAM, GTNX, GRAPH_TYPE, n_nodes,
+        len(list(graph.graph.edges())), graph.time_logs["add_nodes"],
+        graph.time_logs["add_all_edges"], graph.time_logs["shortest_path"],
+        notes
+    ]
+    append_to_csv(CSV_TIMES, param_list)
 
 
 def pos2node(pos, length):
@@ -63,15 +96,18 @@ def piecewise_linear_fit(path, segments=5, out_path=None):
         plt.savefig(out_path)
 
 
+#@njit
 def angle(vec1, vec2):
     # path = np.asarray(path)
     # for p, (i, j) in enumerate(path[:-2]):
     #     v1 = path[p + 1] - path[p]
     #     v2 = path[p + 1] - path[p + 2]
+    vec1 = np.asarray(vec1)
+    vec2 = np.asarray(vec2)
     v1_norm = np.linalg.norm(vec1)
     v2_norm = np.linalg.norm(vec2)
-    v1 = np.asarray(vec1) / v1_norm
-    v2 = np.asarray(vec2) / v2_norm
+    v1 = vec1 / v1_norm
+    v2 = vec2 / v2_norm
     angle = np.arccos(np.dot(v1, v2))
     return angle
 
@@ -175,6 +211,24 @@ def shift_surface(costs, shift):
     return rolled_costs
 
 
+def emergency_points(hard_cons, costs, max_dist, start_inds, dest_inds):
+    hard_cons[start_inds[0], start_inds[1]] = 1
+    hard_cons[dest_inds[0], dest_inds[1]] = 1
+    # add grid of emergency points
+    w, h = hard_cons.shape
+    print(w, max_dist)
+    w_inds = np.arange(0, w, max_dist)
+    print(w_inds)
+    w_inds = w_inds.astype(int)
+    h_inds = np.arange(0, h, max_dist).astype(int)
+    print(w_inds)
+    max_cost = np.max(costs)
+    for row in w_inds:
+        hard_cons[row, h_inds] = 1
+        costs[row, h_inds] = max_cost
+    return hard_cons, costs
+
+
 def plot_path(instance, path, out_path=None, buffer=2):
     """
     Colour points on path red on the instance image
@@ -194,29 +248,54 @@ def plot_path(instance, path, out_path=None, buffer=2):
     plt.figure(figsize=(25, 15))
     plt.imshow(expanded, origin="lower")
     if out_path is not None:
-        plt.savefig(out_path)
+        plt.savefig(out_path, bbox_inches='tight')
     else:
         plt.show()
 
 
-def plot_path_costs(instance, path, edgecosts, out_path=None, buffer=1):
-    expanded = np.expand_dims(instance, axis=2)
-    expanded = np.tile(expanded, (1, 1, 3))  # overwrite instance by tiled one
+def plot_path_costs(
+    instance, path, edgecosts, class_names, out_path=None, buffer=1
+):
 
     edgecosts = np.asarray(edgecosts)
-    env_costs = edgecosts[:, 1]  # np.sum(edgecosts, axis=1) #
-    normed_env_costs = (env_costs - np.min(env_costs)
-                        ) / (np.max(env_costs) - np.min(env_costs))
-    # colour nodes in path in red
-    for i, (x, y) in enumerate(path):
-        # print(edgecosts[i])
-        expanded[x - buffer:x + buffer + 1, y - buffer:y + buffer +
-                 1] = [0.9, 1 - normed_env_costs[i], 0.2]  # colour red
+    print("out costs shape:", edgecosts.shape)
+    # env_costs = np.mean(edgecosts, axis=1)  # edgecosts[:, 1]  #
+    n_crit = edgecosts.shape[1]
+    print("number crit", n_crit)
+
+    # fill for angle costs
+    if len(instance) < n_crit:
+        print("fill angle")
+        repeat_list = [1 for _ in range(len(instance))]
+        repeat_list[0] = 2
+        instance = np.repeat(instance, repeat_list, axis=0)
+    print("instance shape", instance.shape)
 
     plt.figure(figsize=(25, 15))
-    plt.imshow(np.swapaxes(expanded, 1, 0), origin="upper")
+    for j in range(n_crit):
+        curr_costs = instance[j]
+        expanded = np.expand_dims(curr_costs, axis=2)
+        expanded = np.tile(
+            expanded, (1, 1, 3)
+        )  # overwrite instance by tiled one
+        # put values into visible range
+        normed_env_costs = normalize(edgecosts[:, j])
+        # colour nodes in path
+        for i, (x, y) in enumerate(path):
+            # colour red for high cost
+            expanded[x - buffer:x + buffer + 1, y - buffer:y + buffer +
+                     1] = [0.9, 1 - normed_env_costs[i], 0.2]
+        wo_zero = expanded[:, np.any(curr_costs > 0, axis=0)]
+        wo_zero = wo_zero[np.any(curr_costs > 0, axis=1), :]
+
+        # display
+        plt.subplot(1, n_crit, j + 1)
+        plt.imshow(np.swapaxes(wo_zero, 1, 0), origin="upper")
+        plt.title(class_names[j])
+    plt.tight_layout()
+
     if out_path is not None:
-        plt.savefig(out_path)
+        plt.savefig(out_path, bbox_inches='tight')
     else:
         plt.show()
 

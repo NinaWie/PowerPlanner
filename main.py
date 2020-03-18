@@ -2,7 +2,7 @@
 import warnings
 warnings.filterwarnings("ignore")
 from power_planner.data_reader import DataReader
-from power_planner.utils import normalize, get_half_donut, plot_path
+from power_planner.utils import plot_path, plot_path_costs, time_test_csv
 from weighted_graph import WeightedGraph
 from line_graph import LineGraph, LineGraphFromGraph
 import numpy as np
@@ -18,24 +18,28 @@ COST_PATH = "COSTSURFACE.tif"
 START_PATH = "start_point/Start"
 DEST_PATH = "dest_point/Destination"
 WEIGHT_CSV = "layer_weights.csv"
+CSV_TIMES = "outputs/time_tests.csv"
 
 OUT_PATH = "outputs/path_" + str(round(time.time()))[-5:]
 
 # define hyperparameters:
 RASTER = 10
 PYLON_DIST_MIN = 150
-PYLON_DIST_MAX = 300
+PYLON_DIST_MAX = 250
 MAX_ANGLE = 0.5 * np.pi
+CLASS_WEIGHTS = [1, 1, 1]
 
 VERBOSE = 1
 GTNX = 1
 
-SCALE_PARAM = 5
+SCALE_PARAM = 10
 
-GRAPH_TYPE = "NORM"
+GRAPH_TYPE = "LINE"
 
-LOAD = 1
-SAVE_PICKLE = 1
+NOTES = "None"
+
+LOAD = 0
+SAVE_PICKLE = 0
 IOPATH = os.path.join(PATH_FILES, "data_dump_" + str(SCALE_PARAM) + ".dat")
 
 print("graph type:", GRAPH_TYPE)
@@ -56,14 +60,9 @@ if LOAD:
 else:
     # read in files
     data = DataReader(PATH_FILES, CORR_PATH, WEIGHT_CSV, SCALE_PARAM)
-    instance, instance_corr = data.get_data()
-
-    # Get start and end point
-    start_inds = data.get_shape_point(START_PATH)
-    dest_inds = data.get_shape_point(DEST_PATH)
-    print("shape of instance", instance.shape)
-    assert instance.shape == instance_corr.shape
-    print("start cells:", start_inds, "dest cells:", dest_inds)
+    instance, instance_corr, start_inds, dest_inds = data.get_data(
+        START_PATH, DEST_PATH, emergency_dist=PYLON_DIST_MAX
+    )
 
     if SAVE_PICKLE:
         out_tuple = (instance, instance_corr, start_inds, dest_inds)
@@ -71,12 +70,10 @@ else:
             pickle.dump(out_tuple, outfile)
         print("successfully saved data")
 
-# get donut around each cell
 vec = dest_inds - start_inds
 print("start-dest-vec", vec)
 
 # DEFINE GRAPH AND ALGORITHM
-
 if GRAPH_TYPE == "NORM":
     # Define normal weighted graph
     graph = WeightedGraph(
@@ -94,24 +91,40 @@ elif GRAPH_TYPE == "LINE_FILE":
         graph_file, instance, instance_corr, graphtool=GTNX, verbose=VERBOSE
     )
 
-# ADD NODES AND EDGES:
+# BUILD GRAPH:
+graph.set_edge_costs(data.layer_classes, CLASS_WEIGHTS)
 graph.set_shift(PYLON_DIST_MIN, PYLON_DIST_MAX, vec, MAX_ANGLE)
+# add nodes and vertices
 graph.add_nodes()
 graph.add_edges()
+# weighted sum of all costs
+graph.sum_costs()
 
 # SHORTEST PATH
 # # Alternative: with list of start and end nodes:
 # source, target = graph.add_start_end_vertices()
 # path = graph.shortest_path(source, target)
 source_v, target_v = graph.add_start_and_dest(start_inds, dest_inds)
+print("start and end:", source_v, target_v)
 path, path_costs = graph.get_shortest_path(source_v, target_v)
 
 # PLOT RESULT
-plot_path(instance * instance_corr, path, buffer=0, out_path=OUT_PATH + ".png")
+# plot_path(instance * instance_corr, path, buffer=1, out_path=OUT_PATH + ".png")
+plot_path_costs(
+    instance * instance_corr,
+    path,
+    path_costs,
+    graph.cost_classes,
+    buffer=0,
+    out_path=OUT_PATH + ".png"
+)
 
-# SAVE stuff
+# SAVE timing test
+time_test_csv(CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, NOTES)
+
+# SAVE graph
 # save the path as a json:
-# graph.save_graph(OUT_PATH + "_graph")
+# graph.save_graph(OUT_PATH)  # + "_graph")
 # np.save(OUT_PATH + "_pos2node.npy", graph.pos2node)
 
 # data.save_coordinates(path, OUT_PATH, scale_factor=SCALE_PARAM)

@@ -19,7 +19,7 @@ class WeightedGraph(GeneralGraph):
         graphtool=1,
         verbose=1
     ):
-        assert cost_instance.shape == hard_constraints.shape
+        # assert cost_instance.shape == hard_constraints.shape
         # , "Cost size must be equal to corridor definition size!"
 
         # time logs
@@ -32,7 +32,7 @@ class WeightedGraph(GeneralGraph):
         # cost surface
         self.cost_instance = cost_instance
         self.hard_constraints = hard_constraints
-        self.x_len, self.y_len = cost_instance.shape
+        self.x_len, self.y_len = hard_constraints.shape
         # node to pos mapping
         self.node_pos = [
             (i, j) for i in range(self.x_len) for j in range(self.y_len)
@@ -43,7 +43,7 @@ class WeightedGraph(GeneralGraph):
             self.node_pos[i]: i
             for i in range(len(self.node_pos))
         }
-        self.pos2node = np.ones(cost_instance.shape)
+        self.pos2node = np.ones(hard_constraints.shape)
         self.pos2node *= -1
         for n, (i, j) in enumerate(self.node_pos):
             self.pos2node[i, j] = n
@@ -64,8 +64,10 @@ class WeightedGraph(GeneralGraph):
         self.shift_vals = get_donut_vals(self.shifts, vec)
 
     def add_nodes(self):
+        tic = time.time()
         # add nodes to graph
         GeneralGraph.add_nodes(self, len(self.node_pos))
+        self.time_logs["add_nodes"] = round(time.time() - tic, 3)
 
     def add_edges_old(self, shifts):
         # Define edges
@@ -125,7 +127,11 @@ class WeightedGraph(GeneralGraph):
         for i in range(len(self.shifts)):
 
             tic_edges = time.time()
-            costs_shifted = shift_surface(self.cost_rest, self.shifts[i])
+            # switch axes to make shift surface work
+            cost_rest_switched = np.moveaxis(self.cost_rest, 0, -1)
+            costs_shifted = shift_surface(cost_rest_switched, self.shifts[i])
+            # switch axes back
+            costs_shifted = np.moveaxis(costs_shifted, -1, 0)
 
             weights = (costs_shifted + self.cost_rest) / 2
             # new version: edge weights
@@ -137,16 +143,20 @@ class WeightedGraph(GeneralGraph):
             #     "min edge weights:", np.min(weights2)
             # )
 
-            inds_shifted = self.pos2node[costs_shifted > 0]
-
+            inds_shifted = self.pos2node[costs_shifted[0] > 0]
             # delete the ones where inds_shifted is zero
             assert len(inds_shifted) == len(inds_orig)
-            weights_list = weights[costs_shifted > 0]
+
+            # take weights of the shifted ones
+            weights_arr = np.array(
+                [w[costs_shifted[i] > 0] for i, w in enumerate(weights)]
+            )
+
+            inds_arr = np.asarray([inds_orig, inds_shifted])
+            inds_weights = np.concatenate((inds_arr, weights_arr), axis=0)
 
             pos_inds = inds_shifted >= 0
-            out = np.swapaxes(
-                np.asarray([inds_orig, inds_shifted, weights_list]), 1, 0
-            )[pos_inds]
+            out = np.swapaxes(inds_weights, 1, 0)[pos_inds]
 
             n_edges += len(out)
             times_edge_list.append(round(time.time() - tic_edges, 3))
@@ -154,7 +164,7 @@ class WeightedGraph(GeneralGraph):
             # add edges to graph
             tic_graph = time.time()
             if self.graphtool:
-                self.graph.add_edge_list(out, eprops=[self.weight])
+                self.graph.add_edge_list(out, eprops=self.cost_props)
             else:
                 nx_edge_list = [(e[0], e[1], {"weight": e[2]}) for e in out]
                 self.graph.add_edges_from(nx_edge_list)
@@ -178,6 +188,8 @@ class WeightedGraph(GeneralGraph):
 
         self.time_logs["edge_list"] = round(np.mean(times_edge_list), 3)
         self.time_logs["edge_list_times"] = times_edge_list
+
+        self.time_logs["add_all_edges"] = round(time.time() - tic_function, 3)
 
         if self.verbose:
             print("DONE adding", n_edges, "edges:", time.time() - tic_function)
@@ -257,15 +269,22 @@ class WeightedGraph(GeneralGraph):
                 for v in vertices_path
             ]
         else:
-            vertices_path = nx.dijkstra_path(self.graph, source, target)
-            # vertices_path = nx.bellman_ford_path(self.graph, source, target)
+            # vertices_path = nx.dijkstra_path(self.graph, source, target)
+            vertices_path = nx.bellman_ford_path(self.graph, source, target)
             path = [self.node_pos[int(v)] for v in vertices_path]  # [1:-1]]
 
         if self.verbose:
             print("time for shortest path", time.time() - tic)
 
         self.time_logs["shortest_path"] = round(time.time() - tic, 3)
-        return path, []
+
+        # compute edge costs
+        out_costs = []
+        for (i, j) in path:
+            out_costs.append(self.cost_instance[:, i, j].tolist())
+        # TODO: append graph.weight[edge]?
+
+        return path, out_costs
 
     def get_shortest_path_nx(self, source, target):
         # define cutoff

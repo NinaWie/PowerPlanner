@@ -18,7 +18,7 @@ class LineGraph(GeneralGraph):
         verbose=1
     ):
         tic = time.time()
-        assert cost_instance.shape == hard_constraints.shape
+        # assert cost_instance.shape == hard_constraints.shape
         self.cost_instance = cost_instance
         self.hard_constraints = hard_constraints
 
@@ -31,15 +31,24 @@ class LineGraph(GeneralGraph):
         self.time_logs = {}
         self.time_logs["init_graph"] = round(time.time() - tic, 3)
 
-        # set different costs:
-        self.angle_cost = self.graph.new_edge_property("float")
-        self.env_cost = self.graph.new_edge_property("float")
-        self.cost_props = [self.angle_cost, self.env_cost]
-        self.cost_weights = [0, 1]
+        # # set different costs:
+        # self.angle_cost = self.graph.new_edge_property("float")
+        # self.env_cost = self.graph.new_edge_property("float")
+        # self.cost_props = [self.angle_cost, self.env_cost]
+        # self.cost_weights = [0.25, 1]
 
     def set_shift(self, lower, upper, vec, max_angle):
         GeneralGraph.set_shift(self, lower, upper, vec, max_angle)
         self.angle_tuples = get_lg_donut(lower, upper, vec)
+
+    def set_edge_costs(self, classes, weights=None):
+        # classes = ["angle", "env", "urban"]  # data.layer_classes + ["angle"]
+        classes.insert(0, "angle")
+        if len(weights) < len(classes):
+            print("insert weight 1 for angle costs")
+            weights.insert(0, 1)  # append angle weight
+        print("edge costs classes:", classes)
+        GeneralGraph.set_edge_costs(self, classes, weights=weights)
 
     def add_nodes(self):
         tic = time.time()
@@ -66,7 +75,7 @@ class LineGraph(GeneralGraph):
         }
         if self.verbose:
             print("Added ", len(edge_lists_concat), "vertices")
-        self.time_logs["add_nodes"] = time.time() - tic
+        self.time_logs["add_nodes"] = round(time.time() - tic, 3)
 
     def _valid_edges(self, mask, shift):
         in_node = shift_surface(mask, np.asarray(shift[0]) * (-1))
@@ -75,6 +84,8 @@ class LineGraph(GeneralGraph):
         return np.all(stacked, axis=0)
 
     def add_edges(self):
+        tic_function = time.time()
+
         times_edge_list = []
         times_add_edges = []
         if self.verbose:
@@ -85,20 +96,28 @@ class LineGraph(GeneralGraph):
         for shift in self.angle_tuples:
             tic_edges = time.time()
             # get cost for angle
-            angle_weight = shift[2]  # TODO: gewichten
+            angle_weight = shift[2]
             # get all angles that are possible
             all_angles = self._valid_edges(self.hard_constraints, shift)
             node_inds = np.swapaxes(np.vstack(np.where(all_angles)), 1, 0)
-            # cost at edge in lg is cost of node tower inbetween
-            node_cost = self.cost_instance[all_angles]
             in_node = node_inds + shift[0]
             out_node = node_inds + shift[1]
+            # cost at edge in lg is cost of node tower inbetween
+            # node_cost = [self.cost_instance[all_angles]]
+            # new version TODO
+            node_cost_list = [
+                cost_surface[all_angles] for cost_surface in self.cost_instance
+            ]
+            node_cost_arr = np.swapaxes(np.array(node_cost_list), 1, 0)
+
             # iterate over edges and map to node position
             edges_lg = []
             for i in range(len(node_inds)):
                 e1 = self.edge_dict[(tuple(in_node[i]), tuple(node_inds[i]))]
                 e2 = self.edge_dict[(tuple(node_inds[i]), tuple(out_node[i]))]
-                edges_lg.append([e1, e2, angle_weight, node_cost[i]])
+                edges_lg.append(
+                    [e1, e2, angle_weight] + node_cost_arr[i].tolist()
+                )
             # save time
             times_edge_list.append(round(time.time() - tic_edges, 3))
             # add to graph
@@ -112,18 +131,10 @@ class LineGraph(GeneralGraph):
         self.time_logs["edge_list"] = round(np.mean(times_edge_list), 3)
         self.time_logs["edge_list_times"] = times_edge_list
 
+        self.time_logs["add_all_edges"] = round(time.time() - tic_function, 3)
+
         if self.verbose:
             print("Done adding edges:", len(list(self.graph.edges())))
-
-        # add sum of all costs
-        tic = time.time()
-        summed_costs_arr = np.zeros(self.cost_props[0].get_array().shape)
-        for i in range(len(self.cost_props)):
-            prop = self.cost_props[i].get_array()
-            summed_costs_arr += prop * self.cost_weights[i]
-        self.weight.a = summed_costs_arr
-        self.time_logs["sum_of_costs"] = round(time.time() - tic, 3)
-        # w_angle * self.angle_cost.get_array()+ w_env * self.env_cost.get_array()
 
     def add_start_and_dest(self, source, dest):
         tic = time.time()
@@ -146,10 +157,16 @@ class LineGraph(GeneralGraph):
         start_ind = self.graph.vertex_index[start_v]
         dest_ind = self.graph.vertex_index[dest_v]
 
-        start_edges = [[start_ind, u] for u in possible_start_edges]
-        dest_edges = [[u, dest_ind] for u in possible_dest_edges]
-        self.graph.add_edge_list(start_edges)
-        self.graph.add_edge_list(dest_edges)
+        mean_costs = np.mean(self.cost_instance, axis=(1, 2)).tolist()
+        mean_costs.insert(0, 0)  # insert zero angle cost
+        print("mean costs:", mean_costs)  # TODO: leave this?
+
+        start_edges = [
+            [start_ind, u] + mean_costs for u in possible_start_edges
+        ]
+        dest_edges = [[u, dest_ind] + mean_costs for u in possible_dest_edges]
+        self.graph.add_edge_list(start_edges, eprops=self.cost_props)
+        self.graph.add_edge_list(dest_edges, eprops=self.cost_props)
 
         self.time_logs["add_start_end"] = round(time.time() - tic, 3)
 
@@ -172,13 +189,10 @@ class LineGraph(GeneralGraph):
         )
         # version with costs
         out_costs = []
-        for i in range(1, len(vertices_path) - 2):
+        for i in range(len(vertices_path) - 1):
             edge = self.graph.edge(vertices_path[i], vertices_path[i + 1])
-            ang_cost = self.angle_cost[edge]
-            env_cost = self.env_cost[edge]
-            cost_all = self.weight[edge]
-            out_costs.append([ang_cost, env_cost, cost_all])
-
+            out_costs.append([c[edge] for c in self.cost_props])
+            # costs.append(self.weight[edge]) # TODO: add all costs ?
         return out_path, out_costs
 
 
@@ -236,7 +250,9 @@ class LineGraphFromGraph():
         self.time_logs["init_graph"] = round(time.time() - tic, 3)
 
     def add_nodes(self):
+        tic_function = time.time()
         GeneralGraph.add_nodes(self, self.n_edges)
+        self.time_logs["add_nodes"] = round(time.time() - tic_function, 3)
 
     def add_edges(self, max_angle=0.5 * np.pi):
         tic_edges = time.time()
@@ -268,6 +284,8 @@ class LineGraphFromGraph():
         self.time_logs["add_edges_times"] = 0
         self.time_logs["edge_list"] = round(toc_edges - tic_edges, 3)
         self.time_logs["edge_list_times"] = 0
+
+        self.time_logs["add_all_edges"] = round(time.time() - tic_edges, 3)
 
     def add_start_and_dest(self, source_pos, dest_pos):
         tic = time.time()
