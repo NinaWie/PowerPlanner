@@ -6,6 +6,7 @@ import numpy as np
 import json
 import pandas as pd
 import functools
+import time
 # import matplotlib.pyplot as plt
 
 from power_planner.utils import normalize
@@ -213,9 +214,14 @@ class DataReader():
                 )
                 if os.path.exists(file_path):
                     costs = self.read_tif(file_path)
+                # binarize single tif layer so it can be weighted
+                # -1  because in tifs the costly areas are black
                 costs = np.absolute(normalize(costs) - 1)
                 cost_sum_arr[i] = cost_sum_arr[i] + costs * int(weight)
-            cost_sum_arr[i] = normalize(cost_sum_arr[i])
+            # normalize cost surface with all tifs together
+            norm_costs = normalize(cost_sum_arr[i])
+            norm_costs[norm_costs == 0] = 0.0001  # cost cannot be zero!
+            cost_sum_arr[i] = norm_costs
         return cost_sum_arr
 
     def get_shape_point(self, start_end_path):
@@ -265,30 +271,37 @@ class DataReader():
         corr = np.zeros(hard_constraints.shape)
         corr[start_x:end_x, start_y:end_y] = 1
 
-        hard_constraints = corr * hard_constraints
+        hard_constraints = np.asarray(corr * hard_constraints)
 
         # add emergency points in regular grid
         if emergency_dist is not None:
-            w_inds = np.arange(start_x, end_x, emergency_dist).astype(int)
-            h_inds = np.arange(start_y, end_y, emergency_dist).astype(int)
-            # define dist --> emergency points
+            # w_inds = np.arange(start_x, end_x, emergency_dist).astype(int)
+            # h_inds = np.arange(start_y, end_y, emergency_dist).astype(int)
             max_cost = np.max(instance)
-            for row in w_inds:
-                # give maximal cost to emergency points
-                for col in h_inds:
-                    if hard_constraints[row, col] == 0:
-                        instance[:, row, col] = max_cost  # TODO
-                    hard_constraints[row, col] = 1
+            # for row in w_inds:
+            #     # give maximal cost to emergency points
+            #     for col in h_inds:
+            #         if hard_constraints[row, col] == 0:
+            #             instance[:, row, col] = max_cost  # TODO
+            #         hard_constraints[row, col] = 1
+            d = int(emergency_dist // 2)
+            tic = time.time()
+            for i in range(start_x, end_x):
+                for j in range(start_y, end_y):
+                    if not np.any(hard_constraints[i - d:i + d, j - d:j + d]):
+                        hard_constraints[i, j] = 1
+                        instance[:, i, j] = max_cost
+            print("time for emergency points", round(time.time() - tic, 2))
 
         # set start and dest to possible points
         if hard_constraints[start_inds[0], start_inds[1]] == 0:
             print("set start as possible")
             hard_constraints[start_inds[0], start_inds[1]] = 1
-            instance[:, start_inds[0], start_inds[1]] = np.max(instance)
+            instance[:, start_inds[0], start_inds[1]] = np.mean(instance)
         if hard_constraints[dest_inds[0], dest_inds[1]] == 0:
             print("set dest as possible")
             hard_constraints[dest_inds[0], dest_inds[1]] = 1
-            instance[:, dest_inds[0], dest_inds[1]] = np.max(instance)
+            instance[:, dest_inds[0], dest_inds[1]] = np.mean(instance)
 
         return instance, hard_constraints
 

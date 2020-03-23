@@ -2,9 +2,11 @@
 import warnings
 warnings.filterwarnings("ignore")
 from power_planner.data_reader import DataReader
-from power_planner.utils import plot_path, plot_path_costs, time_test_csv
+from power_planner.plotting import plot_path, plot_path_costs
+from power_planner.utils import time_test_csv
 from weighted_graph import WeightedGraph
 from line_graph import LineGraph, LineGraphFromGraph
+from weighted_reduced_graph import ReducedGraph
 import numpy as np
 import time
 import os
@@ -32,9 +34,10 @@ CLASS_WEIGHTS = [1, 1, 1]
 VERBOSE = 1
 GTNX = 1
 
-SCALE_PARAM = 10
+SCALE_PARAM = 2
+CLUSTER_SCALE = 2  # segmentation --> reducing number of nodes by this factor
 
-GRAPH_TYPE = "LINE"
+GRAPH_TYPE = "NORM"
 
 NOTES = "None"
 
@@ -90,6 +93,14 @@ elif GRAPH_TYPE == "LINE_FILE":
     graph = LineGraphFromGraph(
         graph_file, instance, instance_corr, graphtool=GTNX, verbose=VERBOSE
     )
+elif GRAPH_TYPE == "REDUCED":
+    graph = ReducedGraph(
+        instance,
+        instance_corr,
+        CLUSTER_SCALE,
+        graphtool=GTNX,
+        verbose=VERBOSE
+    )
 
 # BUILD GRAPH:
 graph.set_edge_costs(data.layer_classes, CLASS_WEIGHTS)
@@ -115,7 +126,7 @@ plot_path_costs(
     path,
     path_costs,
     graph.cost_classes,
-    buffer=0,
+    buffer=2,
     out_path=OUT_PATH + ".png"
 )
 
@@ -124,8 +135,8 @@ time_test_csv(CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, NOTES)
 
 # SAVE graph
 # save the path as a json:
-# graph.save_graph(OUT_PATH)  # + "_graph")
-# np.save(OUT_PATH + "_pos2node.npy", graph.pos2node)
+graph.save_graph(OUT_PATH + "_graph")
+np.save(OUT_PATH + "_pos2node.npy", graph.pos2node)
 
 # data.save_coordinates(path, OUT_PATH, scale_factor=SCALE_PARAM)
 DataReader.save_json(OUT_PATH, path, path_costs, graph.time_logs, SCALE_PARAM)

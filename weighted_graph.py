@@ -54,6 +54,8 @@ class WeightedGraph(GeneralGraph):
             self, directed=directed, graphtool=graphtool, verbose=verbose
         )
 
+        self.cost_rest = self.cost_instance * (self.hard_constraints >
+                                               0).astype(int)
         # print statements
         self.verbose = verbose
 
@@ -66,7 +68,8 @@ class WeightedGraph(GeneralGraph):
     def add_nodes(self):
         tic = time.time()
         # add nodes to graph
-        GeneralGraph.add_nodes(self, len(self.node_pos))
+        n_nodes = len(np.unique(self.pos2node))
+        GeneralGraph.add_nodes(self, n_nodes)
         self.time_logs["add_nodes"] = round(time.time() - tic, 3)
 
     def add_edges_old(self, shifts):
@@ -109,48 +112,66 @@ class WeightedGraph(GeneralGraph):
             (time.time() - tic) / len(shifts), 3
         )
 
+    def _update_time_logs(
+        self, times_add_edges, times_edge_list, tic_function
+    ):
+        self.time_logs["add_edges"] = round(np.mean(times_add_edges), 3)
+        self.time_logs["add_edges_times"] = times_add_edges
+
+        self.time_logs["edge_list"] = round(np.mean(times_edge_list), 3)
+        self.time_logs["edge_list_times"] = times_edge_list
+
+        self.time_logs["add_all_edges"] = round(time.time() - tic_function, 3)
+
+    def _compute_edge_costs(self, shift_index):
+        # switch axes for shift
+        cost_rest_switched = np.moveaxis(self.cost_rest, 0, -1)
+        # shift by shift
+        costs_shifted = shift_surface(
+            cost_rest_switched, self.shifts[shift_index]
+        )
+        # switch axes back
+        costs_shifted = np.moveaxis(costs_shifted, -1, 0)
+
+        weights = (costs_shifted + self.cost_rest) / 2
+        # new version: edge weights
+        # weights = convolve_faster(self.cost_rest, kernels[i], posneg[i])
+        # weights = weights1 + 2 * weights2
+        # print(
+        #     "max node weights", np.max(weights1), "max edge weights:",
+        #     np.max(weights2), "min node weights", np.min(weights1),
+        #     "min edge weights:", np.min(weights2)
+        # )
+
+        inds_shifted = self.pos2node[costs_shifted[0] > 0]
+        # delete the ones where inds_shifted is zero
+
+        # take weights of the shifted ones
+        weights_arr = np.array(
+            [w[costs_shifted[i] > 0] for i, w in enumerate(weights)]
+        )
+
+        return inds_shifted, weights_arr
+
     def add_edges(self):
         tic_function = time.time()
         inds_orig = self.pos2node[self.hard_constraints > 0]
 
         self.cost_rest = self.cost_instance * (self.hard_constraints >
-                                               0).astype(int)
+                                               0).astype(int)  # -1 ?
         n_edges = 0
-
-        kernels, posneg = get_kernel(self.shifts, self.shift_vals)
+        # kernels, posneg = get_kernel(self.shifts, self.shift_vals)
 
         times_edge_list = []
         times_add_edges = []
-
         edge_array = []
 
         for i in range(len(self.shifts)):
 
             tic_edges = time.time()
-            # switch axes to make shift surface work
-            cost_rest_switched = np.moveaxis(self.cost_rest, 0, -1)
-            costs_shifted = shift_surface(cost_rest_switched, self.shifts[i])
-            # switch axes back
-            costs_shifted = np.moveaxis(costs_shifted, -1, 0)
 
-            weights = (costs_shifted + self.cost_rest) / 2
-            # new version: edge weights
-            # weights = convolve_faster(self.cost_rest, kernels[i], posneg[i])
-            # weights = weights1 + 2 * weights2
-            # print(
-            #     "max node weights", np.max(weights1), "max edge weights:",
-            #     np.max(weights2), "min node weights", np.min(weights1),
-            #     "min edge weights:", np.min(weights2)
-            # )
-
-            inds_shifted = self.pos2node[costs_shifted[0] > 0]
-            # delete the ones where inds_shifted is zero
+            inds_shifted, weights_arr = self._compute_edge_costs(i)
             assert len(inds_shifted) == len(inds_orig)
-
-            # take weights of the shifted ones
-            weights_arr = np.array(
-                [w[costs_shifted[i] > 0] for i, w in enumerate(weights)]
-            )
 
             inds_arr = np.asarray([inds_orig, inds_shifted])
             inds_weights = np.concatenate((inds_arr, weights_arr), axis=0)
@@ -183,14 +204,7 @@ class WeightedGraph(GeneralGraph):
         # self.time_logs["add_edges"] = round(
         #     (time.time() - tic_graph) / len(shifts), 3
         # )
-        self.time_logs["add_edges"] = round(np.mean(times_add_edges), 3)
-        self.time_logs["add_edges_times"] = times_add_edges
-
-        self.time_logs["edge_list"] = round(np.mean(times_edge_list), 3)
-        self.time_logs["edge_list_times"] = times_edge_list
-
-        self.time_logs["add_all_edges"] = round(time.time() - tic_function, 3)
-
+        self._update_time_logs(times_add_edges, times_edge_list, tic_function)
         if self.verbose:
             print("DONE adding", n_edges, "edges:", time.time() - tic_function)
 
@@ -254,14 +268,8 @@ class WeightedGraph(GeneralGraph):
         """
         tic = (time.time())
         # #if source and target are given as indices:
+        vertices_path = GeneralGraph.get_shortest_path(self, source, target)
         if self.graphtool:
-            vertices_path, _ = shortest_path(
-                self.graph,
-                source,
-                target,
-                weights=self.weight,
-                negative_weights=True
-            )
             # exclude auxiliary start and end
             # actual_path = vertices_path[1:-1]
             path = [
@@ -270,7 +278,6 @@ class WeightedGraph(GeneralGraph):
             ]
         else:
             # vertices_path = nx.dijkstra_path(self.graph, source, target)
-            vertices_path = nx.bellman_ford_path(self.graph, source, target)
             path = [self.node_pos[int(v)] for v in vertices_path]  # [1:-1]]
 
         if self.verbose:

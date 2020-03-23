@@ -79,14 +79,13 @@ class GeneralGraph():
         else:
             vertices_path = nx.dijkstra_path(self.graph, source, target)
 
-        if self.verbose:
-            print("time for shortest path", time.time() - tic)
-
         self.time_logs["shortest_path"] = round(time.time() - tic, 3)
         return vertices_path
 
     def save_graph(self, OUT_PATH):
         if self.graphtool:
+            for i, cost_class in enumerate(self.cost_classes):
+                self.graph.edge_properties[cost_class] = self.cost_props[i]
             self.graph.edge_properties["weight"] = self.weight
             self.graph.save(OUT_PATH + ".xml.gz")
         else:
