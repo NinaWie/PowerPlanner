@@ -161,23 +161,31 @@ class WeightedGraph(GeneralGraph):
                                                0).astype(int)  # -1 ?
         n_edges = 0
         # kernels, posneg = get_kernel(self.shifts, self.shift_vals)
+        # edge_array = []
 
         times_edge_list = []
         times_add_edges = []
-        edge_array = []
 
         for i in range(len(self.shifts)):
 
             tic_edges = time.time()
 
+            # compute shift and weights
             inds_shifted, weights_arr = self._compute_edge_costs(i)
             assert len(inds_shifted) == len(inds_orig)
 
+            # concatenete indices and weights, select feasible ones
             inds_arr = np.asarray([inds_orig, inds_shifted])
             inds_weights = np.concatenate((inds_arr, weights_arr), axis=0)
-
             pos_inds = inds_shifted >= 0
             out = np.swapaxes(inds_weights, 1, 0)[pos_inds]
+
+            # remove edges with high costs:
+            # first two columns of out are indices
+            # weights_arr = np.mean(out[:, 2:], axis=1)
+            # weights_mean = np.quantile(weights_arr, 0.9)
+            # inds_higher = np.where(weights_arr < weights_mean)
+            # out = out[inds_higher[0]]
 
             n_edges += len(out)
             times_edge_list.append(round(time.time() - tic_edges, 3))
@@ -280,8 +288,8 @@ class WeightedGraph(GeneralGraph):
             # vertices_path = nx.dijkstra_path(self.graph, source, target)
             path = [self.node_pos[int(v)] for v in vertices_path]  # [1:-1]]
 
-        if self.verbose:
-            print("time for shortest path", time.time() - tic)
+        # if self.verbose:
+        #     print("time for shortest path", time.time() - tic)
 
         self.time_logs["shortest_path"] = round(time.time() - tic, 3)
 

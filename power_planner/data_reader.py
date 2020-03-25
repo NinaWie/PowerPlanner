@@ -74,12 +74,17 @@ def padding(func):
 
 class DataReader():
 
-    def __init__(self, base_path, instance_path, weight_csv, scale_factor):
+    def __init__(
+        self, base_path, instance_path, weight_csv, scenario, scale_factor
+    ):
         self.path = base_path
         self.scale_factor = scale_factor
         weights = pd.read_csv(os.path.join(base_path, weight_csv))
-        self.weights = weights.dropna()
+        self.class_csv = weights.dropna()
         self.padding = 0
+        self.scenario = scenario
+        # get classes and corresponding weights from csv
+        self.compute_class_weights()
 
         with rasterio.open(os.path.join(base_path, instance_path)) as dataset:
             # binary mask
@@ -91,6 +96,18 @@ class DataReader():
             self.transform_matrix = dataset.transform
             #  array itself
             self.instance = dataset.read()[0]  # TODO: redundant
+
+    def compute_class_weights(self):
+        self.layer_classes = []
+        self.class_weights = []
+        for c in np.unique(self.class_csv["class"]):  # "+str(self.scenario)
+            class_rows = self.class_csv[self.class_csv["class"] == c]
+            class_weight = np.unique(
+                class_rows["category_weight_" + str(self.scenario)]
+            )
+            assert len(class_weight) == 1, "multiple weights for single class"
+            self.layer_classes.append(c)
+            self.class_weights.append(class_weight[0])
 
     def set_padding(self, padding):
         """
@@ -157,7 +174,8 @@ class DataReader():
     @binarize
     @reduce_instance
     def get_hard_constraints(self):
-        hard_cons_rows = self.weights[self.weights["weight"] == "Forbidden"]
+        hard_cons_rows = self.class_csv[self.class_csv[
+            "weight_" + str(self.scenario)] == "Forbidden"]
         # read in corresponding tifs
         hard_constraints = []
         for fname in hard_cons_rows["Layer Name"]:
@@ -180,8 +198,11 @@ class DataReader():
     def get_weighted_costs(self):
         cost_sum_arr = np.zeros(self.raster_size)
         cost_sum_arr = np.swapaxes(cost_sum_arr, 1, 0)
-        layers = self.weights[self.weights["weight"] != "Forbidden"]
-        for fname, weight in zip(layers["Layer Name"], layers["weight"]):
+        layers = self.class_csv[
+            self.class_csv["weight_" + str(self.scenario)] != "Forbidden"]
+        for fname, weight in zip(
+            layers["Layer Name"], layers["weight_" + str(self.scenario)]
+        ):
             file_path = os.path.join(self.path, "tif_layers", fname + ".tif")
             if os.path.exists(file_path):
                 costs = self.read_tif(file_path)
@@ -192,11 +213,10 @@ class DataReader():
     @padding
     @reduce_instance
     def get_costs_per_class(self, oneclass=False):
-        layers = self.weights[self.weights["weight"] != "Forbidden"]
+        layers = self.class_csv[
+            self.class_csv["weight_" + str(self.scenario)] != "Forbidden"]
         if oneclass:
             self.layer_classes = ["resistance"]
-        else:
-            self.layer_classes = np.unique(layers["class"]).tolist()
         cost_sum_arr = np.zeros(
             (
                 len(self.layer_classes), self.raster_size[1],
@@ -208,16 +228,20 @@ class DataReader():
                 class_r = layers
             else:
                 class_r = layers[layers["class"] == classname]
-            for fname, weight in zip(class_r["Layer Name"], class_r["weight"]):
+            for fname, weight in zip(
+                class_r["Layer Name"], class_r["weight_" + str(self.scenario)]
+            ):
                 file_path = os.path.join(
                     self.path, "tif_layers", fname + ".tif"
                 )
                 if os.path.exists(file_path):
                     costs = self.read_tif(file_path)
-                # binarize single tif layer so it can be weighted
-                # -1  because in tifs the costly areas are black
-                costs = np.absolute(normalize(costs) - 1)
-                cost_sum_arr[i] = cost_sum_arr[i] + costs * int(weight)
+                    # binarize single tif layer so it can be weighted
+                    # -1  because in tifs the costly areas are black
+                    costs = np.absolute(normalize(costs) - 1)
+                    cost_sum_arr[i] = cost_sum_arr[i] + costs * int(weight)
+                else:
+                    print("file not found:", fname)
             # normalize cost surface with all tifs together
             norm_costs = normalize(cost_sum_arr[i])
             norm_costs[norm_costs == 0] = 0.0001  # cost cannot be zero!

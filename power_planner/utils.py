@@ -20,19 +20,23 @@ def append_to_csv(file_name, list_of_elem):
         csv_writer.writerow(list_of_elem)
 
 
-def time_test_csv(CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, notes):
+def time_test_csv(
+    ID, CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, path_costs, notes
+):
     if GTNX:
         n_nodes = len(list(graph.graph.vertices()))
     else:
         n_nodes = len(graph.graph.nodes())
+    # compute average costs:
+    costs = [round(s, 3) for s in np.sum(path_costs, axis=0)]
     # --> csv columns:
     # scale,graphtool,graphtype,n_nodes,n_edges,add_nodes_time,add_edge_time,
     # shortest_path_time, notes
     param_list = [
-        SCALE_PARAM, GTNX, GRAPH_TYPE, n_nodes,
+        ID, SCALE_PARAM, GTNX, GRAPH_TYPE, n_nodes,
         len(list(graph.graph.edges())), graph.time_logs["add_nodes"],
         graph.time_logs["add_all_edges"], graph.time_logs["shortest_path"],
-        notes
+        costs, notes
     ]
     append_to_csv(CSV_TIMES, param_list)
 

@@ -60,8 +60,10 @@ class LineGraph(GeneralGraph):
                 np.asarray(self.shifts[i]) * (-1)
             )
             possible_out_edges = np.where(self.hard_constraints * out_edges)
+            # first and second coordinate of the edge
             out_edge_2 = np.swapaxes(np.vstack(possible_out_edges), 1, 0)
             out_edge_1 = out_edge_2 + np.array(self.shifts[i])
+            # add both together
             out_edge = np.concatenate(
                 [np.expand_dims(out_edge_2, 1),
                  np.expand_dims(out_edge_1, 1)],

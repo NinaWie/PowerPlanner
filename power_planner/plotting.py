@@ -36,7 +36,7 @@ def plot_path_costs(
     print("out costs shape:", edgecosts.shape)
     # env_costs = np.mean(edgecosts, axis=1)  # edgecosts[:, 1]  #
     n_crit = edgecosts.shape[1]
-    print("number crit", n_crit)
+    # print("number crit", n_crit)
 
     # fill for angle costs
     if len(instance) < n_crit:
@@ -73,6 +73,49 @@ def plot_path_costs(
         plt.savefig(out_path, bbox_inches='tight')
     else:
         plt.show()
+
+
+def plot_pareto(pareto0, pareto1, paths, vary, classes, out_path=None):
+    # plot pareto
+    color = plt.cm.rainbow(np.linspace(0, 1, len(pareto0)))
+    # scatter pareto curve
+    plt.figure(figsize=(20, 10))
+    plt.subplot(1, 2, 1)
+    plt.scatter(pareto0, pareto1, c=color)
+    plt.xlabel(classes[0], fontsize=15)
+    plt.ylabel(classes[1], fontsize=15)
+    plt.title("Pareto frontier for " + classes[0] + " vs " + classes[1])
+
+    # plot paths
+    plt.subplot(1, 2, 2)
+    for i, p in enumerate(paths):
+        p_arr = np.array(p)
+        plt.plot(p_arr[:, 1], p_arr[:, 0], label=str(i), c=color[i])
+        # print("path length:", len(p))
+    plt.legend(title="Weight of " + classes[0] + " costs")
+    plt.title(
+        "Paths for varied weights for " + classes[0] + " vs " + classes[1]
+    )
+
+    if out_path is not None:
+        plt.savefig(out_path + "_pareto.png")
+    else:
+        plt.show()
+
+
+# def plot_pareto_paths(paths, classes, out_path=None):
+#     color = iter(plt.cm.rainbow(np.linspace(0, 1, len(paths))))
+#     plt.figure(figsize=(20, 10))
+#     for i, p in enumerate(paths):
+#         p_arr = np.array(p)
+#         c = next(color)
+#         plt.plot(p_arr[:, 1], p_arr[:, 0], label=str(i), c=c)
+#         # print("path length:", len(p))
+#     plt.legend(title="Weight of " + classes[0] + " costs")
+#     if out_path is not None:
+#         plt.savefig(out_path + "_pareto_paths.png")
+#     else:
+#         plt.show()
 
 
 def plot_graph(g):

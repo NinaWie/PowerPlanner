@@ -22,14 +22,15 @@ DEST_PATH = "dest_point/Destination"
 WEIGHT_CSV = "layer_weights.csv"
 CSV_TIMES = "outputs/time_tests.csv"
 
-OUT_PATH = "outputs/path_" + str(round(time.time()))[-5:]
+ID = str(round(time.time() / 60))[-5:]
+OUT_PATH = "outputs/path_" + ID
 
 # define hyperparameters:
 RASTER = 10
 PYLON_DIST_MIN = 150
 PYLON_DIST_MAX = 250
 MAX_ANGLE = 0.5 * np.pi
-CLASS_WEIGHTS = [1, 1, 1]
+SCENARIO = 1
 
 VERBOSE = 1
 GTNX = 1
@@ -62,7 +63,7 @@ if LOAD:
         (instance, instance_corr, start_inds, dest_inds) = pickle.load(infile)
 else:
     # read in files
-    data = DataReader(PATH_FILES, CORR_PATH, WEIGHT_CSV, SCALE_PARAM)
+    data = DataReader(PATH_FILES, CORR_PATH, WEIGHT_CSV, SCENARIO, SCALE_PARAM)
     instance, instance_corr, start_inds, dest_inds = data.get_data(
         START_PATH, DEST_PATH, emergency_dist=PYLON_DIST_MAX
     )
@@ -103,7 +104,7 @@ elif GRAPH_TYPE == "REDUCED":
     )
 
 # BUILD GRAPH:
-graph.set_edge_costs(data.layer_classes, CLASS_WEIGHTS)
+graph.set_edge_costs(data.layer_classes, data.class_weights)
 graph.set_shift(PYLON_DIST_MIN, PYLON_DIST_MAX, vec, MAX_ANGLE)
 # add nodes and vertices
 graph.add_nodes()
@@ -118,9 +119,17 @@ graph.sum_costs()
 source_v, target_v = graph.add_start_and_dest(start_inds, dest_inds)
 print("start and end:", source_v, target_v)
 path, path_costs = graph.get_shortest_path(source_v, target_v)
+# PARETO FRONTEIR
+graph.get_pareto(
+    np.arange(0, 1.1, 0.1),
+    source_v,
+    target_v,
+    out_path=OUT_PATH,
+    compare=[2, 3]
+)
 
 # PLOT RESULT
-# plot_path(instance * instance_corr, path, buffer=1, out_path=OUT_PATH + ".png")
+# plot_path(instance * instance_corr, path, buffer=1, out_path=OUT_PATH+".png")
 plot_path_costs(
     instance * instance_corr,
     path,
@@ -131,12 +140,13 @@ plot_path_costs(
 )
 
 # SAVE timing test
-time_test_csv(CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, NOTES)
+time_test_csv(
+    ID, CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, path_costs, NOTES
+)
 
 # SAVE graph
-# save the path as a json:
-graph.save_graph(OUT_PATH + "_graph")
-np.save(OUT_PATH + "_pos2node.npy", graph.pos2node)
+# graph.save_graph(OUT_PATH + "_graph")
+# np.save(OUT_PATH + "_pos2node.npy", graph.pos2node)
 
 # data.save_coordinates(path, OUT_PATH, scale_factor=SCALE_PARAM)
 DataReader.save_json(OUT_PATH, path, path_costs, graph.time_logs, SCALE_PARAM)

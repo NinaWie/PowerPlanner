@@ -1,8 +1,9 @@
 import numpy as np
-from graph_tool.all import Graph, shortest_path, load_graph
+from graph_tool.all import Graph, shortest_path, load_graph, find_edge
 import time
 import networkx as nx
 from power_planner.utils import get_half_donut
+from power_planner.plotting import plot_pareto
 
 
 class GeneralGraph():
@@ -61,6 +62,35 @@ class GeneralGraph():
         self.weight.a = summed_costs_arr
 
         self.time_logs["sum_of_costs"] = round(time.time() - tic, 3)
+
+    def get_pareto(self, vary, source, dest, out_path=None, compare=[0, 1]):
+        """
+        compute shortest paths with varied weights
+        """
+        pareto = list()
+        paths = list()
+        cost0 = self.cost_props[compare[0]].get_array()
+        cost1 = self.cost_props[compare[1]].get_array()
+        class0 = self.cost_classes[compare[0]]
+        class1 = self.cost_classes[compare[1]]
+        # test_edge = find_edge(self.graph, self.graph.edge_index, 44)[0]
+        for w in vary:
+            self.weight.a = cost0 * w + cost1 * (1 - w)
+            # print("test weight", self.weight[test_edge])
+            path, path_costs = self.get_shortest_path(source, dest)
+            # print(
+            #     class0, "weight:", w, class1, "weight:", 1 - w, "costs:",
+            #     np.mean(path_costs, axis=0)
+            # )
+            pareto.append(np.sum(path_costs, axis=0))
+            paths.append(path)
+        pareto = np.asarray(pareto)
+        pareto0 = pareto[:, compare[0]]
+        pareto1 = pareto[:, compare[1]]
+        plot_pareto(
+            pareto0, pareto1, paths, vary, [class0, class1], out_path=out_path
+        )
+        # plot_pareto_paths(paths, [class0, class1], out_path=out_path)
 
     def get_shortest_path(self, source, target):
         """
