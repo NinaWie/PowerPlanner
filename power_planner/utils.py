@@ -3,6 +3,9 @@ import numpy as np
 import networkx as nx
 import pwlf
 from csv import writer
+
+from scipy.ndimage.morphology import binary_dilation
+from scipy.spatial.distance import cdist
 # from numba import jit, njit
 
 
@@ -39,16 +42,6 @@ def time_test_csv(
         costs, notes
     ]
     append_to_csv(CSV_TIMES, param_list)
-
-
-def pos2node(pos, length):
-    return pos[0] * length + pos[1]
-
-
-def node2pos(node, length):
-    j = node % length  # rest
-    i = node // length
-    return i, j
 
 
 def normalize(instance):
@@ -231,6 +224,71 @@ def emergency_points(hard_cons, costs, max_dist, start_inds, dest_inds):
         hard_cons[row, h_inds] = 1
         costs[row, h_inds] = max_cost
     return hard_cons, costs
+
+
+def get_path_lines(cost_shape, paths):
+    path_dilation = np.zeros(cost_shape)
+    for path in paths:
+        # iterate over path nodes
+        for i in range(len(path) - 1):
+            line = bresenham_line(*path[i], *path[i + 1])
+            # print(line)
+            for (j, k) in line:
+                path_dilation[j, k] = 1
+    return path_dilation
+
+
+def dilation_dist(path_dilation, n_dilate=None):
+    """
+    path_dilation: binary array with zeros everywhere except for path locations
+    """
+    saved_arrs = [path_dilation]
+    if n_dilate is None:
+        # compute number of iterations: maximum distance of pixel to line
+        x_coords, y_coords = np.where(path_dilation)
+        x_len, y_len = path_dilation.shape
+        # print([np.min(x_coords), x_len- np.max(x_coords), np.min(y_coords), y_len- np.max(y_coords)])
+        n_dilate = max(
+            [
+                np.min(x_coords), x_len - np.max(x_coords),
+                np.min(y_coords), y_len - np.max(y_coords)
+            ]
+        )
+
+    # dilate
+    for _ in range(n_dilate):
+        path_dilation = binary_dilation(path_dilation)
+        saved_arrs.append(path_dilation)
+    saved_arrs = np.sum(np.array(saved_arrs), axis=0)
+    return saved_arrs
+
+
+def cdist_dist(path_dilation):
+    saved_arrs = np.zeros(path_dilation.shape)
+    x_len, y_len = path_dilation.shape
+    xa = np.array([[i, j] for i in range(x_len) for j in range(y_len)])
+    xb = np.swapaxes(np.vstack(np.where(path_dilation > 0)), 1, 0)
+    print(xa.shape, xb.shape)
+    all_dists = cdist(xa, xb)
+    print(all_dists.shape)
+    out = np.min(all_dists, axis=1)
+    k = 0
+    for i in range(x_len):
+        for j in range(y_len):
+            saved_arrs[i, j] = out[k]
+            k += 1
+    return saved_arrs
+
+
+def get_distance_surface(out_shape, paths, mode="dilation", n_dilate=None):
+    path_dilation = get_path_lines(out_shape, paths)
+    if mode == "dilation":
+        dist_surface = dilation_dist(path_dilation, n_dilate=n_dilate)
+    elif mode == "cdist":
+        dist_surface = cdist_dist(path_dilation)
+    else:
+        raise NotImplementedError
+    return dist_surface
 
 
 def bresenham_line(x0, y0, x1, y1):

@@ -3,6 +3,7 @@ powerenv/
 power_planner.code-workspace
 outputs/
 test_file.py
+backup.py
 
 notebooks/Function*
 *.csv

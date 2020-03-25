@@ -91,6 +91,7 @@ class GeneralGraph():
             pareto0, pareto1, paths, vary, [class0, class1], out_path=out_path
         )
         # plot_pareto_paths(paths, [class0, class1], out_path=out_path)
+        return paths
 
     def get_shortest_path(self, source, target):
         """

@@ -35,12 +35,10 @@ class ReducedGraph(WeightedGraph):
         # cluster_scale = 2 --> half of the nodes
 
         self.cluster_scale = cluster_scale
-        self.mode = "all"
+        self.mode = "center"
 
         # overwrites pos2node
         self._watershed_transform(mode=self.mode)
-        # plt.imshow(self.cost_rest[0])
-        # plt.savefig("pos2node.png")
         print("number of nodes watershed:", len(np.unique(self.pos2node)))
         self.node_pos = []
 
@@ -76,8 +74,10 @@ class ReducedGraph(WeightedGraph):
             print("number seeds: ", np.sum(seeds > 0))
 
         w1 = watershed(edges, seeds, compactness=compact)
-
+        # w1 is full watershed --> labels spread over corridor borders
+        # but: label 0 also included --> +1 before corridor
         w1_g_zero = (w1 + 1) * greater_zero
+        # labels: 0 is forbidden, 1 etc is watershed labels
         labels = np.unique(w1_g_zero)
         self.pos2node = np.zeros(w1.shape).astype(int)
         self.nr_members = np.zeros(w1.shape).astype(int)
@@ -86,10 +86,13 @@ class ReducedGraph(WeightedGraph):
             self.pos2node[inds] = i
             self.nr_members[inds] = np.sum(inds)
 
-        if mode == "center":
+        self.pos2node[self.pos2node == 0] = -1
+
+       if mode == "center":
             new_cost_rest = np.zeros(self.cost_rest.shape)
-            for i, lab in enumerate(labels):
-                x_inds, y_inds = np.where(w1_g_zero == lab)
+            for lab in np.unique(self.pos2node)[1:]:
+                # , lab in enumerate(labels):
+                x_inds, y_inds = np.where(self.pos2node == lab)
                 for j in range(len(self.cost_rest)):
                     new_cost_rest[j,
                                   int(np.mean(x_inds)),
@@ -98,6 +101,7 @@ class ReducedGraph(WeightedGraph):
                                   )
             self.cost_rest = new_cost_rest
 
+        self.cost_rest *= self.hard_constraints
         self.time_logs["watershed"] = round(time.time() - tic, 3)
 
     def _split_to_shape(self, a, chunk_shape, start_axis=0):
@@ -119,67 +123,6 @@ class ReducedGraph(WeightedGraph):
             split_to_shape(split_a, chunk_shape, start_axis + 1)
             for split_a in split
         ]
-
-    def add_edges(self):
-        tic_function = time.time()
-
-        inds_orig = self.pos2node[self.cost_rest[0] > 0]
-
-        # kernels, posneg = get_kernel(self.shifts, self.shift_vals)
-        n_edges = 0
-        times_edge_list = []
-        times_add_edges = []
-
-        for i in range(len(self.shifts)):
-            tic_edges = time.time()
-
-            inds_shifted, weights_arr = WeightedGraph._compute_edge_costs(
-                self, i
-            )
-            assert len(inds_shifted) == len(
-                inds_orig
-            ), "orig:{},shifted:{}".format(len(inds_orig), len(inds_shifted))
-
-            # concatenate indices and costs
-            inds_arr = np.asarray([inds_orig, inds_shifted])
-            inds_weights = np.concatenate((inds_arr, weights_arr), axis=0)
-
-            pos_inds = inds_shifted > 0
-            edges = np.swapaxes(inds_weights, 1, 0)[pos_inds]
-            # print(edges.shape)
-
-            # delete duplicates:
-            if self.mode == "all":
-                df = pd.DataFrame(
-                    edges, columns=[str(i + 1) for i in range(edges.shape[1])]
-                )
-                df = df[df["1"] != df["2"]]
-                df_grouped = df.groupby(["1", "2"], as_index=False).agg(
-                    {str(i): "sum"
-                     for i in range(3, edges.shape[1] + 1)}
-                )
-                out = np.array(df_grouped)
-                # if i == 0:
-                #     df.to_csv("df.csv")
-                #     df_grouped.to_csv("df_grouped.csv")
-            else:
-                out = edges  # must do this one because no need to sum up now
-
-            n_edges += len(out)
-            times_edge_list.append(round(time.time() - tic_edges, 3))
-
-            # add edges to graph
-            tic_graph = time.time()
-            self.graph.add_edge_list(out, eprops=self.cost_props)
-            # else:
-            #     nx_edge_list = [(e[0], e[1], {"weight": e[2]}) for e in out]
-            #     self.graph.add_edges_from(nx_edge_list)
-            times_add_edges.append(round(time.time() - tic_graph, 3))
-
-        # update time logs
-        WeightedGraph._update_time_logs(
-            self, times_add_edges, times_edge_list, tic_function
-        )
 
     def get_shortest_path(self, source, target):
         tic = time.time()

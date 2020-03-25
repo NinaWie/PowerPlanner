@@ -50,6 +50,49 @@ def reduce_instance(func):
     return call_and_reduce
 
 
+def strip(func):
+
+    def call_and_strip(*args, **kwargs):
+        instance, instance_corr, start_inds, dest_inds = func(*args, **kwargs)
+        print(
+            "PREV:", instance.shape, instance_corr.shape, start_inds, dest_inds
+        )
+        # find x and y width to strip
+        x_coords, y_coords = np.where(instance_corr)
+        _, x_len, y_len = instance.shape
+        print(
+            "abstand vom rand", [
+                np.min(x_coords), x_len - np.max(x_coords),
+                np.min(y_coords), y_len - np.max(y_coords)
+            ]
+        )
+        # padding size
+        padding = min(
+            [
+                np.min(x_coords), x_len - np.max(x_coords),
+                np.min(y_coords), y_len - np.max(y_coords)
+            ]
+        )
+        # define borders
+        up = np.min(x_coords) - padding
+        down = np.max(x_coords) + padding
+        left = np.min(y_coords) - padding
+        right = np.max(y_coords) + padding
+        # strip
+        instance = instance[:, up:down, left:right]
+        instance_corr = instance_corr[up:down, left:right]
+        start_inds -= np.array([up, left])
+        dest_inds -= np.array([up, left])
+        print(
+            "AFTER:", instance.shape, instance_corr.shape, start_inds,
+            dest_inds
+        )
+
+        return instance, instance_corr, start_inds, dest_inds
+
+    return call_and_strip
+
+
 def binarize(func):
 
     def call_and_binarize(*args, **kwargs):
@@ -329,6 +372,7 @@ class DataReader():
 
         return instance, hard_constraints
 
+    @strip
     def get_data(self, start_path, dest_path, emergency_dist=None):
         """
         Get all data at once: intersection of hard constraints and return

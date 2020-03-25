@@ -35,10 +35,10 @@ SCENARIO = 1
 VERBOSE = 1
 GTNX = 1
 
-SCALE_PARAM = 2
+SCALE_PARAM = 5
 CLUSTER_SCALE = 2  # segmentation --> reducing number of nodes by this factor
 
-GRAPH_TYPE = "NORM"
+GRAPH_TYPE = "REDUCED"
 
 NOTES = "None"
 
@@ -120,13 +120,13 @@ source_v, target_v = graph.add_start_and_dest(start_inds, dest_inds)
 print("start and end:", source_v, target_v)
 path, path_costs = graph.get_shortest_path(source_v, target_v)
 # PARETO FRONTEIR
-graph.get_pareto(
-    np.arange(0, 1.1, 0.1),
-    source_v,
-    target_v,
-    out_path=OUT_PATH,
-    compare=[2, 3]
-)
+# _ = graph.get_pareto(
+#     np.arange(0, 1.1, 0.1),
+#     source_v,
+#     target_v,
+#     out_path=OUT_PATH,
+#     compare=[2, 3]
+# )
 
 # PLOT RESULT
 # plot_path(instance * instance_corr, path, buffer=1, out_path=OUT_PATH+".png")
@@ -146,7 +146,7 @@ time_test_csv(
 
 # SAVE graph
 # graph.save_graph(OUT_PATH + "_graph")
-# np.save(OUT_PATH + "_pos2node.npy", graph.pos2node)
+np.save(OUT_PATH + "_pos2node.npy", graph.pos2node)
 
 # data.save_coordinates(path, OUT_PATH, scale_factor=SCALE_PARAM)
 DataReader.save_json(OUT_PATH, path, path_costs, graph.time_logs, SCALE_PARAM)
