@@ -2,6 +2,7 @@ from power_planner.utils import normalize
 
 import matplotlib.pyplot as plt
 import numpy as np
+# import pwlf
 
 
 def plot_path(instance, path, out_path=None, buffer=2):
@@ -60,8 +61,9 @@ def plot_path_costs(
             # colour red for high cost
             expanded[x - buffer:x + buffer + 1, y - buffer:y + buffer +
                      1] = [0.9, 1 - normed_env_costs[i], 0.2]
-        wo_zero = expanded[:, np.any(curr_costs > 0, axis=0)]
-        wo_zero = wo_zero[np.any(curr_costs > 0, axis=1), :]
+        # wo_zero = expanded[:, np.any(curr_costs > 0, axis=0)]
+        # wo_zero = wo_zero[np.any(curr_costs > 0, axis=1), :]
+        wo_zero = expanded
 
         # display
         plt.subplot(1, n_crit, j + 1)
@@ -69,6 +71,30 @@ def plot_path_costs(
         plt.title(class_names[j])
     plt.tight_layout()
 
+    if out_path is not None:
+        plt.savefig(out_path, bbox_inches='tight')
+    else:
+        plt.show()
+
+
+def plot_pipeline_paths(plot_surfaces, output_paths, buffer=1, out_path=None):
+    """
+    subplots of different steps in the pipeline
+    """
+    plt.figure(figsize=(20, 10))
+    for i, (p, p_cost) in enumerate(output_paths):
+        plt.subplot(1, len(output_paths), i + 1)
+
+        # expand to greyscale
+        expanded = np.expand_dims(plot_surfaces[i], axis=2)
+        expanded = np.tile(expanded, (1, 1, 3))
+        # colour nodes in path in red
+        for (x, y) in p:
+            expanded[x - buffer:x + buffer + 1, y - buffer:y + buffer +
+                     1] = [0.9, 0.2, 0.2]  # colour red
+        plt.imshow(np.swapaxes(expanded, 1, 0), origin="upper")
+        print("costs", np.sum(np.array(p_cost), axis=0))
+    plt.tight_layout()
     if out_path is not None:
         plt.savefig(out_path, bbox_inches='tight')
     else:
@@ -147,3 +173,21 @@ def _transform_cols(arr):
         for j in range(y):
             new[i, j] = cols[int(transformed[int(arr[i, j])])]
     return new
+
+
+def piecewise_linear_fit(path, segments=5, out_path=None):
+    x = path[:, 0]
+    y = path[:, 1]
+    my_pwlf = pwlf.PiecewiseLinFit(x, y)
+    breaks = my_pwlf.fit(segments)
+    print("breaks", breaks)
+    x_hat = np.linspace(x.min(), x.max(), 100)
+    y_hat = my_pwlf.predict(x_hat)
+
+    plt.figure(figsize=(20, 10))
+    plt.plot(x, y, 'o')
+    plt.plot(x_hat, y_hat, '-')
+    if out_path is None:
+        plt.show()
+    else:
+        plt.savefig(out_path)

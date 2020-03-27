@@ -1,0 +1,15 @@
+name: penv
+channels:
+    - conda-forge
+dependencies:
+    - graph-tool
+    - jupyter
+    - numpy
+    - pandas
+    - scipy
+    - networkx
+    - scikit-image
+    - matplotlib
+    - rasterio
+    - pyshp
+    - pillow

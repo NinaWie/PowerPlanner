@@ -45,7 +45,12 @@ def reduce_instance(func):
             else:
                 raise ValueError("Passed array is not of the right shape")
         else:
-            return np.swapaxes(img, 1, 0)  # TODO: why
+            print(img.shape)
+            return np.swapaxes(
+                img,
+                len(img.shape) - 1,
+                len(img.shape) - 2
+            )  # TODO: why
 
     return call_and_reduce
 
@@ -54,9 +59,7 @@ def strip(func):
 
     def call_and_strip(*args, **kwargs):
         instance, instance_corr, start_inds, dest_inds = func(*args, **kwargs)
-        print(
-            "PREV:", instance.shape, instance_corr.shape, start_inds, dest_inds
-        )
+
         # find x and y width to strip
         x_coords, y_coords = np.where(instance_corr)
         _, x_len, y_len = instance.shape
@@ -83,10 +86,6 @@ def strip(func):
         instance_corr = instance_corr[up:down, left:right]
         start_inds -= np.array([up, left])
         dest_inds -= np.array([up, left])
-        print(
-            "AFTER:", instance.shape, instance_corr.shape, start_inds,
-            dest_inds
-        )
 
         return instance, instance_corr, start_inds, dest_inds
 
@@ -283,11 +282,11 @@ class DataReader():
                     # -1  because in tifs the costly areas are black
                     costs = np.absolute(normalize(costs) - 1)
                     cost_sum_arr[i] = cost_sum_arr[i] + costs * int(weight)
-                else:
-                    print("file not found:", fname)
+                # else:
+                #     print("file not found:", fname)
             # normalize cost surface with all tifs together
             norm_costs = normalize(cost_sum_arr[i])
-            norm_costs[norm_costs == 0] = 0.0001  # cost cannot be zero!
+            # norm_costs[norm_costs == 0] = 0.0001  # cost cannot be zero!
             cost_sum_arr[i] = norm_costs
         return cost_sum_arr
 

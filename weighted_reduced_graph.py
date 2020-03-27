@@ -1,5 +1,5 @@
-from constraints import convolve, get_kernel, convolve_faster
-from power_planner.utils import shift_surface, get_donut_vals
+# from constraints import ConstraintUtils
+from power_planner.utils import get_donut_vals
 from weighted_graph import WeightedGraph
 
 import numpy as np
@@ -11,6 +11,15 @@ import pandas as pd
 
 from skimage.segmentation import watershed
 from skimage import data, util, filters, color
+
+# elif GRAPH_TYPE == "REDUCED":
+#     graph = ReducedGraph(
+#         instance,
+#         instance_corr,
+#         CLUSTER_SCALE,
+#         graphtool=GTNX,
+#         verbose=VERBOSE
+#     )
 
 
 class ReducedGraph(WeightedGraph):
@@ -88,7 +97,7 @@ class ReducedGraph(WeightedGraph):
 
         self.pos2node[self.pos2node == 0] = -1
 
-       if mode == "center":
+        if mode == "center":
             new_cost_rest = np.zeros(self.cost_rest.shape)
             for lab in np.unique(self.pos2node)[1:]:
                 # , lab in enumerate(labels):

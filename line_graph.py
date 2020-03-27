@@ -2,12 +2,16 @@ import numpy as np
 import time
 from graph_tool.all import Graph, shortest_path, load_graph
 
-from power_planner.utils import angle, shift_surface, get_lg_donut, get_half_donut
+from power_planner.utils import angle, get_lg_donut
+from power_planner.constraints import ConstraintUtils
 
 from general_graph import GeneralGraph
 
 
 class LineGraph(GeneralGraph):
+    """
+    Build a line graph for incorporating angle costs
+    """
 
     def __init__(
         self,
@@ -26,22 +30,21 @@ class LineGraph(GeneralGraph):
         GeneralGraph.__init__(
             self, directed=directed, graphtool=graphtool, verbose=verbose
         )
-        self.verbose = verbose
 
         self.time_logs = {}
         self.time_logs["init_graph"] = round(time.time() - tic, 3)
 
-        # # set different costs:
-        # self.angle_cost = self.graph.new_edge_property("float")
-        # self.env_cost = self.graph.new_edge_property("float")
-        # self.cost_props = [self.angle_cost, self.env_cost]
-        # self.cost_weights = [0.25, 1]
-
     def set_shift(self, lower, upper, vec, max_angle):
+        """
+        Get donut tuples (for vertices) and angle tuples (for edges)
+        """
         GeneralGraph.set_shift(self, lower, upper, vec, max_angle)
         self.angle_tuples = get_lg_donut(lower, upper, vec)
 
     def set_edge_costs(self, classes, weights=None):
+        """
+        Initialize edge properties as in super, but add angle costs
+        """
         # classes = ["angle", "env", "urban"]  # data.layer_classes + ["angle"]
         classes.insert(0, "angle")
         if len(weights) < len(classes):
@@ -51,11 +54,15 @@ class LineGraph(GeneralGraph):
         GeneralGraph.set_edge_costs(self, classes, weights=weights)
 
     def add_nodes(self):
+        """
+        Compute nodes = edges in original graph
+        """
         tic = time.time()
         # Build edge dictionary
         edge_array = []
         for i in range(len(self.shifts)):
-            out_edges = shift_surface(
+            # shift surface
+            out_edges = ConstraintUtils.shift_surface(
                 self.hard_constraints,
                 np.asarray(self.shifts[i]) * (-1)
             )
@@ -70,22 +77,39 @@ class LineGraph(GeneralGraph):
                 axis=1
             )
             edge_array.append(out_edge)
+        # combine all edge lists
         edge_lists_concat = np.concatenate(edge_array, axis=0)
+        # save edge dict
         self.edge_dict = {
             (tuple(edge_lists_concat[i, 0]), tuple(edge_lists_concat[i, 1])): i
             for i in range(len(edge_lists_concat))
         }
+        # verbose
         if self.verbose:
             print("Added ", len(edge_lists_concat), "vertices")
         self.time_logs["add_nodes"] = round(time.time() - tic, 3)
 
     def _valid_edges(self, mask, shift):
-        in_node = shift_surface(mask, np.asarray(shift[0]) * (-1))
-        out_node = shift_surface(mask, np.asarray(shift[1]) * (-1))
+        """
+        Get all valid edges given a certain shift
+        :param mask: binary 2d array marking forbidden areas
+        """
+        in_node = ConstraintUtils.shift_surface(
+            mask,
+            np.asarray(shift[0]) * (-1)
+        )
+        out_node = ConstraintUtils.shift_surface(
+            mask,
+            np.asarray(shift[1]) * (-1)
+        )
         stacked = np.asarray([mask, in_node, out_node])
         return np.all(stacked, axis=0)
 
     def add_edges(self):
+        """
+        Add edges to line graph: Iterate over angle tuples, retrieve nodes,
+        add if angle is possible with corresponding angle cost
+        """
         tic_function = time.time()
 
         times_edge_list = []
@@ -127,18 +151,17 @@ class LineGraph(GeneralGraph):
             self.graph.add_edge_list(edges_lg, eprops=self.cost_props)
             times_add_edges.append(round(time.time() - tic_graph, 3))
 
-        self.time_logs["add_edges"] = round(np.mean(times_add_edges), 3)
-        self.time_logs["add_edges_times"] = times_add_edges
-
-        self.time_logs["edge_list"] = round(np.mean(times_edge_list), 3)
-        self.time_logs["edge_list_times"] = times_edge_list
-
-        self.time_logs["add_all_edges"] = round(time.time() - tic_function, 3)
-
-        if self.verbose:
-            print("Done adding edges:", len(list(self.graph.edges())))
+        # time logs
+        self._update_time_logs(times_add_edges, times_edge_list, tic_function)
 
     def add_start_and_dest(self, source, dest):
+        """
+        start and dest are no vertices in line graph, so need to add them
+        seperately
+        --> get all outgoing edges from source
+        --> create new start vertex, connect to all outgoing edges
+        :returns: newly created source and dest vertices
+        """
         tic = time.time()
         possible_start_edges = []
         for shift in self.shifts:
@@ -175,6 +198,10 @@ class LineGraph(GeneralGraph):
         return [start_v, dest_v]
 
     def get_shortest_path(self, source, dest):
+        """
+        Compute shortest path and convert from line graph representation to 
+        coordinates
+        """
         vertices_path = GeneralGraph.get_shortest_path(self, source, dest)
         edge_mapping = [
             k for k, _ in
@@ -199,6 +226,9 @@ class LineGraph(GeneralGraph):
 
 
 class LineGraphFromGraph():
+    """
+    Class to build a line graph from a given weighted graph
+    """
 
     def __init__(
         self,

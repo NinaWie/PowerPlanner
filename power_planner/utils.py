@@ -1,7 +1,4 @@
-import matplotlib.pyplot as plt
 import numpy as np
-import networkx as nx
-import pwlf
 from csv import writer
 
 from scipy.ndimage.morphology import binary_dilation
@@ -24,22 +21,31 @@ def append_to_csv(file_name, list_of_elem):
 
 
 def time_test_csv(
-    ID, CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, path_costs, notes
+    ID, CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, path_costs, dist,
+    time_pipeline, notes
 ):
+    """
+    Prepare current data for time logs csv file
+    :param CSV_TIMES: output file
+    :params: all parameters to save in the csv
+    """
     if GTNX:
         n_nodes = len(list(graph.graph.vertices()))
     else:
         n_nodes = len(graph.graph.nodes())
     # compute average costs:
     costs = [round(s, 3) for s in np.sum(path_costs, axis=0)]
+    # get scale factor and number of nonzero pixels:
+    factor = graph.factor
+    n_pixels = np.sum(np.mean(graph.cost_rest, axis=0) > 0)
     # --> csv columns:
     # scale,graphtool,graphtype,n_nodes,n_edges,add_nodes_time,add_edge_time,
     # shortest_path_time, notes
     param_list = [
-        ID, SCALE_PARAM, GTNX, GRAPH_TYPE, n_nodes,
+        ID, SCALE_PARAM, GTNX, GRAPH_TYPE, factor, dist, n_pixels, n_nodes,
         len(list(graph.graph.edges())), graph.time_logs["add_nodes"],
         graph.time_logs["add_all_edges"], graph.time_logs["shortest_path"],
-        costs, notes
+        costs, time_pipeline, notes
     ]
     append_to_csv(CSV_TIMES, param_list)
 
@@ -75,26 +81,13 @@ def get_donut(radius_low, radius_high):
     return pos_x - img_size, pos_y - img_size
 
 
-def piecewise_linear_fit(path, segments=5, out_path=None):
-    x = path[:, 0]
-    y = path[:, 1]
-    my_pwlf = pwlf.PiecewiseLinFit(x, y)
-    breaks = my_pwlf.fit(segments)
-    print("breaks", breaks)
-    x_hat = np.linspace(x.min(), x.max(), 100)
-    y_hat = my_pwlf.predict(x_hat)
-
-    plt.figure(figsize=(20, 10))
-    plt.plot(x, y, 'o')
-    plt.plot(x_hat, y_hat, '-')
-    if out_path is None:
-        plt.show()
-    else:
-        plt.savefig(out_path)
-
-
 #@njit
 def angle(vec1, vec2):
+    """
+    Compute angle between two vectors
+    :params vec1, vec2: two 1-dim vectors of same size, can be lists or array
+    :returns angle
+    """
     # path = np.asarray(path)
     # for p, (i, j) in enumerate(path[:-2]):
     #     v1 = path[p + 1] - path[p]
@@ -110,6 +103,13 @@ def angle(vec1, vec2):
 
 
 def get_donut_vals(donut_tuples, vec):
+    """
+    compute the angle between edges defined by donut tuples
+    :param donut_tuples: list of pairs of tuples, each pair defines an edge 
+    going from [(x1,y1), (x2,y2)]
+    :param vec: vector to compute angle with
+    :returns: list of same length as donut_tuples with all angles
+    """
     return [angle(tup, vec) + 0.1 for tup in donut_tuples]
 
 
@@ -157,76 +157,14 @@ def get_lg_donut(radius_low, radius_high, vec, min_angle=3 * np.pi / 4):
     return linegraph_tuples
 
 
-def shift_surface_old(costs, shift):
-    """
-    Shifts a numpy array and pads with zeros
-    :param costs: 2-dim numpy array
-    :param shift: tuple of shift in x and y direction
-    (negative value for left / up shift)
-    :returns shifted array of same size
-    """
-    if shift[0] < 0:
-        tup1 = (0, -shift[0])
-    else:
-        tup1 = (shift[0], 0)
-    if shift[1] < 0:
-        tup2 = (0, -shift[1])
-    else:
-        tup2 = (shift[1], 0)
-
-    costs_shifted = np.pad(costs, (tup1, tup2), mode='constant')
-
-    if shift[0] > 0 and shift[1] > 0:
-        costs_shifted = costs_shifted[:-shift[0], :-shift[1]]
-    elif shift[0] > 0 and shift[1] <= 0:
-        costs_shifted = costs_shifted[:-shift[0], -shift[1]:]
-    elif shift[0] <= 0 and shift[1] > 0:
-        costs_shifted = costs_shifted[-shift[0]:, :-shift[1]]
-    elif shift[0] <= 0 and shift[1] <= 0:
-        costs_shifted = costs_shifted[-shift[0]:, -shift[1]:]
-
-    return costs_shifted
-
-
-def shift_surface(costs, shift):
-    """
-    Shifts a numpy array and pads with zeros
-    :param costs: 2-dim numpy array
-    :param shift: tuple of shift in x and y direction
-    BUT: ONLY WORKS FOR (+,+) or (+,-) shift tuples
-    :returns shifted array of same size
-    """
-    rolled_costs = np.roll(costs, shift, axis=(0, 1))
-    if shift[0] >= 0:
-        rolled_costs[:shift[0], :] = 0
-    else:
-        rolled_costs[shift[0]:, :] = 0
-    if shift[1] >= 0:
-        rolled_costs[:, :shift[1]] = 0
-    else:
-        rolled_costs[:, shift[1]:] = 0
-    return rolled_costs
-
-
-def emergency_points(hard_cons, costs, max_dist, start_inds, dest_inds):
-    hard_cons[start_inds[0], start_inds[1]] = 1
-    hard_cons[dest_inds[0], dest_inds[1]] = 1
-    # add grid of emergency points
-    w, h = hard_cons.shape
-    print(w, max_dist)
-    w_inds = np.arange(0, w, max_dist)
-    print(w_inds)
-    w_inds = w_inds.astype(int)
-    h_inds = np.arange(0, h, max_dist).astype(int)
-    print(w_inds)
-    max_cost = np.max(costs)
-    for row in w_inds:
-        hard_cons[row, h_inds] = 1
-        costs[row, h_inds] = max_cost
-    return hard_cons, costs
-
-
 def get_path_lines(cost_shape, paths):
+    """
+    Given a list of paths, compute the continous lines in an array of cost_shape
+    :param cost_shape: desired 2-dim output shape of array
+    :param paths: list of paths of possibly different lengths, each path is 
+    a list of tuples
+    :returns: 2-dim binary of shape cost_shape where paths are set to 1
+    """
     path_dilation = np.zeros(cost_shape)
     for path in paths:
         # iterate over path nodes
@@ -240,7 +178,12 @@ def get_path_lines(cost_shape, paths):
 
 def dilation_dist(path_dilation, n_dilate=None):
     """
-    path_dilation: binary array with zeros everywhere except for path locations
+    Compute surface of distances with dilation
+    :param path_dilation: binary array with zeros everywhere except for paths
+    :param dilate: How often to do dilation --> defines radious of corridor
+    :returns: 2dim array of same shape as path_dilation, with values 
+    0 = infinite distance from path
+    n_dilation = path location
     """
     saved_arrs = [path_dilation]
     if n_dilate is None:
@@ -264,6 +207,13 @@ def dilation_dist(path_dilation, n_dilate=None):
 
 
 def cdist_dist(path_dilation):
+    """
+    Use scipy cdist function to compute distances from path (SLOW!)
+    :param path_dilation: binary array with zeros everywhere except for paths
+    :returns: 2dim array of same shape as path_dilation, with values 
+    0 = path
+    x = pixel has distance x from the path
+    """
     saved_arrs = np.zeros(path_dilation.shape)
     x_len, y_len = path_dilation.shape
     xa = np.array([[i, j] for i in range(x_len) for j in range(y_len)])
@@ -281,6 +231,14 @@ def cdist_dist(path_dilation):
 
 
 def get_distance_surface(out_shape, paths, mode="dilation", n_dilate=None):
+    """
+    Given a list of paths, compute the corridor
+    :param mode: How to compute --> dilation or cdist
+    :param out_shape: desired output shape
+    :param paths: list of paths of possibly different lengths, each path is 
+    a list of tuples
+    :returns: 2dim array showing the distance from the path
+    """
     path_dilation = get_path_lines(out_shape, paths)
     if mode == "dilation":
         dist_surface = dilation_dist(path_dilation, n_dilate=n_dilate)

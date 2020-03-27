@@ -1,1 +1,1 @@
-from .utils import shift_surface
+from .utils import normalize

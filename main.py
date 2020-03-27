@@ -2,8 +2,8 @@
 import warnings
 warnings.filterwarnings("ignore")
 from power_planner.data_reader import DataReader
-from power_planner.plotting import plot_path, plot_path_costs
-from power_planner.utils import time_test_csv
+from power_planner.plotting import plot_path_costs, plot_pipeline_paths
+from power_planner.utils import time_test_csv, get_distance_surface
 from weighted_graph import WeightedGraph
 from line_graph import LineGraph, LineGraphFromGraph
 from weighted_reduced_graph import ReducedGraph
@@ -35,14 +35,14 @@ SCENARIO = 1
 VERBOSE = 1
 GTNX = 1
 
-SCALE_PARAM = 5
-CLUSTER_SCALE = 2  # segmentation --> reducing number of nodes by this factor
+SCALE_PARAM = 1
+PIPELINE = [(4, 80), (2, 50), (1, 0)]  # [(1, 0)]  # (8, 100), (4, 80),
 
-GRAPH_TYPE = "REDUCED"
+GRAPH_TYPE = "NORM"
 
-NOTES = "None"
+NOTES = "parcels"
 
-LOAD = 0
+LOAD = 1
 SAVE_PICKLE = 0
 IOPATH = os.path.join(PATH_FILES, "data_dump_" + str(SCALE_PARAM) + ".dat")
 
@@ -60,7 +60,8 @@ print("defined pylon distances in raster:", PYLON_DIST_MIN, PYLON_DIST_MAX)
 if LOAD:
     # load from pickle
     with open(IOPATH, "rb") as infile:
-        (instance, instance_corr, start_inds, dest_inds) = pickle.load(infile)
+        data = pickle.load(infile)
+        (instance, instance_corr, start_inds, dest_inds) = data.data
 else:
     # read in files
     data = DataReader(PATH_FILES, CORR_PATH, WEIGHT_CSV, SCENARIO, SCALE_PARAM)
@@ -69,9 +70,9 @@ else:
     )
 
     if SAVE_PICKLE:
-        out_tuple = (instance, instance_corr, start_inds, dest_inds)
+        data.data = (instance, instance_corr, start_inds, dest_inds)
         with open(IOPATH, "wb") as outfile:
-            pickle.dump(out_tuple, outfile)
+            pickle.dump(data, outfile)
         print("successfully saved data")
 
 vec = dest_inds - start_inds
@@ -94,41 +95,84 @@ elif GRAPH_TYPE == "LINE_FILE":
     graph = LineGraphFromGraph(
         graph_file, instance, instance_corr, graphtool=GTNX, verbose=VERBOSE
     )
-elif GRAPH_TYPE == "REDUCED":
-    graph = ReducedGraph(
-        instance,
-        instance_corr,
-        CLUSTER_SCALE,
-        graphtool=GTNX,
-        verbose=VERBOSE
-    )
+else:
+    raise NotImplementedError
 
 # BUILD GRAPH:
 graph.set_edge_costs(data.layer_classes, data.class_weights)
 graph.set_shift(PYLON_DIST_MIN, PYLON_DIST_MAX, vec, MAX_ANGLE)
-# add nodes and vertices
+# add vertices
 graph.add_nodes()
-graph.add_edges()
-# weighted sum of all costs
-graph.sum_costs()
 
-# SHORTEST PATH
-# # Alternative: with list of start and end nodes:
-# source, target = graph.add_start_end_vertices()
-# path = graph.shortest_path(source, target)
-source_v, target_v = graph.add_start_and_dest(start_inds, dest_inds)
-print("start and end:", source_v, target_v)
-path, path_costs = graph.get_shortest_path(source_v, target_v)
-# PARETO FRONTEIR
-# _ = graph.get_pareto(
-#     np.arange(0, 1.1, 0.1),
-#     source_v,
-#     target_v,
-#     out_path=OUT_PATH,
-#     compare=[2, 3]
-# )
+# START PIPELINE
+tic = time.time()
+corridor = np.ones(instance_corr.shape)  # beginning: everything is included
+output_paths = []
+plot_surfaces = []
+
+for (factor, dist) in PIPELINE:
+    print("----------- PIPELINE", factor, dist, "---------------")
+    graph.set_cost_rest(factor, corridor, start_inds, dest_inds)
+    print(
+        "1) set cost rest, nonzero:",
+        np.sum(np.mean(graph.cost_rest, axis=0) > 0)
+    )
+    graph.add_edges()
+    print("2) added edges", len(list(graph.graph.edges())))
+    print("number of vertices:", len(list(graph.graph.vertices())))
+
+    # weighted sum of all costs
+    graph.sum_costs()
+    source_v, target_v = graph.add_start_and_dest(start_inds, dest_inds)
+    print("3) summed cost, get source and dest")
+    # get actual best path
+    path, path_costs = graph.get_shortest_path(source_v, target_v)
+    print("4) shortest path")
+    # save for inspection
+    output_paths.append((path, path_costs))
+    plot_surfaces.append(graph.cost_rest[2])  # TODO: mean makes black
+    # get several paths --> here: pareto paths
+    paths = [path]
+    # graph.get_pareto(
+    #     np.arange(0, 1.1, 0.1), source_v, target_v, compare=[2, 3]
+    # )
+
+    # PRINT AND SAVE timing test
+    time_test_csv(
+        ID, CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, path_costs, dist,
+        0, NOTES
+    )
+
+    if VERBOSE:
+        del graph.time_logs['edge_list_times']
+        del graph.time_logs['add_edges_times']
+        print(graph.time_logs)
+
+    if dist > 0:
+        # do specified numer of dilations
+        dist_surface = get_distance_surface(
+            graph.pos2node.shape, paths, mode="dilation", n_dilate=dist
+        )
+        print("5) compute distance surface")
+        # remove the edges of vertices in the corridor (to overwrite)
+        graph.remove_vertices(dist_surface, delete_padding=PYLON_DIST_MAX)
+        print("6) remove edges")
+        # set new corridor
+        corridor = (dist_surface > 0).astype(int)
+
+time_pipeline = round(time.time() - tic, 3)
+print("FINISHED PIPELINE:", time_pipeline)
+
+# SAVE timing test
+time_test_csv(
+    ID, CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, path_costs, 0,
+    time_pipeline, NOTES
+)
 
 # PLOT RESULT
+plot_pipeline_paths(
+    plot_surfaces, output_paths, buffer=2, out_path=OUT_PATH + "_pipeline.png"
+)
 # plot_path(instance * instance_corr, path, buffer=1, out_path=OUT_PATH+".png")
 plot_path_costs(
     instance * instance_corr,
@@ -139,22 +183,12 @@ plot_path_costs(
     out_path=OUT_PATH + ".png"
 )
 
-# SAVE timing test
-time_test_csv(
-    ID, CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, path_costs, NOTES
-)
-
 # SAVE graph
 # graph.save_graph(OUT_PATH + "_graph")
-np.save(OUT_PATH + "_pos2node.npy", graph.pos2node)
+# np.save(OUT_PATH + "_pos2node.npy", graph.pos2node)
 
 # data.save_coordinates(path, OUT_PATH, scale_factor=SCALE_PARAM)
 DataReader.save_json(OUT_PATH, path, path_costs, graph.time_logs, SCALE_PARAM)
-
-if VERBOSE:
-    del graph.time_logs['edge_list_times']
-    del graph.time_logs['add_edges_times']
-    print(graph.time_logs)
 
 #TESTING:
 
@@ -181,3 +215,28 @@ if VERBOSE:
 # instance_corr = instance
 # PYLON_DIST_MIN = 1.5
 # PYLON_DIST_MAX = 3
+
+# PIPELINE PREV
+
+# # add edges in corridor
+# corridor = np.ones(instance_corr.shape)
+# graph.set_cost_rest(1, corridor, start_inds, dest_inds)
+# graph.add_edges()
+# # weighted sum of all costs
+# graph.sum_costs()
+
+# # SHORTEST PATH
+# # # Alternative: with list of start and end nodes:
+# # source, target = graph.add_start_end_vertices()
+# # path = graph.shortest_path(source, target)
+# source_v, target_v = graph.add_start_and_dest(start_inds, dest_inds)
+# print("start and end:", source_v, target_v)
+# path, path_costs = graph.get_shortest_path(source_v, target_v)
+# # PARETO FRONTEIR
+# _ = graph.get_pareto(
+#     np.arange(0, 1.1, 0.1),
+#     source_v,
+#     target_v,
+#     out_path=OUT_PATH,
+#     compare=[2, 3]
+# )

@@ -1,13 +1,12 @@
-from constraints import convolve, get_kernel, convolve_faster
-from power_planner.utils import shift_surface, get_donut_vals
+from power_planner.constraints import ConstraintUtils
+from power_planner.utils import get_donut_vals
 from general_graph import GeneralGraph
+from power_planner.utils_instance import CostUtils
 
 import numpy as np
-from graph_tool.all import Graph, shortest_path
+from graph_tool.all import Graph, shortest_path, remove_labeled_edges
 import time
 import networkx as nx
-from collections import deque
-import pandas as pd
 
 
 class WeightedGraph(GeneralGraph):
@@ -34,33 +33,55 @@ class WeightedGraph(GeneralGraph):
         self.cost_instance = cost_instance
         self.hard_constraints = hard_constraints
         self.x_len, self.y_len = hard_constraints.shape
-        # node to pos mapping
-        self.node_pos = [
-            (i, j) for i in range(self.x_len) for j in range(self.y_len)
-            if hard_constraints[i, j]
-        ]
-        # pos to node mapping
-        self.pos_node_dict = {
-            self.node_pos[i]: i
-            for i in range(len(self.node_pos))
-        }
-        self.pos2node = np.ones(hard_constraints.shape)
-        self.pos2node *= -1
-        for n, (i, j) in enumerate(self.node_pos):
-            self.pos2node[i, j] = n
-        print("initialized weighted graph (pos2node and node_pos)")
 
         # initialize graph:
         GeneralGraph.__init__(
             self, directed=directed, graphtool=graphtool, verbose=verbose
         )
 
-        self.cost_rest = self.cost_instance * (self.hard_constraints >
-                                               0).astype(int)
         # print statements
         self.verbose = verbose
 
         self.time_logs["init_graph"] = round(time.time() - tic, 3)
+
+        # original pos2node: all filled except for hard constraints
+        self.pos2node_orig = np.arange(1, self.x_len * self.y_len + 1).reshape(
+            (self.x_len, self.y_len)
+        )
+        self.pos2node_orig *= (self.hard_constraints > 0).astype(int)
+        # self.pos2node_orig[self.pos2node_orig==0] = -1
+        self.pos2node_orig -= 1
+        if self.verbose:
+            print("initialized weighted graph pos2node")
+
+    def set_cost_rest(self, factor, corridor, start_inds, dest_inds):
+        self.factor = factor
+        self.cost_rest = self.cost_instance * (self.hard_constraints >
+                                               0).astype(int) * corridor
+        # downsample
+        tic = time.time()
+        if factor > 1:
+            self.cost_rest = CostUtils.downsample(self.cost_rest, factor)
+        self.time_logs["downsample"] = round(time.time() - tic, 3)
+
+        # repeat because edge artifacts
+        self.cost_rest = self.cost_rest * (self.hard_constraints >
+                                           0).astype(int) * corridor
+
+        # add start and end TODO ugly
+        self.cost_rest[:, dest_inds[0],
+                       dest_inds[1]] = self.cost_instance[:, dest_inds[0],
+                                                          dest_inds[1]]
+        self.cost_rest[:, start_inds[0],
+                       start_inds[1]] = self.cost_instance[:, start_inds[0],
+                                                           start_inds[1]]
+
+        # define pos2node accordingly:
+        inverted_corridor = np.absolute(1 - corridor).astype(bool)
+        self.pos2node = self.pos2node_orig.copy()
+        # set all which are not in the corridor to -1
+        self.pos2node[inverted_corridor] = -1
+        self.time_logs["set_cost_rest"] = round(time.time() - tic, 3)
 
     def set_shift(self, lower, upper, vec, max_angle):
         GeneralGraph.set_shift(self, lower, upper, vec, max_angle)
@@ -69,26 +90,16 @@ class WeightedGraph(GeneralGraph):
     def add_nodes(self):
         tic = time.time()
         # add nodes to graph
-        n_nodes = len(np.unique(self.pos2node))
+        n_nodes = self.x_len * self.y_len
+        # len(np.unique(self.pos2node))
         GeneralGraph.add_nodes(self, n_nodes)
         self.time_logs["add_nodes"] = round(time.time() - tic, 3)
-
-    def _update_time_logs(
-        self, times_add_edges, times_edge_list, tic_function
-    ):
-        self.time_logs["add_edges"] = round(np.mean(times_add_edges), 3)
-        self.time_logs["add_edges_times"] = times_add_edges
-
-        self.time_logs["edge_list"] = round(np.mean(times_edge_list), 3)
-        self.time_logs["edge_list_times"] = times_edge_list
-
-        self.time_logs["add_all_edges"] = round(time.time() - tic_function, 3)
 
     def _compute_edge_costs(self, shift_index):
         # switch axes for shift
         cost_rest_switched = np.moveaxis(self.cost_rest, 0, -1)
         # shift by shift
-        costs_shifted = shift_surface(
+        costs_shifted = ConstraintUtils.shift_surface(
             cost_rest_switched, self.shifts[shift_index]
         )
         # switch axes back
@@ -96,7 +107,8 @@ class WeightedGraph(GeneralGraph):
 
         weights = (costs_shifted + self.cost_rest) / 2
         # new version: edge weights
-        # weights = convolve_faster(self.cost_rest, kernels[i], posneg[i])
+        # weights = ConstraintUtils.convolve_faster
+        # (self.cost_rest, kernels[i], posneg[i])
         # weights = weights1 + 2 * weights2
         # print(
         #     "max node weights", np.max(weights1), "max edge weights:",
@@ -104,12 +116,13 @@ class WeightedGraph(GeneralGraph):
         #     "min edge weights:", np.min(weights2)
         # )
 
-        inds_shifted = self.pos2node[np.mean(costs_shifted, axis=0) > 0]
-        # delete the ones where inds_shifted is zero
+        mean_costs_shifted = np.mean(costs_shifted, axis=0) > 0
+
+        inds_shifted = self.pos2node[mean_costs_shifted]
 
         # take weights of the shifted ones
         weights_arr = np.array(
-            [w[costs_shifted[i] > 0] for i, w in enumerate(weights)]
+            [w[mean_costs_shifted] for i, w in enumerate(weights)]
         )
 
         return inds_shifted, weights_arr
@@ -119,11 +132,14 @@ class WeightedGraph(GeneralGraph):
         inds_orig = self.pos2node[np.mean(self.cost_rest, axis=0) > 0]
 
         n_edges = 0
-        # kernels, posneg = get_kernel(self.shifts, self.shift_vals)
+        # kernels, posneg = ConstraintUtils.get_kernel(self.shifts, self.shift_vals)
         # edge_array = []
 
         times_edge_list = []
         times_add_edges = []
+
+        if self.verbose:
+            print("n_neighbors:", len(self.shifts))
 
         for i in range(len(self.shifts)):
 
@@ -148,6 +164,11 @@ class WeightedGraph(GeneralGraph):
             # inds_higher = np.where(weights_arr < weights_mean)
             # out = out[inds_higher[0]]
 
+            # Error if -1 entries because graph-tool crashes with -1 nodes
+            if np.any(out[:2].flatten() == -1):
+                print(np.where(out[:2] == -1))
+                raise RuntimeError
+
             n_edges += len(out)
             times_edge_list.append(round(time.time() - tic_edges, 3))
 
@@ -159,6 +180,7 @@ class WeightedGraph(GeneralGraph):
                 nx_edge_list = [(e[0], e[1], {"weight": e[2]}) for e in out]
                 self.graph.add_edges_from(nx_edge_list)
             times_add_edges.append(round(time.time() - tic_graph, 3))
+
             # alternative: collect edges here and add alltogether
             # edge_array.append(out)
 
@@ -172,11 +194,46 @@ class WeightedGraph(GeneralGraph):
         # self.time_logs["add_edges"] = round(
         #     (time.time() - tic_graph) / len(shifts), 3
         # )
+
         self._update_time_logs(times_add_edges, times_edge_list, tic_function)
         if self.verbose:
             print("DONE adding", n_edges, "edges:", time.time() - tic_function)
 
+    def remove_vertices(self, dist_surface, delete_padding=0):
+        """
+        Remove edges in a certain corridor (or all) to replace them by
+        a refined surface
+
+        @param dist_surface: a surface where each pixel value corresponds to 
+        the distance of the pixel to the shortest path
+        @param delete_padding: define padding in which part of the corridor to 
+        delete vertices (cannot delete all because then graph unconnected)
+        """
+        tic = time.time()
+        # #Possibility 1: remove all edges of vertices in (smaller) corridor
+        # corridor = (dist_surface>delete_padding).astype(int)
+        # corr_vertices = self.pos2node * corridor
+        # new_vertices = corr_vertices[corr_vertices>0]
+        # for v in new_vertices:
+        #     self.graph.clear_vertex(self.graph.vertex(v))
+        # #Possibility 2: remove all edges --> only considering corridor then
+        self.graph.clear_edges()
+        # #Possibility 3: remove all out_edges of corridor vertices
+        # corridor = (dist_surface>0).astype(int)
+        # corr_vertices = self.pos2node * corridor
+        # new_vertices = corr_vertices[corr_vertices>0]
+        # remove_property = self.graph.new_edge_property("float")
+        # remove_property.a = np.zeros(self.weight.get_array().shape)
+        # for v in new_vertices:
+        #     for e in self.graph.vertex(v).out_edges():
+        #         remove_property[e] = 1
+        # remove_labeled_edges(self.graph, remove_property)
+        self.time_logs["remove_edges"] = round(time.time() - tic, 3)
+
     def add_start_and_dest(self, start_inds, dest_inds):
+        """
+        In this case only get the corresponding vertex (no need to add)
+        """
         start_node_ind = self.pos2node[start_inds[0], start_inds[1]]
         dest_node_ind = self.pos2node[dest_inds[0], dest_inds[1]]
         if self.graphtool:
@@ -185,51 +242,6 @@ class WeightedGraph(GeneralGraph):
         else:
             return start_node_ind, dest_node_ind
 
-    def old_add_start_end_vertices(self, start_list=None, end_list=None):
-        """
-        old version: connect to a list of start and a list of end vertices
-        """
-        tic = time.time()
-        # defaults if no start and end list are given:
-        topbottom, leftright = np.where(self.hard_constraints)
-        if start_list is None:
-            nr_start = len(topbottom) // 1000
-            start_list = zip(topbottom[:nr_start], leftright[:nr_start])
-        if end_list is None:
-            nr_end = len(topbottom) // 1000
-            end_list = zip(topbottom[-nr_end:], leftright[-nr_end:])
-
-        # iterate over start and end and over neighbors
-        neighbor_lists = [start_list, end_list]
-        start_and_end = []
-
-        for k in [0, 1]:
-            # add start and end vertex
-            if self.graphtool:
-                v = self.graph.add_vertex()
-                v_index = self.graph.vertex_index[v]
-                start_and_end.append(v)
-            else:
-                v_index = len(self.node_pos) + k
-                self.graph.add_node(v_index)
-                start_and_end.append(v_index)
-            print("index of start/end vertex", v_index)
-            # compute edges to neighbors
-            edges = []
-            for (i, j) in neighbor_lists[k]:
-                neighbor_ind = self.pos2node[i, j]
-                edges.append(
-                    [v_index, neighbor_ind, 1]
-                )  # weight zero funktioniert nicht
-            # add edges from start and end to neighbors
-            if self.graphtool:
-                self.graph.add_edge_list(edges, eprops=[self.weight])
-            else:
-                nx_edges = [(e[0], e[1], {"weight": e[2]}) for e in edges]
-                self.graph.add_edges_from(nx_edges)
-        self.time_logs["start_end_vertex"] = round(time.time() - tic, 3)
-        return start_and_end[0], start_and_end[1]
-
     def get_shortest_path(self, source, target):
         """
         Compute shortest path from source vertex to target vertex
@@ -237,19 +249,14 @@ class WeightedGraph(GeneralGraph):
         tic = (time.time())
         # #if source and target are given as indices:
         vertices_path = GeneralGraph.get_shortest_path(self, source, target)
-        if self.graphtool:
-            # exclude auxiliary start and end
-            # actual_path = vertices_path[1:-1]
-            path = [
-                self.node_pos[self.graph.vertex_index[v]]
-                for v in vertices_path
-            ]
-        else:
-            # vertices_path = nx.dijkstra_path(self.graph, source, target)
-            path = [self.node_pos[int(v)] for v in vertices_path]  # [1:-1]]
 
-        # if self.verbose:
-        #     print("time for shortest path", time.time() - tic)
+        path = []
+        for v in vertices_path:
+            if self.graphtool:
+                ind = self.graph.vertex_index[v]
+            else:
+                ind = int(v)
+            path.append((ind // self.y_len, ind % self.y_len))
 
         self.time_logs["shortest_path"] = round(time.time() - tic, 3)
 
@@ -260,3 +267,49 @@ class WeightedGraph(GeneralGraph):
         # TODO: append graph.weight[edge]?
 
         return path, out_costs
+
+
+# def old_add_start_end_vertices(self, start_list=None, end_list=None):
+#         """
+#         old version: connect to a list of start and a list of end vertices
+#         """
+#         tic = time.time()
+#         # defaults if no start and end list are given:
+#         topbottom, leftright = np.where(self.hard_constraints)
+#         if start_list is None:
+#             nr_start = len(topbottom) // 1000
+#             start_list = zip(topbottom[:nr_start], leftright[:nr_start])
+#         if end_list is None:
+#             nr_end = len(topbottom) // 1000
+#             end_list = zip(topbottom[-nr_end:], leftright[-nr_end:])
+
+#         # iterate over start and end and over neighbors
+#         neighbor_lists = [start_list, end_list]
+#         start_and_end = []
+
+#         for k in [0, 1]:
+#             # add start and end vertex
+#             if self.graphtool:
+#                 v = self.graph.add_vertex()
+#                 v_index = self.graph.vertex_index[v]
+#                 start_and_end.append(v)
+#             else:
+#                 v_index = len(self.node_pos) + k
+#                 self.graph.add_node(v_index)
+#                 start_and_end.append(v_index)
+#             print("index of start/end vertex", v_index)
+#             # compute edges to neighbors
+#             edges = []
+#             for (i, j) in neighbor_lists[k]:
+#                 neighbor_ind = self.pos2node[i, j]
+#                 edges.append(
+#                     [v_index, neighbor_ind, 1]
+#                 )  # weight zero funktioniert nicht
+#             # add edges from start and end to neighbors
+#             if self.graphtool:
+#                 self.graph.add_edge_list(edges, eprops=[self.weight])
+#             else:
+#                 nx_edges = [(e[0], e[1], {"weight": e[2]}) for e in edges]
+#                 self.graph.add_edges_from(nx_edges)
+#         self.time_logs["start_end_vertex"] = round(time.time() - tic, 3)
+#         return start_and_end[0], start_and_end[1]
