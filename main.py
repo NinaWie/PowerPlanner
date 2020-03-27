@@ -11,9 +11,19 @@ import numpy as np
 import time
 import os
 import pickle
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-cluster', action='store_true')
+parser.add_argument('scale', help="how much to downsample", type=int)
+args = parser.parse_args()
+
+if args.cluster:
+    PATH_FILES = os.path.join("..", "data")
+else:
+    PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
 
 # define paths:
-PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
 HARD_CONS_PATH = "hard_constraints"
 CORR_PATH = "corridor/Corridor_BE.tif"
 COST_PATH = "COSTSURFACE.tif"
@@ -35,7 +45,7 @@ SCENARIO = 1
 VERBOSE = 1
 GTNX = 1
 
-SCALE_PARAM = 1
+SCALE_PARAM = args.scale
 PIPELINE = [(4, 80), (2, 50), (1, 0)]  # [(1, 0)]  # (8, 100), (4, 80),
 
 GRAPH_TYPE = "NORM"
@@ -109,6 +119,7 @@ tic = time.time()
 corridor = np.ones(instance_corr.shape)  # beginning: everything is included
 output_paths = []
 plot_surfaces = []
+time_infos = []
 
 for (factor, dist) in PIPELINE:
     print("----------- PIPELINE", factor, dist, "---------------")
@@ -142,6 +153,7 @@ for (factor, dist) in PIPELINE:
         ID, CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, path_costs, dist,
         0, NOTES
     )
+    time_infos.append(graph.time_logs)
 
     if VERBOSE:
         del graph.time_logs['edge_list_times']
@@ -188,7 +200,10 @@ plot_path_costs(
 # np.save(OUT_PATH + "_pos2node.npy", graph.pos2node)
 
 # data.save_coordinates(path, OUT_PATH, scale_factor=SCALE_PARAM)
-DataReader.save_json(OUT_PATH, path, path_costs, graph.time_logs, SCALE_PARAM)
+# DataReader.save_json(OUT_PATH, path, path_costs, graph.time_logs,SCALE_PARAM)
+DataReader.save_pipeline_infos(
+    OUT_PATH, output_paths, time_infos, PIPELINE, SCALE_PARAM
+)
 
 #TESTING:
 

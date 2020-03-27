@@ -443,3 +443,28 @@ class DataReader():
         # save as json
         with open(out_path + "_infos.json", "w") as outfile:
             json.dump(out_dict, outfile)
+
+    @staticmethod
+    def save_pipeline_infos(
+        out_path, output_paths, time_infos, pipeline, scale_factor=1
+    ):
+        """
+        new function to save the information for a whole pipeline
+        """
+        assert len(pipeline) == len(output_paths), "must be same len"
+
+        out_dict = {"scale": scale_factor, "pipeline": pipeline, "data": []}
+
+        for i, (path, path_costs) in enumerate(output_paths):
+            power_path = (np.asarray(path) * scale_factor).tolist()
+
+            data_dict = {
+                "path_cells": power_path,
+                "edgecosts": path_costs,
+                "time_logs": time_infos[i]
+            }
+            out_dict["data"].append(data_dict)
+
+        # save as json
+        with open(out_path + "_infos.json", "w") as outfile:
+            json.dump(out_dict, outfile)
