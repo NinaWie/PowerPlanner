@@ -1,12 +1,16 @@
 # import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings("ignore")
+# utils imports
 from power_planner.data_reader import DataReader
 from power_planner.plotting import plot_path_costs, plot_pipeline_paths
 from power_planner.utils import time_test_csv, get_distance_surface
+# graph imports
 from weighted_graph import WeightedGraph
 from line_graph import LineGraph, LineGraphFromGraph
 from weighted_reduced_graph import ReducedGraph
+from random_graph import RandomGraph
+# dependencies
 import numpy as np
 import time
 import os
@@ -15,7 +19,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-cluster', action='store_true')
-parser.add_argument('scale', help="how much to downsample", type=int)
+parser.add_argument('scale', help="downsample", type=int, default=1)
 args = parser.parse_args()
 
 if args.cluster:
@@ -32,10 +36,21 @@ DEST_PATH = "dest_point/Destination"
 WEIGHT_CSV = "layer_weights.csv"
 CSV_TIMES = "outputs/time_tests.csv"
 
-ID = str(round(time.time() / 60))[-5:]
-OUT_PATH = "outputs/path_" + ID
+# DEFINE CONFIGURATION
+ID = "random_1_pipe"  # str(round(time.time() / 60))[-5:]
 
-# define hyperparameters:
+OUT_PATH = "outputs/path_" + ID
+SCALE_PARAM = 1  # args.scale
+# normal graph pipeline
+# PIPELINE = [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
+# random graph pipeline
+PIPELINE = [(0.995, 200), (0.995, 50), (0, 0)]  #
+
+GRAPH_TYPE = "RANDOM"
+# summarize: mean/max/min, remove: all/surrounding, sample: simple/watershed
+NOTES = "mean-all-simple"
+
+# HYPERPARAMETER:
 RASTER = 10
 PYLON_DIST_MIN = 150
 PYLON_DIST_MAX = 250
@@ -44,13 +59,6 @@ SCENARIO = 1
 
 VERBOSE = 1
 GTNX = 1
-
-SCALE_PARAM = args.scale
-PIPELINE = [(4, 80), (2, 50), (1, 0)]  # [(1, 0)]  # (8, 100), (4, 80),
-
-GRAPH_TYPE = "NORM"
-
-NOTES = "parcels"
 
 LOAD = 1
 SAVE_PICKLE = 0
@@ -105,6 +113,11 @@ elif GRAPH_TYPE == "LINE_FILE":
     graph = LineGraphFromGraph(
         graph_file, instance, instance_corr, graphtool=GTNX, verbose=VERBOSE
     )
+
+elif GRAPH_TYPE == "RANDOM":
+    graph = RandomGraph(
+        instance, instance_corr, graphtool=GTNX, verbose=VERBOSE
+    )
 else:
     raise NotImplementedError
 
@@ -116,7 +129,7 @@ graph.add_nodes()
 
 # START PIPELINE
 tic = time.time()
-corridor = np.ones(instance_corr.shape)  # beginning: everything is included
+corridor = np.ones(instance_corr.shape) * 0.5  # start with all
 output_paths = []
 plot_surfaces = []
 time_infos = []
@@ -124,10 +137,7 @@ time_infos = []
 for (factor, dist) in PIPELINE:
     print("----------- PIPELINE", factor, dist, "---------------")
     graph.set_cost_rest(factor, corridor, start_inds, dest_inds)
-    print(
-        "1) set cost rest, nonzero:",
-        np.sum(np.mean(graph.cost_rest, axis=0) > 0)
-    )
+    print("1) set cost rest")
     graph.add_edges()
     print("2) added edges", len(list(graph.graph.edges())))
     print("number of vertices:", len(list(graph.graph.vertices())))
@@ -141,19 +151,14 @@ for (factor, dist) in PIPELINE:
     print("4) shortest path")
     # save for inspection
     output_paths.append((path, path_costs))
-    plot_surfaces.append(graph.cost_rest[2])  # TODO: mean makes black
+    plot_surfaces.append(graph.cost_rest[2].copy())  # TODO: mean makes black
     # get several paths --> here: pareto paths
     paths = [path]
     # graph.get_pareto(
     #     np.arange(0, 1.1, 0.1), source_v, target_v, compare=[2, 3]
     # )
 
-    # PRINT AND SAVE timing test
-    time_test_csv(
-        ID, CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, path_costs, dist,
-        0, NOTES
-    )
-    time_infos.append(graph.time_logs)
+    time_infos.append(graph.time_logs.copy())
 
     if VERBOSE:
         del graph.time_logs['edge_list_times']
@@ -161,23 +166,26 @@ for (factor, dist) in PIPELINE:
         print(graph.time_logs)
 
     if dist > 0:
+        # PRINT AND SAVE timing test
+        time_test_csv(
+            ID, CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, path_costs,
+            dist, 0, NOTES
+        )
         # do specified numer of dilations
-        dist_surface = get_distance_surface(
+        corridor = get_distance_surface(
             graph.pos2node.shape, paths, mode="dilation", n_dilate=dist
         )
         print("5) compute distance surface")
         # remove the edges of vertices in the corridor (to overwrite)
-        graph.remove_vertices(dist_surface, delete_padding=PYLON_DIST_MAX)
+        graph.remove_vertices(corridor, delete_padding=PYLON_DIST_MAX)
         print("6) remove edges")
-        # set new corridor
-        corridor = (dist_surface > 0).astype(int)
 
 time_pipeline = round(time.time() - tic, 3)
 print("FINISHED PIPELINE:", time_pipeline)
 
 # SAVE timing test
 time_test_csv(
-    ID, CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, path_costs, 0,
+    ID, CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, path_costs, dist,
     time_pipeline, NOTES
 )
 

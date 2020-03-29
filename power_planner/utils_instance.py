@@ -57,10 +57,11 @@ class CostUtils():
         return new_cost_rest
 
     @staticmethod
-    def simple_downsample(img, factor):
+    def simple_downsample(img, factor, func="mean"):
         x_len_new = img.shape[1] // factor
         y_len_new = img.shape[2] // factor
         new_img = np.zeros(img.shape)
+        pool_func = eval("np." + func)
         for i in range(x_len_new):
             for j in range(y_len_new):
                 patch = img[:, i * factor:(i + 1) * factor,
@@ -69,15 +70,15 @@ class CostUtils():
                     for k in range(len(new_img)):
                         part = patch[k]
                         if np.any(part):  # >0.01):
-                            new_img[k, i * factor, j * factor] = np.mean(
+                            new_img[k, i * factor, j * factor] = pool_func(
                                 part[part > 0]
                             )  # >0.01])
         return new_img
 
     @staticmethod
-    def downsample(img, factor, mode="simple", compact=0.01):
+    def downsample(img, factor, mode="simple", func="mean", compact=0.01):
         if mode == "simple":
-            return CostUtils.simple_downsample(img, factor)
+            return CostUtils.simple_downsample(img, factor, func=func)
         elif mode == "watershed":
             return CostUtils.watershed_transform(img, factor, compact=compact)
         else:

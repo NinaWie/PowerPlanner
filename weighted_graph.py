@@ -54,14 +54,19 @@ class WeightedGraph(GeneralGraph):
         if self.verbose:
             print("initialized weighted graph pos2node")
 
-    def set_cost_rest(self, factor, corridor, start_inds, dest_inds):
+    def set_cost_rest(self, factor, dist_surface, start_inds, dest_inds):
+        # set new corridor
+        corridor = (dist_surface > 0).astype(int)
+
         self.factor = factor
         self.cost_rest = self.cost_instance * (self.hard_constraints >
                                                0).astype(int) * corridor
         # downsample
         tic = time.time()
         if factor > 1:
-            self.cost_rest = CostUtils.downsample(self.cost_rest, factor)
+            self.cost_rest = CostUtils.downsample(
+                self.cost_rest, factor, func="min"
+            )
         self.time_logs["downsample"] = round(time.time() - tic, 3)
 
         # repeat because edge artifacts
