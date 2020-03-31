@@ -4,6 +4,7 @@ import time
 import networkx as nx
 from power_planner.utils import get_half_donut
 from power_planner.plotting import plot_pareto
+from power_planner.utils_instance import CostUtils
 
 
 class GeneralGraph():
@@ -54,6 +55,34 @@ class GeneralGraph():
         :param max_angle: Maximum angle of edges to vec
         """
         self.shifts = get_half_donut(lower, upper, vec, angle_max=max_angle)
+        self.shift_tuples = self.shifts
+
+    def set_corridor(self, factor, dist_surface, start_inds, dest_inds):
+        # set new corridor
+        corridor = (dist_surface > 0).astype(int)
+
+        self.factor = factor
+        self.cost_rest = self.cost_instance * (self.hard_constraints >
+                                               0).astype(int) * corridor
+        # downsample
+        tic = time.time()
+        if factor > 1:
+            self.cost_rest = CostUtils.downsample(
+                self.cost_rest, factor, func="min"
+            )
+        self.time_logs["downsample"] = round(time.time() - tic, 3)
+
+        # repeat because edge artifacts
+        self.cost_rest = self.cost_rest * (self.hard_constraints >
+                                           0).astype(int) * corridor
+
+        # add start and end TODO ugly
+        self.cost_rest[:, dest_inds[0],
+                       dest_inds[1]] = self.cost_instance[:, dest_inds[0],
+                                                          dest_inds[1]]
+        self.cost_rest[:, start_inds[0],
+                       start_inds[1]] = self.cost_instance[:, start_inds[0],
+                                                           start_inds[1]]
 
     def add_nodes(self, nodes):
         """
@@ -71,6 +100,79 @@ class GeneralGraph():
             print("Added nodes:", nodes, "in time:", time.time() - tic)
         self.time_logs["add_nodes"] = round(time.time() - tic, 3)
 
+    def add_edges(self):
+        tic_function = time.time()
+
+        n_edges = 0
+        # kernels, posneg = ConstraintUtils.get_kernel(self.shifts,
+        # self.shift_vals)
+        # edge_array = []
+
+        times_edge_list = []
+        times_add_edges = []
+
+        if self.verbose:
+            print("n_neighbors:", len(self.shift_tuples))
+
+        for i in range(len(self.shift_tuples)):
+
+            tic_edges = time.time()
+
+            # set cost rest if necessary (random graph)
+            self.set_cost_rest()
+
+            # compute shift and weights
+            out = self._compute_edges(self.shift_tuples[i])
+
+            # Error if -1 entries because graph-tool crashes with -1 nodes
+            if np.any(out[:2].flatten() == -1):
+                print(np.where(out[:2] == -1))
+                raise RuntimeError
+
+            n_edges += len(out)
+            times_edge_list.append(round(time.time() - tic_edges, 3))
+
+            # add edges to graph
+            tic_graph = time.time()
+            if self.graphtool:
+                self.graph.add_edge_list(out, eprops=self.cost_props)
+            else:
+                nx_edge_list = [(e[0], e[1], {"weight": e[2]}) for e in out]
+                self.graph.add_edges_from(nx_edge_list)
+            times_add_edges.append(round(time.time() - tic_graph, 3))
+
+            # alternative: collect edges here and add alltogether
+            # edge_array.append(out)
+
+        # # alternative: add edges all in one go
+        # tic_concat = time.time()
+        # edge_lists_concat = np.concatenate(edge_array, axis=0)
+        # self.time_logs["concatenate"] = round(time.time() - tic_concat, 3)
+        # print("time for concatenate:", self.time_logs["concatenate"])
+        # tic_graph = time.time()
+        # self.graph.add_edge_list(edge_lists_concat, eprops=[self.weight])
+        # self.time_logs["add_edges"] = round(
+        #     (time.time() - tic_graph) / len(shifts), 3
+        # )
+
+        self._update_time_logs(times_add_edges, times_edge_list, tic_function)
+        if self.verbose:
+            print("DONE adding", n_edges, "edges:", time.time() - tic_function)
+
+    def _update_time_logs(
+        self, times_add_edges, times_edge_list, tic_function
+    ):
+        self.time_logs["add_edges"] = round(np.mean(times_add_edges), 3)
+        self.time_logs["add_edges_times"] = times_add_edges
+
+        self.time_logs["edge_list"] = round(np.mean(times_edge_list), 3)
+        self.time_logs["edge_list_times"] = times_edge_list
+
+        self.time_logs["add_all_edges"] = round(time.time() - tic_function, 3)
+
+        if self.verbose:
+            print("Done adding edges:", len(list(self.graph.edges())))
+
     def sum_costs(self):
         """
         Additive weighting of costs
@@ -86,19 +188,19 @@ class GeneralGraph():
 
         self.time_logs["sum_of_costs"] = round(time.time() - tic, 3)
 
-    def _update_time_logs(
-        self, times_add_edges, times_edge_list, tic_function
-    ):
-        self.time_logs["add_edges"] = round(np.mean(times_add_edges), 3)
-        self.time_logs["add_edges_times"] = times_add_edges
+    def remove_vertices(self, dist_surface, delete_padding=0):
+        """
+        Remove edges in a certain corridor (or all) to replace them by
+        a refined surface
 
-        self.time_logs["edge_list"] = round(np.mean(times_edge_list), 3)
-        self.time_logs["edge_list_times"] = times_edge_list
-
-        self.time_logs["add_all_edges"] = round(time.time() - tic_function, 3)
-
-        if self.verbose:
-            print("Done adding edges:", len(list(self.graph.edges())))
+        @param dist_surface: a surface where each pixel value corresponds to 
+        the distance of the pixel to the shortest path
+        @param delete_padding: define padding in which part of the corridor to 
+        delete vertices (cannot delete all because then graph unconnected)
+        """
+        tic = time.time()
+        self.graph.clear_edges()
+        self.time_logs["remove_edges"] = round(time.time() - tic, 3)
 
     def get_pareto(self, vary, source, dest, out_path=None, compare=[0, 1]):
         """

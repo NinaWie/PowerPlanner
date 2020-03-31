@@ -4,8 +4,9 @@ from graph_tool.all import Graph, shortest_path, load_graph
 
 from power_planner.utils import angle, get_lg_donut
 from power_planner.constraints import ConstraintUtils
+from power_planner.utils_instance import CostUtils
 
-from general_graph import GeneralGraph
+from .general_graph import GeneralGraph
 
 
 class LineGraph(GeneralGraph):
@@ -31,128 +32,105 @@ class LineGraph(GeneralGraph):
             self, directed=directed, graphtool=graphtool, verbose=verbose
         )
 
+        self.x_len, self.y_len = hard_constraints.shape
+        self.pos2node = np.arange(1, self.x_len * self.y_len + 1).reshape(
+            (self.x_len, self.y_len)
+        )
+
         self.time_logs = {}
         self.time_logs["init_graph"] = round(time.time() - tic, 3)
+
+    def _edge2node(self, v1_arr, shift):
+        """
+        binary arrays of same shape as pos2v1
+        """
+        neighbor_ind = self.shift_dict[tuple(shift)]
+        return self.pos2node[v1_arr] * self.n_neighbors + neighbor_ind
+        # return self.pos2node[v1_arr] * self.n_entries + self.pos2node[v2_arr]
+
+    # def set_corridor(self, factor, dist_surface, start_inds, dest_inds):
+    #     # original pos2node: all filled except for hard constraints
+    #     GeneralGraph.set_corridor(
+    #         self, factor, dist_surface, start_inds, dest_inds
+    #     )
 
     def set_shift(self, lower, upper, vec, max_angle):
         """
         Get donut tuples (for vertices) and angle tuples (for edges)
         """
         GeneralGraph.set_shift(self, lower, upper, vec, max_angle)
-        self.angle_tuples = get_lg_donut(lower, upper, vec)
+        self.shift_tuples = get_lg_donut(lower, upper, vec)
+        self.n_neighbors = len(self.shifts)
+        self.shift_dict = {tuple(s): i for i, s in enumerate(self.shifts)}
 
     def set_edge_costs(self, classes, weights=None):
         """
         Initialize edge properties as in super, but add angle costs
         """
         # classes = ["angle", "env", "urban"]  # data.layer_classes + ["angle"]
-        classes.insert(0, "angle")
+        classes = ["angle"] + classes
         if len(weights) < len(classes):
             print("insert weight 1 for angle costs")
-            weights.insert(0, 1)  # append angle weight
+            weights = [1] + list(weights)  # append angle weight
         print("edge costs classes:", classes)
         GeneralGraph.set_edge_costs(self, classes, weights=weights)
 
     def add_nodes(self):
-        """
-        Compute nodes = edges in original graph
-        """
-        tic = time.time()
-        # Build edge dictionary
-        edge_array = []
-        for i in range(len(self.shifts)):
-            # shift surface
-            out_edges = ConstraintUtils.shift_surface(
-                self.hard_constraints,
-                np.asarray(self.shifts[i]) * (-1)
-            )
-            possible_out_edges = np.where(self.hard_constraints * out_edges)
-            # first and second coordinate of the edge
-            out_edge_2 = np.swapaxes(np.vstack(possible_out_edges), 1, 0)
-            out_edge_1 = out_edge_2 + np.array(self.shifts[i])
-            # add both together
-            out_edge = np.concatenate(
-                [np.expand_dims(out_edge_2, 1),
-                 np.expand_dims(out_edge_1, 1)],
-                axis=1
-            )
-            edge_array.append(out_edge)
-        # combine all edge lists
-        edge_lists_concat = np.concatenate(edge_array, axis=0)
-        # save edge dict
-        self.edge_dict = {
-            (tuple(edge_lists_concat[i, 0]), tuple(edge_lists_concat[i, 1])): i
-            for i in range(len(edge_lists_concat))
-        }
-        # verbose
-        if self.verbose:
-            print("Added ", len(edge_lists_concat), "vertices")
-        self.time_logs["add_nodes"] = round(time.time() - tic, 3)
+        GeneralGraph.add_nodes(
+            self, self.x_len * self.y_len * self.n_neighbors
+        )
 
-    def _valid_edges(self, mask, shift):
+    def set_cost_rest(self):
+        # in case of the non-random graph, we don't have to set cost_rest
+        pass
+
+    def _compute_edges(self, shift):
         """
         Get all valid edges given a certain shift
         :param mask: binary 2d array marking forbidden areas
         """
+        # get all angles that are possible
         in_node = ConstraintUtils.shift_surface(
-            mask,
+            self.hard_constraints,
             np.asarray(shift[0]) * (-1)
         )
         out_node = ConstraintUtils.shift_surface(
-            mask,
+            self.hard_constraints,
             np.asarray(shift[1]) * (-1)
         )
-        stacked = np.asarray([mask, in_node, out_node])
-        return np.all(stacked, axis=0)
+        stacked = np.asarray([self.hard_constraints, in_node, out_node])
+        all_angles = np.all(stacked, axis=0)
 
-    def add_edges(self):
-        """
-        Add edges to line graph: Iterate over angle tuples, retrieve nodes,
-        add if angle is possible with corresponding angle cost
-        """
-        tic_function = time.time()
+        # shift again, andersrum
+        in_node = ConstraintUtils.shift_surface(
+            all_angles, np.asarray(shift[0])
+        )
+        out_node = ConstraintUtils.shift_surface(
+            all_angles, np.asarray(shift[1])
+        )
 
-        times_edge_list = []
-        times_add_edges = []
-        if self.verbose:
-            print(
-                "Start adding edges...", len(self.angle_tuples), "iterations"
-            )
-        # for every angle in the new angle tuples
-        for shift in self.angle_tuples:
-            tic_edges = time.time()
-            # get cost for angle
-            angle_weight = shift[2]
-            # get all angles that are possible
-            all_angles = self._valid_edges(self.hard_constraints, shift)
-            node_inds = np.swapaxes(np.vstack(np.where(all_angles)), 1, 0)
-            in_node = node_inds + shift[0]
-            out_node = node_inds + shift[1]
-            # cost at edge in lg is cost of node tower inbetween
-            # node_cost = [self.cost_instance[all_angles]]
-            # new version TODO
-            node_cost_list = [
-                cost_surface[all_angles] for cost_surface in self.cost_instance
-            ]
-            node_cost_arr = np.swapaxes(np.array(node_cost_list), 1, 0)
+        e1 = self._edge2node(
+            in_node,
+            np.array(shift[0]) * (-1)
+        )  # in_node, all_angles,
+        e2 = self._edge2node(all_angles, shift[1])
 
-            # iterate over edges and map to node position
-            edges_lg = []
-            for i in range(len(node_inds)):
-                e1 = self.edge_dict[(tuple(in_node[i]), tuple(node_inds[i]))]
-                e2 = self.edge_dict[(tuple(node_inds[i]), tuple(out_node[i]))]
-                edges_lg.append(
-                    [e1, e2, angle_weight] + node_cost_arr[i].tolist()
-                )
-            # save time
-            times_edge_list.append(round(time.time() - tic_edges, 3))
-            # add to graph
-            tic_graph = time.time()
-            self.graph.add_edge_list(edges_lg, eprops=self.cost_props)
-            times_add_edges.append(round(time.time() - tic_graph, 3))
+        # new version TODO
+        node_cost_arr = np.array(
+            [cost_surface[all_angles] for cost_surface in self.cost_rest]
+        )
 
-        # time logs
-        self._update_time_logs(times_add_edges, times_edge_list, tic_function)
+        pos = (np.sum(node_cost_arr, axis=0) > 0).astype(bool)
+
+        weights_arr = node_cost_arr[:, pos]
+
+        angle_weight = [shift[2] for _ in range(sum(pos.astype(int)))]
+        inds_arr = np.asarray([e1[pos], e2[pos], angle_weight])
+
+        inds_weights = np.concatenate((inds_arr, weights_arr), axis=0)
+        edges_lg = np.swapaxes(inds_weights, 1, 0)
+
+        return edges_lg
 
     def add_start_and_dest(self, source, dest):
         """
@@ -163,19 +141,18 @@ class LineGraph(GeneralGraph):
         :returns: newly created source and dest vertices
         """
         tic = time.time()
-        possible_start_edges = []
-        for shift in self.shifts:
-            neighbor = np.asarray(source) + np.asarray(shift)
-            node_val = self.edge_dict.get((tuple(source), tuple(neighbor)), -1)
-            if node_val > 0:
-                possible_start_edges.append(node_val)
+        possible_start_edges = [
+            self.pos2node[source[0], source[1]] * self.n_neighbors +
+            self.shift_dict[tuple(shift)] for shift in self.shifts
+        ]
 
         possible_dest_edges = []
         for shift in self.shifts:
-            neighbor = np.asarray(dest) - np.asarray(shift)
-            node_val = self.edge_dict.get((tuple(neighbor), tuple(dest)), -1)
-            if node_val > 0:
-                possible_dest_edges.append(node_val)
+            shifted_dest = np.asarray(dest) - np.asarray(shift)
+            possible_dest_edges.append(
+                self.pos2node[shifted_dest[0], shifted_dest[1]] *
+                self.n_neighbors + self.shift_dict[tuple(shift)]
+            )
 
         start_v = self.graph.add_vertex()
         dest_v = self.graph.add_vertex()
@@ -203,25 +180,20 @@ class LineGraph(GeneralGraph):
         coordinates
         """
         vertices_path = GeneralGraph.get_shortest_path(self, source, dest)
-        edge_mapping = [
-            k for k, _ in
-            sorted(self.edge_dict.items(), key=lambda item: item[1])
-        ]
-        # convert
-        out_path = [
-            edge_mapping[self.graph.vertex_index[v]][0]
-            for v in vertices_path[1:-1]
-        ]
-        # append last one
-        out_path.append(
-            edge_mapping[self.graph.vertex_index[vertices_path[-2]]][1]
-        )
-        # version with costs
+        out_path = []
+        for v in vertices_path[1:-1]:
+            start_node = int(v) // self.n_neighbors
+            shift_ind = int(v) % self.n_neighbors
+            start_pos = [start_node // self.y_len, start_node % self.y_len]
+            out_path.append(start_pos)
+
+        # append last on
+        out_path.append(list(np.array(start_pos) + self.shifts[shift_ind]))
+
         out_costs = []
-        for i in range(len(vertices_path) - 1):
-            edge = self.graph.edge(vertices_path[i], vertices_path[i + 1])
-            out_costs.append([c[edge] for c in self.cost_props])
-            # costs.append(self.weight[edge]) # TODO: add all costs ?
+        for (i, j) in out_path:
+            out_costs.append(self.cost_instance[:, i, j].tolist())
+
         return out_path, out_costs
 
 

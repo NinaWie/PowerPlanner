@@ -1,21 +1,17 @@
-# import matplotlib.pyplot as plt
-import warnings
-warnings.filterwarnings("ignore")
-# utils imports
-from power_planner.data_reader import DataReader
-from power_planner.plotting import plot_path_costs, plot_pipeline_paths
-from power_planner.utils import time_test_csv, get_distance_surface
-# graph imports
-from weighted_graph import WeightedGraph
-from line_graph import LineGraph, LineGraphFromGraph
-from weighted_reduced_graph import ReducedGraph
-from random_graph import RandomGraph
-# dependencies
-import numpy as np
-import time
+import argparse
 import os
 import pickle
-import argparse
+import time
+# import warnings
+import numpy as np
+# import matplotlib.pyplot as plt
+
+# utils imports
+from power_planner.data_reader import DataReader
+from power_planner import graphs
+from power_planner.plotting import plot_path_costs, plot_pipeline_paths
+from power_planner.utils import get_distance_surface, time_test_csv
+from config import Config
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-cluster', action='store_true')
@@ -27,52 +23,27 @@ if args.cluster:
 else:
     PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
 
-# define paths:
-HARD_CONS_PATH = "hard_constraints"
-CORR_PATH = "corridor/Corridor_BE.tif"
-COST_PATH = "COSTSURFACE.tif"
-START_PATH = "start_point/Start"
-DEST_PATH = "dest_point/Destination"
-WEIGHT_CSV = "layer_weights.csv"
-CSV_TIMES = "outputs/time_tests.csv"
-
 # DEFINE CONFIGURATION
-ID = "random_1_pipe"  # str(round(time.time() / 60))[-5:]
+ID = "testing"  # str(round(time.time() / 60))[-5:]
 
 OUT_PATH = "outputs/path_" + ID
-SCALE_PARAM = 1  # args.scale
+SCALE_PARAM = 5  # args.scale
 # normal graph pipeline
-# PIPELINE = [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
+# PIPELINE = [(2, 50), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
-PIPELINE = [(0.995, 200), (0.995, 50), (0, 0)]  #
+PIPELINE = [(0.9, 50), (0, 0)]
 
-GRAPH_TYPE = "RANDOM"
+GRAPH_TYPE = graphs.RandomLineGraph
+# LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph
+print("graph type:", GRAPH_TYPE)
 # summarize: mean/max/min, remove: all/surrounding, sample: simple/watershed
-NOTES = "mean-all-simple"
-
-# HYPERPARAMETER:
-RASTER = 10
-PYLON_DIST_MIN = 150
-PYLON_DIST_MAX = 250
-MAX_ANGLE = 0.5 * np.pi
-SCENARIO = 1
-
-VERBOSE = 1
-GTNX = 1
+NOTES = "None"  # "mean-all-simple"
 
 LOAD = 1
 SAVE_PICKLE = 0
 IOPATH = os.path.join(PATH_FILES, "data_dump_" + str(SCALE_PARAM) + ".dat")
 
-print("graph type:", GRAPH_TYPE)
-
-# compute pylon distances:
-PYLON_DIST_MIN /= RASTER
-PYLON_DIST_MAX /= RASTER
-if SCALE_PARAM > 1:
-    PYLON_DIST_MIN /= SCALE_PARAM
-    PYLON_DIST_MAX /= SCALE_PARAM
-print("defined pylon distances in raster:", PYLON_DIST_MIN, PYLON_DIST_MAX)
+cfg = Config(SCALE_PARAM)
 
 # READ DATA
 if LOAD:
@@ -82,9 +53,11 @@ if LOAD:
         (instance, instance_corr, start_inds, dest_inds) = data.data
 else:
     # read in files
-    data = DataReader(PATH_FILES, CORR_PATH, WEIGHT_CSV, SCENARIO, SCALE_PARAM)
+    data = DataReader(
+        PATH_FILES, cfg.CORR_PATH, cfg.WEIGHT_CSV, cfg.SCENARIO, SCALE_PARAM
+    )
     instance, instance_corr, start_inds, dest_inds = data.get_data(
-        START_PATH, DEST_PATH, emergency_dist=PYLON_DIST_MAX
+        cfg.START_PATH, cfg.DEST_PATH, emergency_dist=cfg.PYLON_DIST_MAX
     )
 
     if SAVE_PICKLE:
@@ -97,33 +70,13 @@ vec = dest_inds - start_inds
 print("start-dest-vec", vec)
 
 # DEFINE GRAPH AND ALGORITHM
-if GRAPH_TYPE == "NORM":
-    # Define normal weighted graph
-    graph = WeightedGraph(
-        instance, instance_corr, graphtool=GTNX, verbose=VERBOSE
-    )
-
-elif GRAPH_TYPE == "LINE":
-    # Define LINE GRAPH
-    graph = LineGraph(instance, instance_corr, graphtool=GTNX, verbose=VERBOSE)
-
-elif GRAPH_TYPE == "LINE_FILE":
-    # Load file and derive line graph
-    graph_file = "outputs/path_02852_graph"
-    graph = LineGraphFromGraph(
-        graph_file, instance, instance_corr, graphtool=GTNX, verbose=VERBOSE
-    )
-
-elif GRAPH_TYPE == "RANDOM":
-    graph = RandomGraph(
-        instance, instance_corr, graphtool=GTNX, verbose=VERBOSE
-    )
-else:
-    raise NotImplementedError
+graph = GRAPH_TYPE(
+    instance, instance_corr, graphtool=cfg.GTNX, verbose=cfg.VERBOSE
+)
 
 # BUILD GRAPH:
 graph.set_edge_costs(data.layer_classes, data.class_weights)
-graph.set_shift(PYLON_DIST_MIN, PYLON_DIST_MAX, vec, MAX_ANGLE)
+graph.set_shift(cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX, vec, cfg.MAX_ANGLE)
 # add vertices
 graph.add_nodes()
 
@@ -136,7 +89,7 @@ time_infos = []
 
 for (factor, dist) in PIPELINE:
     print("----------- PIPELINE", factor, dist, "---------------")
-    graph.set_cost_rest(factor, corridor, start_inds, dest_inds)
+    graph.set_corridor(factor, corridor, start_inds, dest_inds)
     print("1) set cost rest")
     graph.add_edges()
     print("2) added edges", len(list(graph.graph.edges())))
@@ -160,7 +113,7 @@ for (factor, dist) in PIPELINE:
 
     time_infos.append(graph.time_logs.copy())
 
-    if VERBOSE:
+    if cfg.VERBOSE:
         del graph.time_logs['edge_list_times']
         del graph.time_logs['add_edges_times']
         print(graph.time_logs)
@@ -168,8 +121,8 @@ for (factor, dist) in PIPELINE:
     if dist > 0:
         # PRINT AND SAVE timing test
         time_test_csv(
-            ID, CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, path_costs,
-            dist, 0, NOTES
+            ID, cfg.CSV_TIMES, SCALE_PARAM, cfg.GTNX, GRAPH_TYPE, graph,
+            path_costs, dist, 0, NOTES
         )
         # do specified numer of dilations
         corridor = get_distance_surface(
@@ -177,7 +130,7 @@ for (factor, dist) in PIPELINE:
         )
         print("5) compute distance surface")
         # remove the edges of vertices in the corridor (to overwrite)
-        graph.remove_vertices(corridor, delete_padding=PYLON_DIST_MAX)
+        graph.remove_vertices(corridor, delete_padding=cfg.PYLON_DIST_MAX)
         print("6) remove edges")
 
 time_pipeline = round(time.time() - tic, 3)
@@ -185,8 +138,8 @@ print("FINISHED PIPELINE:", time_pipeline)
 
 # SAVE timing test
 time_test_csv(
-    ID, CSV_TIMES, SCALE_PARAM, GTNX, GRAPH_TYPE, graph, path_costs, dist,
-    time_pipeline, NOTES
+    ID, cfg.CSV_TIMES, SCALE_PARAM, cfg.GTNX, GRAPH_TYPE, graph, path_costs,
+    dist, time_pipeline, NOTES
 )
 
 # PLOT RESULT
@@ -212,6 +165,14 @@ plot_path_costs(
 DataReader.save_pipeline_infos(
     OUT_PATH, output_paths, time_infos, PIPELINE, SCALE_PARAM
 )
+
+# LINE GRAPH FROM FILE:
+# elif GRAPH_TYPE == "LINE_FILE":
+#     # Load file and derive line graph
+#     graph_file = "outputs/path_02852_graph"
+#     graph = LineGraphFromGraph(
+#         graph_file, instance, instance_corr, graphtool=GTNX, verbose=VERBOSE
+#     )
 
 #TESTING:
 
