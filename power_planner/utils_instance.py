@@ -1,6 +1,6 @@
 import numpy as np
 from skimage.segmentation import watershed
-from skimage import data, util, filters, color
+from skimage import filters
 
 
 class CostUtils():

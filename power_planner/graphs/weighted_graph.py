@@ -53,13 +53,16 @@ class WeightedGraph(GeneralGraph):
             print("initialized weighted graph pos2node")
 
     def set_corridor(self, factor, dist_surface, start_inds, dest_inds):
+        tic = time.time()
         # set cost rest according to corridor
         GeneralGraph.set_corridor(
             self, factor, dist_surface, start_inds, dest_inds
         )
 
         # define pos2node accordingly:
-        inverted_corridor = np.absolute(1 - corridor).astype(bool)
+        # corridor = (dist_surface == 0).astype(int)
+        # inverted_corridor = np.absolute(1 - corridor).astype(bool)
+        inverted_corridor = (dist_surface == 0).astype(bool)
         # set all which are not in the corridor to -1
         self.pos2node[inverted_corridor] = -1
         self.time_logs["set_cost_rest"] = round(time.time() - tic, 3)

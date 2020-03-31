@@ -1,0 +1,11 @@
+#!/bin/bash
+
+
+module load python/3.6.0
+module activate penv
+
+
+bsub -q $queue -J "test_inst" -R "rusage[mem=512]" \
+-o "test.stderr" \
+-e "test.stdout" \
+"python3 main.py -cluster"
