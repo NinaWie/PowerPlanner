@@ -190,11 +190,16 @@ class LineGraph(GeneralGraph):
         # append last on
         out_path.append(list(np.array(start_pos) + self.shifts[shift_ind]))
 
+        # compute costs --> here necessary from vertices_path
         out_costs = []
-        for (i, j) in out_path:
-            out_costs.append(self.cost_instance[:, i, j].tolist())
+        for i in range(len(vertices_path) - 1):
+            edge = self.graph.edge(vertices_path[i], vertices_path[i + 1])
+            out_costs.append([c[edge] for c in self.cost_props])
 
-        return out_path, out_costs
+        weighted_sum = np.dot(
+            self.cost_weights, np.sum(np.array(out_costs), axis=0)
+        )
+        return out_path, out_costs, weighted_sum
 
 
 class LineGraphFromGraph():

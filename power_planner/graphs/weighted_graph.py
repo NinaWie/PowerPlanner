@@ -195,13 +195,11 @@ class WeightedGraph(GeneralGraph):
 
         self.time_logs["shortest_path"] = round(time.time() - tic, 3)
 
-        # compute edge costs
-        out_costs = []
-        for (i, j) in path:
-            out_costs.append(self.cost_instance[:, i, j].tolist())
-        # TODO: append graph.weight[edge]?
-
-        return path, out_costs
+        out_costs = [self.cost_instance[:, i, j].tolist() for (i, j) in path]
+        cost_sum = np.dot(
+            self.cost_weights, np.sum(np.array(out_costs), axis=0)
+        )
+        return path, out_costs, cost_sum
 
 
 # def old_add_start_end_vertices(self, start_list=None, end_list=None):

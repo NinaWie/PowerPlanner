@@ -36,16 +36,18 @@ def plot_path_costs(
     edgecosts = np.asarray(edgecosts)
     print("out costs shape:", edgecosts.shape)
     # env_costs = np.mean(edgecosts, axis=1)  # edgecosts[:, 1]  #
-    n_crit = edgecosts.shape[1]
+    n_crit = len(instance)
     # print("number crit", n_crit)
 
     # fill for angle costs
-    if len(instance) < n_crit:
-        print("fill angle")
-        repeat_list = [1 for _ in range(len(instance))]
-        repeat_list[0] = 2
-        instance = np.repeat(instance, repeat_list, axis=0)
-    print("instance shape", instance.shape)
+    # if len(instance) < n_crit:
+    #     print("fill angle")
+    #     repeat_list = [1 for _ in range(len(instance))]
+    #     repeat_list[0] = 2
+    #     instance = np.repeat(instance, repeat_list, axis=0)
+    # print("instance shape", instance.shape)
+    if n_crit < edgecosts.shape[1]:
+        edgecosts = edgecosts[:, 1:]  # exclude angle costs
 
     plt.figure(figsize=(25, 15))
     for j in range(n_crit):
@@ -93,7 +95,6 @@ def plot_pipeline_paths(plot_surfaces, output_paths, buffer=1, out_path=None):
             expanded[x - buffer:x + buffer + 1, y - buffer:y + buffer +
                      1] = [0.9, 0.2, 0.2]  # colour red
         plt.imshow(np.swapaxes(expanded, 1, 0), origin="upper")
-        print("costs", np.sum(np.array(p_cost), axis=0))
     plt.tight_layout()
     if out_path is not None:
         plt.savefig(out_path, bbox_inches='tight')

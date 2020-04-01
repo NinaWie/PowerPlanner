@@ -100,7 +100,7 @@ for (factor, dist) in PIPELINE:
     source_v, target_v = graph.add_start_and_dest(start_inds, dest_inds)
     print("3) summed cost, get source and dest")
     # get actual best path
-    path, path_costs = graph.get_shortest_path(source_v, target_v)
+    path, path_costs, cost_sum = graph.get_shortest_path(source_v, target_v)
     print("4) shortest path")
     # save for inspection
     output_paths.append((path, path_costs))
@@ -122,7 +122,7 @@ for (factor, dist) in PIPELINE:
         # PRINT AND SAVE timing test
         time_test_csv(
             ID, cfg.CSV_TIMES, SCALE_PARAM, cfg.GTNX, GRAPH_TYPE, graph,
-            path_costs, dist, 0, NOTES
+            path_costs, cost_sum, dist, 0, NOTES
         )
         # do specified numer of dilations
         corridor = get_distance_surface(
@@ -139,7 +139,7 @@ print("FINISHED PIPELINE:", time_pipeline)
 # SAVE timing test
 time_test_csv(
     ID, cfg.CSV_TIMES, SCALE_PARAM, cfg.GTNX, GRAPH_TYPE, graph, path_costs,
-    dist, time_pipeline, NOTES
+    cost_sum, dist, time_pipeline, NOTES
 )
 
 # PLOT RESULT
