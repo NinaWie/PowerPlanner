@@ -24,14 +24,14 @@ else:
     PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
 
 # DEFINE CONFIGURATION
-ID = "norm-1-pipe"  # str(round(time.time() / 60))[-5:]
+ID = "random-2-test"  # str(round(time.time() / 60))[-5:]
 
 OUT_PATH = "outputs/path_" + ID
-SCALE_PARAM = 1  # args.scale
+SCALE_PARAM = 2  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 50), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
-PIPELINE = [(0.9, 100), (0.9, 50), (0, 0)]  # [(0.9, 40), (0, 0)]
+PIPELINE = [(0.9, 100), (0, 0)]  # [(0.9, 40), (0, 0)]
 
 GRAPH_TYPE = graphs.RandomWeightedGraph
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph
@@ -39,7 +39,7 @@ print("graph type:", GRAPH_TYPE)
 # summarize: mean/max/min, remove: all/surrounding, sample: simple/watershed
 NOTES = "None"  # "mean-all-simple"
 
-LOAD = 1
+LOAD = 0
 SAVE_PICKLE = 0
 IOPATH = os.path.join(PATH_FILES, "data_dump_" + str(SCALE_PARAM) + ".dat")
 
@@ -173,54 +173,3 @@ DataReader.save_pipeline_infos(
 #     graph = LineGraphFromGraph(
 #         graph_file, instance, instance_corr, graphtool=GTNX, verbose=VERBOSE
 #     )
-
-#TESTING:
-
-# print("len donut tuples", donut_tuples)
-# img_size = int(PYLON_DIST_MAX) + 1
-# ar = np.zeros((2 * img_size, 2 * img_size))
-# for tup in donut_tuples:
-#     ar[tup[0] + img_size, tup[1] + img_size] = 1
-# plt.imshow(ar)
-# plt.savefig("test.png")
-
-# TESTING:
-# a = np.zeros((20, 20))
-# a[:5, 1] = 1
-# a[4, 1:8] = 1
-# a[4, 10] = 1
-# a[7:15, 10] = 1
-# a[14, 10] = 1
-# a[14, 13:15] = 1
-# a[14:, 14] = 1
-# start_inds = np.asarray([4, 5])
-# dest_inds = np.asarray([23, 18])
-# instance = np.pad(a, ((4, 4), (4, 4)))
-# instance_corr = instance
-# PYLON_DIST_MIN = 1.5
-# PYLON_DIST_MAX = 3
-
-# PIPELINE PREV
-
-# # add edges in corridor
-# corridor = np.ones(instance_corr.shape)
-# graph.set_cost_rest(1, corridor, start_inds, dest_inds)
-# graph.add_edges()
-# # weighted sum of all costs
-# graph.sum_costs()
-
-# # SHORTEST PATH
-# # # Alternative: with list of start and end nodes:
-# # source, target = graph.add_start_end_vertices()
-# # path = graph.shortest_path(source, target)
-# source_v, target_v = graph.add_start_and_dest(start_inds, dest_inds)
-# print("start and end:", source_v, target_v)
-# path, path_costs = graph.get_shortest_path(source_v, target_v)
-# # PARETO FRONTEIR
-# _ = graph.get_pareto(
-#     np.arange(0, 1.1, 0.1),
-#     source_v,
-#     target_v,
-#     out_path=OUT_PATH,
-#     compare=[2, 3]
-# )

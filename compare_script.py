@@ -29,9 +29,9 @@ LOAD = 1
 SAVE_PICKLE = 0
 
 COMPARISONS = [
-    ["norm-1-2-100", 1, "Weighted", [(2, 100), (1, 0)]],
-    ["norm-1-4-100-2-50", 1, "Weighted", [(4, 100), (2, 50), (1, 0)]],
-    ["norm-1-5-100-3-50", 1, "Weighted", [(5, 100), (3, 50), (1, 0)]],
+    # ["norm-1-2-100", 1, "Weighted", [(2, 100), (1, 0)]],
+    # ["norm-1-4-100-2-50", 1, "Weighted", [(4, 100), (2, 50), (1, 0)]],
+    # ["norm-1-5-100-3-50", 1, "Weighted", [(5, 100), (3, 50), (1, 0)]],
     [
         "norm-1-5-200-3-100-2-50", 1, "Weighted",
         [(5, 200), (3, 100), (2, 50), (1, 0)]
@@ -52,7 +52,7 @@ COMPARISONS = [
         [(0.9, 100), (0.8, 50), (0, 0)]
     ],
     [
-        "random-1-95-200-95-100", 2, "RandomWeighted",
+        "random-1-8-200-8-100", 2, "RandomWeighted",
         [(0.8, 200), (0.8, 100), (0, 0)]
     ],
 ]
@@ -112,17 +112,6 @@ for compare_params in COMPARISONS:
     vec = dest_inds - start_inds
     print("start-dest-vec", vec)
 
-    # DEFINE GRAPH AND ALGORITHM
-    graph = GRAPH_TYPE(
-        instance, instance_corr, graphtool=cfg.GTNX, verbose=cfg.VERBOSE
-    )
-
-    # BUILD GRAPH:
-    graph.set_edge_costs(data.layer_classes, data.class_weights)
-    graph.set_shift(cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX, vec, cfg.MAX_ANGLE)
-    # add vertices
-    graph.add_nodes()
-
     # START PIPELINE
     tic = time.time()
     corridor = np.ones(instance_corr.shape) * 0.5  # start with all
@@ -132,6 +121,18 @@ for compare_params in COMPARISONS:
 
     for (factor, dist) in PIPELINE:
         print("----------- PIPELINE", factor, dist, "---------------")
+        # DEFINE GRAPH AND ALGORITHM
+        graph = GRAPH_TYPE(
+            instance, instance_corr, graphtool=cfg.GTNX, verbose=cfg.VERBOSE
+        )
+        # BUILD GRAPH:
+        graph.set_edge_costs(data.layer_classes, data.class_weights)
+        graph.set_shift(
+            cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX, vec, cfg.MAX_ANGLE
+        )
+        # add vertices
+        graph.add_nodes()
+        print("0) initialize graph, add nodes")
         graph.set_corridor(factor, corridor, start_inds, dest_inds)
         print("1) set cost rest")
         graph.add_edges()
@@ -217,62 +218,3 @@ for compare_params in COMPARISONS:
     )
 
     graph = None
-
-# LINE GRAPH FROM FILE:
-# elif GRAPH_TYPE == "LINE_FILE":
-#     # Load file and derive line graph
-#     graph_file = "outputs/path_02852_graph"
-#     graph = LineGraphFromGraph(
-#         graph_file, instance, instance_corr, graphtool=GTNX, verbose=VERBOSE
-#     )
-
-#TESTING:
-
-# print("len donut tuples", donut_tuples)
-# img_size = int(PYLON_DIST_MAX) + 1
-# ar = np.zeros((2 * img_size, 2 * img_size))
-# for tup in donut_tuples:
-#     ar[tup[0] + img_size, tup[1] + img_size] = 1
-# plt.imshow(ar)
-# plt.savefig("test.png")
-
-# TESTING:
-# a = np.zeros((20, 20))
-# a[:5, 1] = 1
-# a[4, 1:8] = 1
-# a[4, 10] = 1
-# a[7:15, 10] = 1
-# a[14, 10] = 1
-# a[14, 13:15] = 1
-# a[14:, 14] = 1
-# start_inds = np.asarray([4, 5])
-# dest_inds = np.asarray([23, 18])
-# instance = np.pad(a, ((4, 4), (4, 4)))
-# instance_corr = instance
-# PYLON_DIST_MIN = 1.5
-# PYLON_DIST_MAX = 3
-
-# PIPELINE PREV
-
-# # add edges in corridor
-# corridor = np.ones(instance_corr.shape)
-# graph.set_cost_rest(1, corridor, start_inds, dest_inds)
-# graph.add_edges()
-# # weighted sum of all costs
-# graph.sum_costs()
-
-# # SHORTEST PATH
-# # # Alternative: with list of start and end nodes:
-# # source, target = graph.add_start_end_vertices()
-# # path = graph.shortest_path(source, target)
-# source_v, target_v = graph.add_start_and_dest(start_inds, dest_inds)
-# print("start and end:", source_v, target_v)
-# path, path_costs = graph.get_shortest_path(source_v, target_v)
-# # PARETO FRONTEIR
-# _ = graph.get_pareto(
-#     np.arange(0, 1.1, 0.1),
-#     source_v,
-#     target_v,
-#     out_path=OUT_PATH,
-#     compare=[2, 3]
-# )

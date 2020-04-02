@@ -102,6 +102,35 @@ def plot_pipeline_paths(plot_surfaces, output_paths, buffer=1, out_path=None):
         plt.show()
 
 
+def plot_prior_paths(plot_surfaces, output_paths, buffer=2, out_path=None):
+    """
+    subplots of different steps in the pipeline
+    plot_surfaces = nr_corrs * nr_pipeline
+    """
+    plt.figure(figsize=(20, 20))
+    for corr in range(len(plot_surfaces)):
+
+        for i, p in enumerate(output_paths[corr]):
+            plt.subplot(
+                len(plot_surfaces), len(output_paths[corr]),
+                (len(output_paths[corr]) * corr) + i + 1
+            )
+
+            # expand to greyscale
+            expanded = np.expand_dims(plot_surfaces[corr][i], axis=2)
+            expanded = np.tile(expanded, (1, 1, 3))
+            # colour nodes in path in red
+            for (x, y) in p:
+                expanded[x - buffer:x + buffer + 1, y - buffer:y + buffer +
+                         1] = [0.9, 0.2, 0.2]  # colour red
+            plt.imshow(expanded, origin="upper")
+    plt.tight_layout()
+    if out_path is not None:
+        plt.savefig(out_path, bbox_inches='tight')
+    else:
+        plt.show()
+
+
 def plot_pareto(pareto0, pareto1, paths, vary, classes, out_path=None):
     # plot pareto
     color = plt.cm.rainbow(np.linspace(0, 1, len(pareto0)))

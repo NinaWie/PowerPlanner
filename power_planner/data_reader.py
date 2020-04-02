@@ -24,21 +24,15 @@ def reduce_instance(func):
     def call_and_reduce(self, *args, **kwargs):
 
         img = func(self, *args, **kwargs)
-        assert len(img.shape) == 3, "Passed array is not of the right shape"
 
-        if self.scale_factor > 1:
-            return np.array(
-                [
-                    np.swapaxes(rescale(img_i, self.scale_factor), 1, 0)
-                    for img_i in img
-                ]
+        if self.scale_factor > 1 and len(img.shape) == 3:
+            img = np.array(
+                [rescale(img_i, self.scale_factor) for img_i in img]
             )
-        else:
-            return np.swapaxes(
-                img,
-                len(img.shape) - 1,
-                len(img.shape) - 2
-            )  # TODO: why swapaxes
+        elif self.scale_factor > 1 and len(img.shape) == 2:
+            img = rescale(img, self.scale_factor)
+
+        return np.swapaxes(img, len(img.shape) - 1, len(img.shape) - 2)
 
     return call_and_reduce
 
