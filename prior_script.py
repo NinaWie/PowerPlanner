@@ -24,14 +24,14 @@ else:
     PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
 
 # DEFINE CONFIGURATION
-ID = "random-2-squared"  # str(round(time.time() / 60))[-5:]
+ID = "direct-2-hard-nina-corrs"  # str(round(time.time() / 60))[-5:]
 
 OUT_PATH = "outputs/path_" + ID
 SCALE_PARAM = 2  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 50), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
-PIPELINE = [(0.9, 50), (0, 0)]  # [(0.9, 40), (0, 0)]
+PIPELINE = [(0, 0)]  # [(0.9, 40), (0, 0)]
 
 GRAPH_TYPE = graphs.RandomWeightedGraph
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph
@@ -82,10 +82,12 @@ graph.add_nodes()
 
 # start with all
 # corrs = [np.ones(instance_corr.shape) * 0.5]
-corrs = CorridorUtils.generate_corridors_middle_line(
-    instance_corr, start_inds, dest_inds, n_dilate=200
+# corrs = CorridorUtils.generate_corridors_middle_line(
+#     instance_corr, start_inds, dest_inds, n_dilate=200
+# )
+corrs = CorridorUtils.generate_corridors_sample_path(
+    instance, start_inds, dest_inds, n_dilate=50, factor=40
 )
-# corrs = CorridorUtils.generate_corridors_sample_path(instance, start_inds, dest_inds)
 # corrs = CorridorUtils.corrs_from_file(os.path.join(PATH_FILES, cfg.CORR_PATH))
 
 corr_plot_surfaces = []

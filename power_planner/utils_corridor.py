@@ -123,20 +123,18 @@ class CorridorUtils():
 
         quantile_surface = np.quantile(surface_comb, quantile)
         patches = surface_comb < quantile_surface
-        plt.imshow(patches.astype(int))
-        plt.show()
 
         inds_x, inds_y = np.where(patches)
         return np.array([inds_x, inds_y])  # *factor
 
     @staticmethod
-    def sample_path(
+    def generate_corridors_sample_path(
         instance,
         start_inds,
         dest_inds,
         factor,
         balance=[1, 3],
-        quantile=0.1,
+        quantile=0.2,
         n_sample=4,
         n_onpath=5,
         n_dilate=100
@@ -167,7 +165,6 @@ class CorridorUtils():
                 [start_inds.tolist()] +
                 np.swapaxes(drawn_path, 1, 0).tolist() + [dest_inds.tolist()]
             ]
-            print(path)
             all_corridors.append(
                 get_distance_surface(
                     instance.shape[1:], path, n_dilate=n_dilate

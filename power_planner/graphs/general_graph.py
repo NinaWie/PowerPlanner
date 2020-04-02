@@ -200,6 +200,7 @@ class GeneralGraph():
         """
         tic = time.time()
         self.graph.clear_edges()
+        self.graph.shrink_to_fit()
         self.time_logs["remove_edges"] = round(time.time() - tic, 3)
 
     def get_pareto(self, vary, source, dest, out_path=None, compare=[0, 1]):

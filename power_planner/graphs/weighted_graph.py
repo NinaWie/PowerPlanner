@@ -153,6 +153,7 @@ class WeightedGraph(GeneralGraph):
         #     self.graph.clear_vertex(self.graph.vertex(v))
         # #Possibility 2: remove all edges --> only considering corridor then
         self.graph.clear_edges()
+        self.graph.shrink_to_fit()
         # #Possibility 3: remove all out_edges of corridor vertices
         # corridor = (dist_surface>0).astype(int)
         # corr_vertices = self.pos2node * corridor

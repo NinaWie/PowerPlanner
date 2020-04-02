@@ -37,7 +37,7 @@ class RandomGraph():
             # make sure all points in corridor are taken
             self.corridor = (corridor > 0).astype(int) * 1.1
         else:
-            corridor = normalize(corridor)
+            corridor = normalize(corridor)**2
             corr_greater_zero = corridor[corridor > 0]
             cutoff = np.quantile(corr_greater_zero, factor)
             if cutoff == 1:

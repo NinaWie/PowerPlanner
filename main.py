@@ -24,16 +24,16 @@ else:
     PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
 
 # DEFINE CONFIGURATION
-ID = "random-2-test"  # str(round(time.time() / 60))[-5:]
+ID = "test"  # str(round(time.time() / 60))[-5:]
 
 OUT_PATH = "outputs/path_" + ID
-SCALE_PARAM = 2  # args.scale
+SCALE_PARAM = 3  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 50), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
-PIPELINE = [(0.9, 100), (0, 0)]  # [(0.9, 40), (0, 0)]
+PIPELINE = [(0.9, 50), (0, 0)]  # [(0.9, 40), (0, 0)]
 
-GRAPH_TYPE = graphs.RandomWeightedGraph
+GRAPH_TYPE = graphs.RandomLineGraph
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph
 print("graph type:", GRAPH_TYPE)
 # summarize: mean/max/min, remove: all/surrounding, sample: simple/watershed
