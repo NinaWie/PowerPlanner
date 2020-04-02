@@ -9,7 +9,7 @@ import functools
 import time
 # import matplotlib.pyplot as plt
 
-from power_planner.utils import normalize
+from power_planner.utils import normalize, rescale
 
 
 # Decorator
@@ -23,34 +23,22 @@ def reduce_instance(func):
     @functools.wraps(func)
     def call_and_reduce(self, *args, **kwargs):
 
-        def reduce(img, scale_factor):
-            x_len_new = img.shape[0] // self.scale_factor
-            y_len_new = img.shape[1] // self.scale_factor
-            new_img = np.zeros((x_len_new, y_len_new))
-            for i in range(x_len_new):
-                for j in range(y_len_new):
-                    patch = img[i * self.scale_factor:(i + 1) *
-                                self.scale_factor, j *
-                                self.scale_factor:(j + 1) * self.scale_factor]
-                    new_img[i, j] = np.mean(patch)
-            return np.swapaxes(new_img, 1, 0)
-
         img = func(self, *args, **kwargs)
+        assert len(img.shape) == 3, "Passed array is not of the right shape"
+
         if self.scale_factor > 1:
-            if len(img.shape) == 2:
-                return reduce(img, self.scale_factor)  # TODO
-            elif len(img.shape) == 3:
-                out = [reduce(img_i, self.scale_factor) for img_i in img]
-                return np.array(out)
-            else:
-                raise ValueError("Passed array is not of the right shape")
+            return np.array(
+                [
+                    np.swapaxes(rescale(img_i, self.scale_factor), 1, 0)
+                    for img_i in img
+                ]
+            )
         else:
-            print(img.shape)
             return np.swapaxes(
                 img,
                 len(img.shape) - 1,
                 len(img.shape) - 2
-            )  # TODO: why
+            )  # TODO: why swapaxes
 
     return call_and_reduce
 

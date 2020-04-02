@@ -59,6 +59,21 @@ def normalize(instance):
             np.min(instance)) / (np.max(instance) - np.min(instance))
 
 
+def rescale(img, scale_factor):
+    """
+    Scale down image by a factor
+    """
+    x_len_new = img.shape[0] // scale_factor
+    y_len_new = img.shape[1] // scale_factor
+    new_img = np.zeros((x_len_new, y_len_new))
+    for i in range(x_len_new):
+        for j in range(y_len_new):
+            patch = img[i * scale_factor:(i + 1) * scale_factor,
+                        j * scale_factor:(j + 1) * scale_factor]
+            new_img[i, j] = np.mean(patch)
+    return new_img
+
+
 def get_donut(radius_low, radius_high):
     """
     Compute all indices of points in donut around (0,0)
@@ -106,7 +121,7 @@ def angle(vec1, vec2):
 def get_donut_vals(donut_tuples, vec):
     """
     compute the angle between edges defined by donut tuples
-    :param donut_tuples: list of pairs of tuples, each pair defines an edge 
+    :param donut_tuples: list of pairs of tuples, each pair defines an edge
     going from [(x1,y1), (x2,y2)]
     :param vec: vector to compute angle with
     :returns: list of same length as donut_tuples with all angles
@@ -160,9 +175,9 @@ def get_lg_donut(radius_low, radius_high, vec, min_angle=3 * np.pi / 4):
 
 def get_path_lines(cost_shape, paths):
     """
-    Given a list of paths, compute the continous lines in an array of cost_shape
+    Given a list of paths, compute continous lines in an array of cost_shape
     :param cost_shape: desired 2-dim output shape of array
-    :param paths: list of paths of possibly different lengths, each path is 
+    :param paths: list of paths of possibly different lengths, each path is
     a list of tuples
     :returns: 2-dim binary of shape cost_shape where paths are set to 1
     """
@@ -182,7 +197,7 @@ def dilation_dist(path_dilation, n_dilate=None):
     Compute surface of distances with dilation
     :param path_dilation: binary array with zeros everywhere except for paths
     :param dilate: How often to do dilation --> defines radious of corridor
-    :returns: 2dim array of same shape as path_dilation, with values 
+    :returns: 2dim array of same shape as path_dilation, with values
     0 = infinite distance from path
     n_dilation = path location
     """
@@ -191,7 +206,6 @@ def dilation_dist(path_dilation, n_dilate=None):
         # compute number of iterations: maximum distance of pixel to line
         x_coords, y_coords = np.where(path_dilation)
         x_len, y_len = path_dilation.shape
-        # print([np.min(x_coords), x_len- np.max(x_coords), np.min(y_coords), y_len- np.max(y_coords)])
         n_dilate = max(
             [
                 np.min(x_coords), x_len - np.max(x_coords),
@@ -211,7 +225,7 @@ def cdist_dist(path_dilation):
     """
     Use scipy cdist function to compute distances from path (SLOW!)
     :param path_dilation: binary array with zeros everywhere except for paths
-    :returns: 2dim array of same shape as path_dilation, with values 
+    :returns: 2dim array of same shape as path_dilation, with values
     0 = path
     x = pixel has distance x from the path
     """
@@ -236,7 +250,7 @@ def get_distance_surface(out_shape, paths, mode="dilation", n_dilate=None):
     Given a list of paths, compute the corridor
     :param mode: How to compute --> dilation or cdist
     :param out_shape: desired output shape
-    :param paths: list of paths of possibly different lengths, each path is 
+    :param paths: list of paths of possibly different lengths, each path is
     a list of tuples
     :returns: 2dim array showing the distance from the path
     """

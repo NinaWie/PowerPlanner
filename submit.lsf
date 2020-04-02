@@ -2,10 +2,10 @@
 
 
 module load python/3.6.0
-conda activate penv
+source activate penv
 
 
-bsub -q $queue -J "test_inst" -R "rusage[mem=512]" \
--o "test.stderr" \
--e "test.stdout" \
-"python3 main.py -cluster"
+bsub -J "test_inst" -R "rusage[mem=1024]" \
+-o "jobs_out/test.stderr" \
+-e "jobs_out/test.stdout" \
+"python3 main.py 5 -cluster"

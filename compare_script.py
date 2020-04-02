@@ -29,9 +29,49 @@ LOAD = 1
 SAVE_PICKLE = 0
 
 COMPARISONS = [
-    ["norm-2-direct", 2, "Weighted", [(1, 0)]],
-    ["norm-2-pipe", 2, "Weighted", [(2, 50), (1, 0)]]
+    ["norm-1-2-100", 1, "Weighted", [(2, 100), (1, 0)]],
+    ["norm-1-4-100-2-50", 1, "Weighted", [(4, 100), (2, 50), (1, 0)]],
+    ["norm-1-5-100-3-50", 1, "Weighted", [(5, 100), (3, 50), (1, 0)]],
+    [
+        "norm-1-5-200-3-100-2-50", 1, "Weighted",
+        [(5, 200), (3, 100), (2, 50), (1, 0)]
+    ],
+    ["norm-1-4-200-2-100", 1, "Weighted", [(4, 200), (2, 100), (1, 0)]],
+    ["norm-1-3-150-2-75", 1, "Weighted", [(3, 150), (2, 75), (1, 0)]],
+    ["random-1-9-100", 2, "RandomWeighted", [(0.9, 100), (0, 0)]],
+    [
+        "random-1-9-100-9-50", 2, "RandomWeighted",
+        [(0.9, 100), (0.9, 50), (0, 0)]
+    ],
+    [
+        "random-1-95-200-95-100", 2, "RandomWeighted",
+        [(0.95, 200), (0.95, 100), (0, 0)]
+    ],
+    [
+        "random-1-9-100-8-50", 2, "RandomWeighted",
+        [(0.9, 100), (0.8, 50), (0, 0)]
+    ],
+    [
+        "random-1-95-200-95-100", 2, "RandomWeighted",
+        [(0.8, 200), (0.8, 100), (0, 0)]
+    ],
 ]
+
+# COMPARISONS_1 = [
+#     ["norm-2-direct", 2, "Weighted", [(1, 0)]],
+#     ["norm-2-pipe", 2, "Weighted", [(2, 50), (1, 0)]],
+#     ["line-5-direct", 5, "Line", [(1, 0)]],
+#     ["line-5-pipe", 5, "Line", [(2, 40), (1, 0)]],
+#     ["line-andom-5-pipe", 5, "RandomLine", [(0.9, 40), (0, 0)]],
+#     ["norm-random-2-pipe", 2, "RandomWeighted", [(0.9, 50), (0, 0)]],
+#     ["norm-1-pipe", 1, "Weighted", [(2, 100), (1, 0)]],
+#     ["norm-1-pipe2", 1, "Weighted", [(4, 100), (2, 50), (1, 0)]],
+#     [
+#         "norm-random-1-pipe", 1, "RandomWeighted",
+#         [(0.95, 100), (0.9, 50), (0, 0)]
+#     ], ["norm-random-1-pipe2", 1, "RandomWeighted", [(0.95, 100), (0, 0)]],
+#     ["norm-1-direct", 1, "Weighted", [(1, 0)]]
+# ]
 
 for compare_params in COMPARISONS:
     ID = compare_params[0]
@@ -175,6 +215,8 @@ for compare_params in COMPARISONS:
     DataReader.save_pipeline_infos(
         OUT_PATH, output_paths, time_infos, PIPELINE, SCALE_PARAM
     )
+
+    graph = None
 
 # LINE GRAPH FROM FILE:
 # elif GRAPH_TYPE == "LINE_FILE":

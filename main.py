@@ -15,7 +15,7 @@ from config import Config
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-cluster', action='store_true')
-parser.add_argument('scale', help="downsample", type=int, default=1)
+# parser.add_argument('scale', help="downsample", type=int, default=1)
 args = parser.parse_args()
 
 if args.cluster:
@@ -24,16 +24,16 @@ else:
     PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
 
 # DEFINE CONFIGURATION
-ID = "line-5-pipe"  # str(round(time.time() / 60))[-5:]
+ID = "norm-1-pipe"  # str(round(time.time() / 60))[-5:]
 
 OUT_PATH = "outputs/path_" + ID
-SCALE_PARAM = 5  # args.scale
+SCALE_PARAM = 1  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 50), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
-PIPELINE = [(0.9, 40), (0, 0)]
+PIPELINE = [(0.9, 100), (0.9, 50), (0, 0)]  # [(0.9, 40), (0, 0)]
 
-GRAPH_TYPE = graphs.RandomLineGraph
+GRAPH_TYPE = graphs.RandomWeightedGraph
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph
 print("graph type:", GRAPH_TYPE)
 # summarize: mean/max/min, remove: all/surrounding, sample: simple/watershed

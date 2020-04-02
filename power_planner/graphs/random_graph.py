@@ -38,11 +38,12 @@ class RandomGraph():
             self.corridor = (corridor > 0).astype(int) * 1.1
         else:
             corridor = normalize(corridor)
-            cutoff = np.quantile(corridor, factor)
+            corr_greater_zero = corridor[corridor > 0]
+            cutoff = np.quantile(corr_greater_zero, factor)
             if cutoff == 1:
                 self.corridor = corridor - factor
             else:
-                self.corridor = corridor + 0.5 - cutoff
+                self.corridor = corridor + 0.5 - max([cutoff, 0.5])
                 # set cutoff # normalize(np.exp(
                 # self.cutoff = max([0.5, cutoff])  # must be at least 0.5!
                 # - 0.5 + self.cutoff
