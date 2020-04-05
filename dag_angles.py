@@ -1,7 +1,7 @@
 from power_planner.utils import get_half_donut, angle, normalize
 from power_planner.constraints import ConstraintUtils
 from power_planner.data_reader import DataReader
-from power_planner.plotting import plot_path
+from power_planner.plotting import plot_path, plot_path_costs
 from config import Config
 import numpy as np
 import argparse
@@ -14,7 +14,7 @@ import pickle
 class PowerBF():
 
     def __init__(self, instance, instance_corr):
-        self.instance = instance
+        self.instance_layers = instance
         self.instance_corr = instance_corr
         self.x_len, self.y_len = instance_corr.shape
         self.fill_val = np.inf
@@ -38,6 +38,10 @@ class PowerBF():
         i, j = start_inds
         self.dists[:, i, j] = self.instance[i, j]
         self.dists_argmin = np.zeros(self.dists.shape)
+        print(
+            "memory taken (dists shape):",
+            len(self.shifts) * self.x_len * self.y_len
+        )
 
         self.time_logs["init_dists"] = round(time.time() - tic, 3)
 
@@ -49,6 +53,15 @@ class PowerBF():
         angles_all = angles_all / self.angle_norm_factor
         self.time_logs["compute_angles"] = round(time.time() - tic, 3)
         return angles_all
+
+    def sum_costs(self, layer_weights):
+        print("class_weights", layer_weights)
+        weights = np.asarray(layer_weights)
+        weights = weights / np.sum(weights)
+        self.instance = np.sum(
+            np.moveaxis(self.instance_layers, 0, -1) * weights, axis=2
+        )
+        print("instance shape", self.instance.shape)
 
     def compute_dists(self, n_iters, weights=[0.5, 0.5]):
         tic = time.time()
@@ -63,21 +76,17 @@ class PowerBF():
 
         for _ in range(n_iters):
             for i in range(len(self.shifts)):
-                # compute angle from the sorted neighbor list to the new edge
-                # immer plus das minimum
-                curr_shift = self.shifts[i]
 
-                angles = angles_all[i]
                 # shift dists by this shift
                 # todo: avoid swaping dimenions each time
                 cost_switched = np.moveaxis(self.dists, 0, -1)
                 # shift by shift
                 costs_shifted = ConstraintUtils.shift_surface(
-                    cost_switched, curr_shift, fill_val=self.fill_val
+                    cost_switched, self.shifts[i], fill_val=self.fill_val
                 )
 
                 # add new costs for current edge
-                angle_cost = angle_weight * angles
+                angle_cost = angle_weight * angles_all[i]
                 together = np.moveaxis(
                     costs_shifted + angle_cost, -1, 0
                 ) + self.instance * resistance_weight
@@ -120,10 +129,12 @@ class PowerBF():
         return ang_out
 
     def get_path_from_dists(self, start_inds, dest_inds):
+        if not np.any(self.dists[:, dest_inds[0], dest_inds[1]] < np.inf):
+            raise RuntimeWarning("empty path")
         tic = time.time()
         curr_point = dest_inds
         path = [dest_inds]
-        path_costs = [self.instance[dest_inds[0], dest_inds[1]]]
+        path_costs = [self.instance_layers[:, dest_inds[0], dest_inds[1]]]
         # first minimum: angles don't matter, just min of in-edges
         min_shift = np.argmin(self.dists[:, dest_inds[0], dest_inds[1]])
         # track back until start inds
@@ -133,16 +144,21 @@ class PowerBF():
             min_shift = self.dists_argmin[int(min_shift), curr_point[0],
                                           curr_point[1]]
             # append costs and path
-            path_costs.append(self.instance[new_point[0], new_point[1]])
+            path_costs.append(
+                self.instance_layers[:, new_point[0], new_point[1]]
+            )
             path.append(new_point)
             curr_point = new_point
 
         path = np.flip(np.asarray(path), axis=0)
         path_costs = np.flip(np.asarray(path_costs), axis=0)
+        print(path_costs.shape)
 
         # compute angle costs on path:
         ang_costs = self._compute_angles_manually(path)
-        path_costs = np.array(list(zip(path_costs, ang_costs)))
+        path_costs = np.concatenate(
+            (np.swapaxes(np.array([ang_costs]), 1, 0), path_costs), axis=1
+        )
 
         self.time_logs["get_path"] = round(time.time() - tic, 3)
         return path, path_costs
@@ -177,7 +193,7 @@ if __name__ == "__main__":
     WEIGHTS = [0.5, 0.5]
 
     # DATA IO
-    LOAD = 1
+    LOAD = 0
     if args.cluster:
         LOAD = 1
     SAVE_PICKLE = 0
@@ -211,19 +227,14 @@ if __name__ == "__main__":
     print("start-dest-vec", vec)
 
     # compute cost surface:
-    print("class_weights", data.class_weights)
-    weighted_inst = np.sum(
-        np.moveaxis(instance, 0, -1) * data.class_weights, axis=2
-    )
-    print(weighted_inst.shape, instance_corr.shape)
-
     tic_all = time.time()
 
     # initialize
-    bf = PowerBF(weighted_inst, instance_corr)
+    bf = PowerBF(instance, instance_corr)
 
     # init dists
     bf.set_shift(cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX, vec, cfg.MAX_ANGLE)
+    bf.sum_costs(data.class_weights)
     bf.dist_init(start_inds)
 
     # main computation
@@ -232,8 +243,16 @@ if __name__ == "__main__":
 
     bf.time_logs["bf_runtime"] = round(time.time() - tic_all, 3)
 
-    plot_path(
-        normalize(weighted_inst), path, buffer=1, out_path=OUT_PATH + ".png"
+    # plot_path(
+    #     normalize(bf.instance), path, buffer=1, out_path=OUT_PATH + ".png"
+    # )
+    plot_path_costs(
+        instance * instance_corr,
+        path,
+        path_costs,
+        data.layer_classes,
+        buffer=2,
+        out_path=OUT_PATH + ".png"
     )
     print(bf.time_logs)
 
