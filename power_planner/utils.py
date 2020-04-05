@@ -63,6 +63,8 @@ def rescale(img, scale_factor):
     """
     Scale down image by a factor
     """
+    if scale_factor == 1:
+        return img
     x_len_new = img.shape[0] // scale_factor
     y_len_new = img.shape[1] // scale_factor
     new_img = np.zeros((x_len_new, y_len_new))
@@ -114,7 +116,11 @@ def angle(vec1, vec2):
     v2_norm = np.linalg.norm(vec2)
     v1 = vec1 / v1_norm
     v2 = vec2 / v2_norm
+    if np.all(v1 == v2) or np.all(v1 == v2 * (-1)):
+        return 0
     angle = np.arccos(np.dot(v1, v2))
+    if np.isnan(angle):
+        print("nan", v1, v2)
     return angle
 
 
@@ -148,7 +154,7 @@ def get_half_donut(radius_low, radius_high, vec, angle_max=0.5 * np.pi):
     return new_tuples
 
 
-def get_lg_donut(radius_low, radius_high, vec, min_angle=3 * np.pi / 4):
+def get_lg_donut(radius_low, radius_high, vec, max_angle=1 * np.pi / 4):
     """
     Compute all possible combinations of edges in restricted angle
     :param radius_low: minimum radius
@@ -160,15 +166,14 @@ def get_lg_donut(radius_low, radius_high, vec, min_angle=3 * np.pi / 4):
     donut = get_donut(radius_low, radius_high)
     tuple_zip = list(zip(donut[0], donut[1]))
     linegraph_tuples = []
-    norm_factor = np.pi - min_angle  # here: 1/4 pi
     for (i, j) in tuple_zip:
         # if in incoming half
         if i * vec[0] + j * vec[1] <= 0:
             for (k, l) in tuple_zip:
-                ang = angle([k, l], [i, j]) - min_angle
-                # min angle and general outgoing edges half
-                if ang >= 0 and k * vec[0] + l * vec[1] >= 0:
-                    angle_norm = round(1 - (ang / norm_factor), 2)
+                ang = angle([-k, -l], [i, j])
+                # if smaller max angle and general outgoing edges half
+                if ang <= max_angle and k * vec[0] + l * vec[1] >= 0:
+                    angle_norm = ang / max_angle
                     linegraph_tuples.append([[i, j], [k, l], angle_norm])
     return linegraph_tuples
 

@@ -83,7 +83,7 @@ class CorridorUtils():
             plt.show()
 
     @staticmethod
-    def generate_corridors_from_file(corr_path, nr_corrs=4):
+    def generate_corridors_from_file(corr_path, nr_corrs=4, scale_param=1):
         with rasterio.open(corr_path, 'r') as ds:
             cost_img = ds.read()[0]
         print("read in corridor", cost_img.shape)
@@ -91,13 +91,14 @@ class CorridorUtils():
 
         corrs = []
         cut_val_prev = 0
-        log_vals = np.logspace(np.log(0.1), np.log(1), 4, base=2)
+        log_vals = np.logspace(np.log(0.03), np.log(1), 4, base=1.5)
         for i in range(4):
             cut_val = np.quantile(actual_vals, log_vals[i])  # (i+1)*0.24)
             copied = cost_img.copy()
             copied[copied < cut_val_prev] = 9999
             copied[copied > cut_val] = 9999
-            corrs.append((copied != 9999).astype(int))
+            corr_bool = (copied != 9999).astype(int)
+            corrs.append(rescale(corr_bool, scale_param))
             cut_val_prev = cut_val
         return corrs
 

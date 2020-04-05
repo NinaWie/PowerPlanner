@@ -24,22 +24,24 @@ else:
     PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
 
 # DEFINE CONFIGURATION
-ID = "test"  # str(round(time.time() / 60))[-5:]
+ID = "test_lg_5"  # str(round(time.time() / 60))[-5:]
 
 OUT_PATH = "outputs/path_" + ID
-SCALE_PARAM = 3  # args.scale
+SCALE_PARAM = 1  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 50), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
-PIPELINE = [(0.9, 50), (0, 0)]  # [(0.9, 40), (0, 0)]
+PIPELINE = [(1, 0)]  # [(0.9, 40), (0, 0)]
 
-GRAPH_TYPE = graphs.RandomLineGraph
+GRAPH_TYPE = graphs.LineGraph
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph
 print("graph type:", GRAPH_TYPE)
 # summarize: mean/max/min, remove: all/surrounding, sample: simple/watershed
 NOTES = "None"  # "mean-all-simple"
 
-LOAD = 0
+LOAD = 1
+if args.cluster:
+    LOAD = 1
 SAVE_PICKLE = 0
 IOPATH = os.path.join(PATH_FILES, "data_dump_" + str(SCALE_PARAM) + ".dat")
 
@@ -69,12 +71,19 @@ else:
 vec = dest_inds - start_inds
 print("start-dest-vec", vec)
 
+# # BUILD GRAPH:
+# weighted_inst = np.sum(
+#     np.moveaxis(instance, 0, -1) * data.class_weights, axis=2
+# )
+# w_new = [0.5, 0.5]  # [sum(data.class_weights)] + list(data.class_weights)
+# instance = np.array([weighted_inst])
+
 # DEFINE GRAPH AND ALGORITHM
 graph = GRAPH_TYPE(
     instance, instance_corr, graphtool=cfg.GTNX, verbose=cfg.VERBOSE
 )
 
-# BUILD GRAPH:
+# graph.set_edge_costs(["angle", "rest"], w_new)
 graph.set_edge_costs(data.layer_classes, data.class_weights)
 graph.set_shift(cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX, vec, cfg.MAX_ANGLE)
 # add vertices
@@ -146,7 +155,7 @@ time_test_csv(
 plot_pipeline_paths(
     plot_surfaces, output_paths, buffer=2, out_path=OUT_PATH + "_pipeline.png"
 )
-# plot_path(instance * instance_corr, path, buffer=1, out_path=OUT_PATH+".png")
+# plot_path(np.mean(instance,axis=0), path, buffer=1, out_path=OUT_PATH + ".png")
 plot_path_costs(
     instance * instance_corr,
     path,

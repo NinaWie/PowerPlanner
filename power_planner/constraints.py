@@ -36,7 +36,7 @@ class ConstraintUtils():
         return costs_shifted
 
     @staticmethod
-    def shift_surface(costs, shift):
+    def shift_surface(costs, shift, fill_val=0):
         """
         Shifts a numpy array and pads with zeros
         :param costs: 2-dim numpy array
@@ -46,13 +46,13 @@ class ConstraintUtils():
         """
         rolled_costs = np.roll(costs, shift, axis=(0, 1))
         if shift[0] >= 0:
-            rolled_costs[:shift[0], :] = 0
+            rolled_costs[:shift[0], :] = fill_val
         else:
-            rolled_costs[shift[0]:, :] = 0
+            rolled_costs[shift[0]:, :] = fill_val
         if shift[1] >= 0:
-            rolled_costs[:, :shift[1]] = 0
+            rolled_costs[:, :shift[1]] = fill_val
         else:
-            rolled_costs[:, shift[1]:] = 0
+            rolled_costs[:, shift[1]:] = fill_val
         return rolled_costs
 
     @staticmethod

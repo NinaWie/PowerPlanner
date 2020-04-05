@@ -24,14 +24,14 @@ else:
     PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
 
 # DEFINE CONFIGURATION
-ID = "direct-2-hard-nina-corrs"  # str(round(time.time() / 60))[-5:]
+ID = "randpipe_2_nina_corrs2"  # str(round(time.time() / 60))[-5:]
 
 OUT_PATH = "outputs/path_" + ID
 SCALE_PARAM = 2  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 50), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
-PIPELINE = [(0, 0)]  # [(0.9, 40), (0, 0)]
+PIPELINE = [(0.8, 150), (0.5, 0)]  # [(0.9, 40), (0, 0)]
 
 GRAPH_TYPE = graphs.RandomWeightedGraph
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph
@@ -82,13 +82,15 @@ graph.add_nodes()
 
 # start with all
 # corrs = [np.ones(instance_corr.shape) * 0.5]
-# corrs = CorridorUtils.generate_corridors_middle_line(
-#     instance_corr, start_inds, dest_inds, n_dilate=200
-# )
-corrs = CorridorUtils.generate_corridors_sample_path(
-    instance, start_inds, dest_inds, n_dilate=50, factor=40
+corrs = CorridorUtils.generate_corridors_middle_line(
+    instance_corr, start_inds, dest_inds, n_dilate=150
 )
-# corrs = CorridorUtils.corrs_from_file(os.path.join(PATH_FILES, cfg.CORR_PATH))
+# corrs = CorridorUtils.generate_corridors_sample_path(
+#     instance, start_inds, dest_inds, n_dilate=50, factor=40
+# )
+# corrs = CorridorUtils.generate_corridors_from_file(
+#     os.path.join(PATH_FILES, cfg.CORR_PATH), scale_param=SCALE_PARAM
+# )
 
 corr_plot_surfaces = []
 corr_plot_paths = []
@@ -143,9 +145,6 @@ for corr_ind, corridor in enumerate(corrs):
             graph.remove_vertices(corridor, delete_padding=cfg.PYLON_DIST_MAX)
             print("6) remove edges")
 
-    # clear graph for next prior
-    graph.remove_vertices(corridor, delete_padding=cfg.PYLON_DIST_MAX)
-
     time_pipeline = round(time.time() - tic, 3)
     print("FINISHED PIPELINE:", time_pipeline)
 
@@ -154,9 +153,12 @@ for corr_ind, corridor in enumerate(corrs):
         ID, cfg.CSV_TIMES, SCALE_PARAM, cfg.GTNX, GRAPH_TYPE, graph,
         path_costs, cost_sum, str(PIPELINE), time_pipeline, NOTES
     )
-
+    # save information for plotting
     corr_plot_surfaces.append(plot_surfaces)
     corr_plot_paths.append([o for (o, _) in output_paths])
+
+    # clear graph for next prior
+    graph.remove_vertices(corridor, delete_padding=cfg.PYLON_DIST_MAX)
 
 plot_prior_paths(
     corr_plot_surfaces,

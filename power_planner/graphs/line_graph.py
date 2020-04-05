@@ -33,7 +33,7 @@ class LineGraph(GeneralGraph):
         )
 
         self.x_len, self.y_len = hard_constraints.shape
-        self.pos2node = np.arange(1, self.x_len * self.y_len + 1).reshape(
+        self.pos2node = np.arange(self.x_len * self.y_len).reshape(
             (self.x_len, self.y_len)
         )
 
@@ -129,7 +129,7 @@ class LineGraph(GeneralGraph):
 
         inds_weights = np.concatenate((inds_arr, weights_arr), axis=0)
         edges_lg = np.swapaxes(inds_weights, 1, 0)
-
+        print("add", len(edges_lg))
         return edges_lg
 
     def add_start_and_dest(self, source, dest):
@@ -149,10 +149,13 @@ class LineGraph(GeneralGraph):
         possible_dest_edges = []
         for shift in self.shifts:
             shifted_dest = np.asarray(dest) - np.asarray(shift)
-            possible_dest_edges.append(
-                self.pos2node[shifted_dest[0], shifted_dest[1]] *
-                self.n_neighbors + self.shift_dict[tuple(shift)]
-            )
+            try:
+                possible_dest_edges.append(
+                    self.pos2node[shifted_dest[0], shifted_dest[1]] *
+                    self.n_neighbors + self.shift_dict[tuple(shift)]
+                )
+            except IndexError:
+                pass
 
         start_v = self.graph.add_vertex()
         dest_v = self.graph.add_vertex()
@@ -200,6 +203,17 @@ class LineGraph(GeneralGraph):
             self.cost_weights, np.sum(np.array(out_costs), axis=0)
         )
         return out_path, out_costs, weighted_sum
+
+    # LG Utils
+    # @staticmethod
+    # def edge_tuple_2_pos_tuples(n1, n2, graph):
+    #     (x,y) = (n1//graph.n_neighbors, n1 % graph.n_neighbors)
+    #     tup1 = ((x // graph.y_len, x % graph.y_len), (y // graph.y_len, y % graph.y_len))
+    #     (x,y) = (n2//graph.n_neighbors, n2 % graph.n_neighbors)
+    #     tup2 = ((x // graph.y_len, x % graph.y_len), (y // graph.y_len, y % graph.y_len))
+    #     return tup1, tup2
+    # edge_tuple_2_pos_tuples(6716500,1062881, graph)
+    # # graph.angle_tuples[0]
 
 
 class LineGraphFromGraph():

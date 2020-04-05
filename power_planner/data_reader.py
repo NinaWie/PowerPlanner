@@ -418,7 +418,7 @@ class DataReader():
 
         out_dict = {
             "path_cells": power_path,
-            "edgecosts": path_costs,
+            "edgecosts": path_costs.tolist(),
             "time_logs": time_logs
         }
 
