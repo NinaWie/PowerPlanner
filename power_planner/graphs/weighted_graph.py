@@ -67,7 +67,7 @@ class WeightedGraph(GeneralGraph):
         self.pos2node[inverted_corridor] = -1
         self.time_logs["set_cost_rest"] = round(time.time() - tic, 3)
 
-    def set_shift(self, lower, upper, vec, max_angle):
+    def set_shift(self, lower, upper, vec, max_angle, max_angle_lg=0):
         GeneralGraph.set_shift(self, lower, upper, vec, max_angle)
         self.shift_vals = get_donut_vals(self.shifts, vec)
 
@@ -201,49 +201,3 @@ class WeightedGraph(GeneralGraph):
             self.cost_weights, np.sum(np.array(out_costs), axis=0)
         )
         return path, out_costs, cost_sum
-
-
-# def old_add_start_end_vertices(self, start_list=None, end_list=None):
-#         """
-#         old version: connect to a list of start and a list of end vertices
-#         """
-#         tic = time.time()
-#         # defaults if no start and end list are given:
-#         topbottom, leftright = np.where(self.hard_constraints)
-#         if start_list is None:
-#             nr_start = len(topbottom) // 1000
-#             start_list = zip(topbottom[:nr_start], leftright[:nr_start])
-#         if end_list is None:
-#             nr_end = len(topbottom) // 1000
-#             end_list = zip(topbottom[-nr_end:], leftright[-nr_end:])
-
-#         # iterate over start and end and over neighbors
-#         neighbor_lists = [start_list, end_list]
-#         start_and_end = []
-
-#         for k in [0, 1]:
-#             # add start and end vertex
-#             if self.graphtool:
-#                 v = self.graph.add_vertex()
-#                 v_index = self.graph.vertex_index[v]
-#                 start_and_end.append(v)
-#             else:
-#                 v_index = len(self.node_pos) + k
-#                 self.graph.add_node(v_index)
-#                 start_and_end.append(v_index)
-#             print("index of start/end vertex", v_index)
-#             # compute edges to neighbors
-#             edges = []
-#             for (i, j) in neighbor_lists[k]:
-#                 neighbor_ind = self.pos2node[i, j]
-#                 edges.append(
-#                     [v_index, neighbor_ind, 1]
-#                 )  # weight zero funktioniert nicht
-#             # add edges from start and end to neighbors
-#             if self.graphtool:
-#                 self.graph.add_edge_list(edges, eprops=[self.weight])
-#             else:
-#                 nx_edges = [(e[0], e[1], {"weight": e[2]}) for e in edges]
-#                 self.graph.add_edges_from(nx_edges)
-#         self.time_logs["start_end_vertex"] = round(time.time() - tic, 3)
-#         return start_and_end[0], start_and_end[1]

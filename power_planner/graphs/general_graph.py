@@ -1,5 +1,5 @@
 import numpy as np
-from graph_tool.all import Graph, shortest_path, load_graph, find_edge
+from graph_tool.all import Graph, shortest_path, load_graph
 import time
 import networkx as nx
 from power_planner.utils import get_half_donut
@@ -29,15 +29,13 @@ class GeneralGraph():
         self.verbose = verbose
         self.graphtool = graphtool
 
-    def set_edge_costs(self, classes, weights=None):
+    def set_edge_costs(self, classes, weights, angle_weight=0):
         """
         Initialize edge cost variables
         :param classes: list of cost categories
         :param weights: list of weights for cost categories - must be of same 
                         shape as classes (if None, then equal weighting)
         """
-        if weights is None:
-            weights = [1 for i in range(len(classes))]
         weights = np.array(weights)
         # set different costs:
         self.cost_classes = classes
@@ -46,6 +44,10 @@ class GeneralGraph():
         ]
         self.cost_weights = weights / np.sum(weights)
         print(self.cost_classes, self.cost_weights)
+        # save weighted instance for plotting
+        self.instance = np.sum(
+            np.moveaxis(self.cost_instance, 0, -1) * self.cost_weights, axis=2
+        )
 
     def set_shift(self, lower, upper, vec, max_angle):
         """
@@ -93,8 +95,10 @@ class GeneralGraph():
         # add nodes to graph
         if self.graphtool:
             _ = self.graph.add_vertex(nodes)
+            self.n_nodes = len(list(self.graph.vertices()))
         else:
             self.graph.add_nodes_from(np.arange(nodes))
+            self.n_nodes = len(self.graph.nodes())
         # verbose
         if self.verbose:
             print("Added nodes:", nodes, "in time:", time.time() - tic)
@@ -154,7 +158,7 @@ class GeneralGraph():
         # self.time_logs["add_edges"] = round(
         #     (time.time() - tic_graph) / len(shifts), 3
         # )
-
+        self.n_edges = len(list(self.graph.edges()))
         self._update_time_logs(times_add_edges, times_edge_list, tic_function)
         if self.verbose:
             print("DONE adding", n_edges, "edges:", time.time() - tic_function)

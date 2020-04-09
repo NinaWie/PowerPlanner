@@ -18,10 +18,15 @@ class Config():
         PYLON_DIST_MIN = 150
         PYLON_DIST_MAX = 250
         self.MAX_ANGLE = 0.5 * np.pi
-        self.SCENARIO = 1
+        self.MAX_ANGLE_LG = 0.25 * np.pi
+        self.SCENARIO = 3
 
         self.VERBOSE = 1
         self.GTNX = 1
+
+        self.ANGLE_WEIGHT = 0.1
+
+        self.KSP = 10
 
         # compute pylon distances:
         self.PYLON_DIST_MIN = PYLON_DIST_MIN / RASTER

@@ -1,5 +1,5 @@
 import numpy as np
-from power_planner.utils import bresenham_line
+from power_planner.utils import bresenham_line, angle
 
 
 class ConstraintUtils():
@@ -60,10 +60,10 @@ class ConstraintUtils():
         """
         Get all kernels describing the path of the edges in a discrete raster
         :param shifts: possible circle points
-        :returns kernel: all possible kernels 
+        :returns kernel: all possible kernels
         shape: (number of circle points x upper x upper)
-        :returns posneg: a list indicating whether it is a path to the left (=1) 
-        or to the right(=0)
+        :returns posneg: a list indicating whether it is a path to the left =1 
+        or to the right =0
         """
         upper = np.amax(np.absolute(shifts)) + 1
         posneg = []
@@ -93,8 +93,8 @@ class ConstraintUtils():
         corresponding the the left or right upper corner
         :param img: 2d numpy array
         :param kernel: kernel (must have equal size and width)
-        :param neg: if neg=0, store in upper left corner, if neg=1, store in upper
-        right corner
+        :param neg: if neg=0, store in upper left corner, if neg=1,
+        store in upper right corner
         :return convolved image of same size
         """
         k_size = len(kernel)
@@ -116,8 +116,8 @@ class ConstraintUtils():
         corresponding the the left or right upper corner
         :param img: 2d numpy array
         :param kernel: kernel (must have equal size and width)
-        :param neg: if neg=0, store in upper left corner, if neg=1, store in upper
-        right corner
+        :param neg: if neg=0, store in upper left corner, if neg=1,
+        store in upper right corner
         :return convolved image of same size
         """
         k_size = len(kernel)
@@ -134,12 +134,14 @@ class ConstraintUtils():
                 convolved[i, j] = np.sum(patch * kernel)
         return convolved
 
-    # Questions:
-    ## altitude leads to more costs for pylons? because they are higher?
+    @staticmethod
+    def compute_angle_costs(path, angle_norm_factor=np.pi / 2):
+        path = np.asarray(path)
+        ang_out = [0]
+        for p in range(len(path) - 2):
+            vec1 = path[p + 1] - path[p]
+            vec2 = path[p + 2] - path[p + 1]
+            ang_out.append(round(angle(vec1, vec2) / angle_norm_factor, 2))
+        ang_out.append(0)
 
-    # height profile constraints:
-    ## simply exclude edges which cannot be placed --> only works when iterating over edges
-
-    ## Angle constraints:
-    # * line graph
-    # * path straighening toolbox
+        return ang_out

@@ -29,10 +29,6 @@ def time_test_csv(
     :param CSV_TIMES: output file
     :params: all parameters to save in the csv
     """
-    if GTNX:
-        n_nodes = len(list(graph.graph.vertices()))
-    else:
-        n_nodes = len(graph.graph.nodes())
     # compute average costs:
     costs = [round(s, 3) for s in np.sum(path_costs, axis=0)]
     print("costs", costs)
@@ -43,8 +39,8 @@ def time_test_csv(
     # scale,graphtool,graphtype,n_nodes,n_edges,add_nodes_time,add_edge_time,
     # shortest_path_time, notes
     param_list = [
-        ID, SCALE_PARAM, GTNX, GRAPH_TYPE, factor, dist, n_pixels, n_nodes,
-        len(list(graph.graph.edges())), graph.time_logs["add_nodes"],
+        ID, SCALE_PARAM, GTNX, GRAPH_TYPE, factor, dist, n_pixels,
+        graph.n_nodes, graph.n_edges, graph.time_logs["add_nodes"],
         graph.time_logs["add_all_edges"], graph.time_logs["shortest_path"],
         costs, cost_sum, time_pipeline, notes
     ]
@@ -112,15 +108,18 @@ def angle(vec1, vec2):
     #     v2 = path[p + 1] - path[p + 2]
     vec1 = np.asarray(vec1)
     vec2 = np.asarray(vec2)
-    v1_norm = np.linalg.norm(vec1)
-    v2_norm = np.linalg.norm(vec2)
-    v1 = vec1 / v1_norm
-    v2 = vec2 / v2_norm
-    if np.all(v1 == v2) or np.all(v1 == v2 * (-1)):
+    v1 = vec1 / np.linalg.norm(vec1)
+    v2 = vec2 / np.linalg.norm(vec2)
+    if np.all(v1 == v2):
         return 0
+    if -v1[0] == v2[0] and -v1[1] == v2[1]:
+        return np.pi
     angle = np.arccos(np.dot(v1, v2))
+    if np.sin(angle) < 0:
+        angle = 2 * np.pi - angle
     if np.isnan(angle):
-        print("nan", v1, v2)
+        print(vec1, vec2, v1, v2)
+        raise ValueError("angle is nan, problem in computation")
     return angle
 
 
@@ -154,7 +153,9 @@ def get_half_donut(radius_low, radius_high, vec, angle_max=0.5 * np.pi):
     return new_tuples
 
 
-def get_lg_donut(radius_low, radius_high, vec, max_angle=1 * np.pi / 4):
+def get_lg_donut(
+    radius_low, radius_high, vec, max_angle, max_angle_lg=np.pi / 4
+):
     """
     Compute all possible combinations of edges in restricted angle
     :param radius_low: minimum radius
@@ -172,8 +173,8 @@ def get_lg_donut(radius_low, radius_high, vec, max_angle=1 * np.pi / 4):
             for (k, l) in tuple_zip:
                 ang = angle([-k, -l], [i, j])
                 # if smaller max angle and general outgoing edges half
-                if ang <= max_angle and k * vec[0] + l * vec[1] >= 0:
-                    angle_norm = ang / max_angle
+                if ang <= max_angle_lg and k * vec[0] + l * vec[1] >= 0:
+                    angle_norm = ang / max_angle_lg
                     linegraph_tuples.append([[i, j], [k, l], angle_norm])
     return linegraph_tuples
 

@@ -4,12 +4,13 @@ import pickle
 import time
 # import warnings
 import numpy as np
+import json
 # import matplotlib.pyplot as plt
 
 # utils imports
 from power_planner.data_reader import DataReader
 from power_planner import graphs
-from power_planner.plotting import plot_path_costs, plot_pipeline_paths
+from power_planner.plotting import plot_path_costs, plot_pipeline_paths, plot_path, plot_k_sp
 from power_planner.utils import get_distance_surface, time_test_csv
 from config import Config
 
@@ -24,17 +25,18 @@ else:
     PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
 
 # DEFINE CONFIGURATION
-ID = "test_lg_5"  # str(round(time.time() / 60))[-5:]
+ID = "two_power"  # str(round(time.time() / 60))[-5:]
 
 OUT_PATH = "outputs/path_" + ID
-SCALE_PARAM = 1  # args.scale
+SCALE_PARAM = 5  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 50), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
 PIPELINE = [(1, 0)]  # [(0.9, 40), (0, 0)]
 
-GRAPH_TYPE = graphs.LineGraph
-# LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph
+GRAPH_TYPE = graphs.TwoPowerBF
+# LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, PowerBF
+# TwoPowerBF, WeightedKSP
 print("graph type:", GRAPH_TYPE)
 # summarize: mean/max/min, remove: all/surrounding, sample: simple/watershed
 NOTES = "None"  # "mean-all-simple"
@@ -84,8 +86,16 @@ graph = GRAPH_TYPE(
 )
 
 # graph.set_edge_costs(["angle", "rest"], w_new)
-graph.set_edge_costs(data.layer_classes, data.class_weights)
-graph.set_shift(cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX, vec, cfg.MAX_ANGLE)
+graph.set_edge_costs(
+    data.layer_classes, data.class_weights, angle_weight=cfg.ANGLE_WEIGHT
+)
+graph.set_shift(
+    cfg.PYLON_DIST_MIN,
+    cfg.PYLON_DIST_MAX,
+    vec,
+    cfg.MAX_ANGLE,
+    max_angle_lg=cfg.MAX_ANGLE_LG
+)
 # add vertices
 graph.add_nodes()
 
@@ -101,8 +111,8 @@ for (factor, dist) in PIPELINE:
     graph.set_corridor(factor, corridor, start_inds, dest_inds)
     print("1) set cost rest")
     graph.add_edges()
-    print("2) added edges", len(list(graph.graph.edges())))
-    print("number of vertices:", len(list(graph.graph.vertices())))
+    print("2) added edges", graph.n_edges)
+    print("number of vertices:", graph.n_nodes)
 
     # weighted sum of all costs
     graph.sum_costs()
@@ -122,10 +132,10 @@ for (factor, dist) in PIPELINE:
 
     time_infos.append(graph.time_logs.copy())
 
-    if cfg.VERBOSE:
-        del graph.time_logs['edge_list_times']
-        del graph.time_logs['add_edges_times']
-        print(graph.time_logs)
+    # if cfg.VERBOSE:
+    #     del graph.time_logs['edge_list_times']
+    #     del graph.time_logs['add_edges_times']
+    #     print(graph.time_logs)
 
     if dist > 0:
         # PRINT AND SAVE timing test
@@ -142,6 +152,13 @@ for (factor, dist) in PIPELINE:
         graph.remove_vertices(corridor, delete_padding=cfg.PYLON_DIST_MAX)
         print("6) remove edges")
 
+# path_window, path_window_cost, cost_sum_window = graph.best_in_window(
+#     60, 70, 120, 130, source_v, target_v
+# )
+# print("cost actually", cost_sum, "cost_new", cost_sum_window)
+
+ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
+
 time_pipeline = round(time.time() - tic, 3)
 print("FINISHED PIPELINE:", time_pipeline)
 
@@ -151,19 +168,31 @@ time_test_csv(
     cost_sum, dist, time_pipeline, NOTES
 )
 
-# PLOT RESULT
-plot_pipeline_paths(
-    plot_surfaces, output_paths, buffer=2, out_path=OUT_PATH + "_pipeline.png"
-)
-# plot_path(np.mean(instance,axis=0), path, buffer=1, out_path=OUT_PATH + ".png")
-plot_path_costs(
-    instance * instance_corr,
-    path,
-    path_costs,
-    graph.cost_classes,
-    buffer=2,
-    out_path=OUT_PATH + ".png"
-)
+# PLOTTING:
+# FOR PIPELINE
+# plot_pipeline_paths(
+#     plot_surfaces, output_paths, buffer=2, out_path=OUT_PATH + "_pipeline.png"
+# )
+# FOR KSP:
+with open(OUT_PATH + "_ksp.json", "w") as outfile:
+    json.dump(ksp, outfile)
+plot_k_sp(ksp, graph.instance, out_path=OUT_PATH)
+
+# FOR WINDOW
+# plot_path(
+#     graph.instance, path_window, buffer=0, out_path=OUT_PATH + "_window.png"
+# )
+# plot_path(graph.instance, path, buffer=0, out_path=OUT_PATH + ".png")
+
+# FOR COST COMPARISON
+# plot_path_costs(
+#     instance * instance_corr,
+#     path,
+#     path_costs,
+#     data.layer_classes,
+#     buffer=2,
+#     out_path=OUT_PATH + "_costs.png"
+# )
 
 # SAVE graph
 # graph.save_graph(OUT_PATH + "_graph")

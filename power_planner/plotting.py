@@ -84,7 +84,7 @@ def plot_pipeline_paths(plot_surfaces, output_paths, buffer=1, out_path=None):
     subplots of different steps in the pipeline
     """
     plt.figure(figsize=(20, 10))
-    for i, (p, p_cost) in enumerate(output_paths):
+    for i, (p, _) in enumerate(output_paths):
         plt.subplot(1, len(output_paths), i + 1)
 
         # expand to greyscale
@@ -155,6 +155,31 @@ def plot_pareto(pareto0, pareto1, paths, vary, classes, out_path=None):
 
     if out_path is not None:
         plt.savefig(out_path + "_pareto.png")
+    else:
+        plt.show()
+
+
+def plot_k_sp(ksp, inst, out_path=None):
+    """
+    Plot k shortest paths on the instance
+    """
+    costs = [k[2] for k in ksp]
+    paths = [k[0] for k in ksp]
+
+    plt.figure(figsize=(10, 20))
+    plt.imshow(np.swapaxes(inst, 1, 0))
+    # plt.imshow(np.swapaxes(instance[1:], 2,0), vmin=0, vmax=0.2)
+    for i, path in enumerate(paths):
+        path = np.asarray(path)
+        plt.plot(
+            path[:, 0], path[:, 1], label=str(round(costs[i], 2)), linewidth=3
+        )
+
+    leg = plt.legend(fontsize=15)
+    leg.set_title('Costs', prop={'size': 15})
+    plt.axis("off")
+    if out_path is not None:
+        plt.savefig(out_path + "_ksp.pdf")
     else:
         plt.show()
 
