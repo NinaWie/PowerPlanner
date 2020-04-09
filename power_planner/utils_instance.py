@@ -7,13 +7,24 @@ class CostUtils():
 
     @staticmethod
     def get_seeds(greater_zero, factor):
+        """
+        Get seeds in grid of every factor pixel
+        Arguments:
+            greater_zero: binary image indicating where seeds are to be placed
+            factor: every factor pixel is a seed
+        Returns:
+            Array of same shape as greater zero with grid of evenly spaced
+            values ranging from 1 to number of seeds
+        """
         lab = 0
         x_len, y_len = greater_zero.shape
         seeds = np.zeros(greater_zero.shape)
         omitted = 0
+        # consider every factor pixel in each dimension
         for i in np.arange(0, x_len, factor):
             for j in np.arange(0, y_len, factor):
                 if greater_zero[i, j]:
+                    # set seed with new index
                     seeds[i, j] = lab
                     lab += 1
                 else:
@@ -33,8 +44,9 @@ class CostUtils():
 
         greater_zero = (img > 0).astype(int)
 
+        # get edge image
         edges = filters.sobel(img)
-
+        # get regular seeds
         seeds = CostUtils.get_seeds(greater_zero, factor)
         print("number seeds: ", np.sum(seeds > 0))
 
@@ -58,6 +70,16 @@ class CostUtils():
 
     @staticmethod
     def simple_downsample(img, factor, func="mean"):
+        """
+        Summarize pixels into on with a certain function
+        Arguments:
+            img: input 3d Array of costs (first dim: cost classes)
+            factor: how many pixels to summarize
+            func: pooling function - can be any such as
+                np.mean np.min or np.max
+        Returns:
+            image that is zero everywhere except for the selected points
+        """
         x_len_new = img.shape[1] // factor
         y_len_new = img.shape[2] // factor
         new_img = np.zeros(img.shape)
@@ -66,13 +88,12 @@ class CostUtils():
             for j in range(y_len_new):
                 patch = img[:, i * factor:(i + 1) * factor,
                             j * factor:(j + 1) * factor]
-                if np.any(patch):  # >0.01):
+                if np.any(patch):
                     for k in range(len(new_img)):
                         part = patch[k]
-                        if np.any(part):  # >0.01):
-                            new_img[k, i * factor, j * factor] = pool_func(
-                                part[part > 0]
-                            )  # >0.01])
+                        if np.any(part):
+                            new_img[k, i * factor,
+                                    j * factor] = pool_func(part[part > 0])
         return new_img
 
     @staticmethod
@@ -86,6 +107,9 @@ class CostUtils():
 
     @staticmethod
     def emergency_points(hard_cons, costs, max_dist, start_inds, dest_inds):
+        """
+        Add points in regular spacing in forbidden areas
+        """
         hard_cons[start_inds[0], start_inds[1]] = 1
         hard_cons[dest_inds[0], dest_inds[1]] = 1
         # add grid of emergency points

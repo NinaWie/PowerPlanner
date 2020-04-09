@@ -80,41 +80,6 @@ class TwoPowerBF():
         )
         return self.path_ab, path_costs, cost_sum
 
-    def best_in_window_simple(
-        self,
-        w_xmin,
-        w_xmax,
-        w_ymin,
-        w_ymax,
-        start_inds,
-        dest_inds,
-        margin=0.05
-    ):
-        """
-        margin: percent that it's allowed to be higher than average
-        """
-        opt = np.min(self.graph_ab.dists[:, dest_inds[0], dest_inds[1]])
-
-        possible_cs = []
-        for x in range(w_xmin, w_xmax + 1, 1):
-            for y in range(w_ymin, w_ymax + 1, 1):
-                # todo here: take into account angle directly
-                added_costs = np.min(self.graph_ab.dists[:, x, y]) + np.min(
-                    self.graph_ba.dists[:, x, y]
-                ) - self.graph_ab.instance[x, y]
-                if added_costs < opt + margin * opt:
-                    possible_cs.append(np.array([x, y]))
-        for c in possible_cs:
-            path_ac = self.graph_ab.get_shortest_path(
-                start_inds, c, ret_only_path=True
-            )
-            path_cb = self.graph_ba.get_shortest_path(
-                dest_inds, c, ret_only_path=True
-            )
-            plt.plot(path_ac[:, 0], path_ac[:, 1])
-            plt.plot(path_cb[:, 0], path_cb[:, 1])
-            plt.show()
-
     @staticmethod
     def get_sp_start_shift(
         dists, dists_argmin, start_inds, dest_inds, shifts, min_shift
@@ -132,6 +97,24 @@ class TwoPowerBF():
             curr_point = new_point
         return np.asarray(my_path)
 
+    def _combined_paths(self, start, dest, shiftab, shiftba, best_node):
+        # compute path from start to middle point
+        path_ac = self.get_sp_start_shift(
+            self.graph_ab.dists, self.graph_ab.dists_argmin, start, best_node,
+            self.graph_ab.shifts, shiftab
+        )
+        # compute path from middle point to dest
+        path_cb = self.get_sp_start_shift(
+            self.graph_ba.dists, self.graph_ba.dists_argmin, dest, best_node,
+            self.graph_ba.shifts, shiftba
+        )
+        # concatenate
+        together = np.concatenate(
+            (np.flip(np.array(path_ac), axis=0), np.array(path_cb)[1:]),
+            axis=0
+        )
+        return together
+
     def best_in_window(
         self,
         w_xmin,
@@ -147,6 +130,11 @@ class TwoPowerBF():
         """
         tic = time.time()
 
+        # check feasability of window
+        check_x, check_y = self.graph_ab.instance.shape
+        if w_xmax > check_x or w_ymax > check_y:
+            raise ValueError("illegal args: window bounds over image size")
+
         ang_weight = self.graph_ba.angle_weight
         ang_norm_factor = self.graph_ba.angle_norm_factor
 
@@ -158,74 +146,92 @@ class TwoPowerBF():
             for y in range(w_ymin, w_ymax + 1, 1):
                 # todo here: take into account angle directly
                 cell_val = self.graph_ab.instance[x, y]
+                min_costs = np.inf
                 if cell_val < np.inf:
-                    min_costs = np.inf
                     min_shifts = [0, 0]
+                    # really iterate over all combinations of angles
                     for s1 in range(len(self.graph_ab.shifts)):
                         for s2 in range(len(self.graph_ab.shifts)):
+                            # get dists for each combination of shifts
                             val_ab = self.graph_ab.dists[s1, x, y]
                             shift_ab = self.graph_ab.shifts[s1]
                             val_ba = self.graph_ba.dists[s2, x, y]
                             shift_ba = self.graph_ba.shifts[s2]
+                            # get angle for edge tuple
                             ang = angle(
                                 np.asarray(shift_ab),
                                 np.asarray(shift_ba) * (-1)
                             )
+                            # combine these costs
                             added_costs = (
                                 val_ab + val_ba - cell_val +
                                 ang_weight * ang / ang_norm_factor
                             )
+                            # check if best one so far
                             if added_costs < min_costs:
                                 min_costs = added_costs
                                 min_shifts = [s1, s2]
                     possible_shifts.append(min_shifts)
-                    added_costs = min_costs
-                    # np.min(self.graph_ab.dists[:, x, y]) +
-                    # np.min(self.graph_ba.dists[:, x, y]) -
-                    # self.graph_ab.instance[x,y]
                 else:
                     possible_shifts.append([0, 0])
-                    added_costs = np.inf
-                possible_cs.append(np.array([x, y]))
                 c_path_cost.append(min_costs)
+                possible_cs.append(np.array([x, y]))
 
         # get best one
         best_c = np.argmin(c_path_cost)
-        print(best_c)
         c = possible_cs[best_c]
         s1, s2 = possible_shifts[best_c]
         # stick together the path
-        path_ac = self.get_sp_start_shift(
-            self.graph_ab.dists, self.graph_ab.dists_argmin, start_inds, c,
-            self.graph_ab.shifts, s1
-        )
-        path_cb = self.get_sp_start_shift(
-            self.graph_ba.dists, self.graph_ba.dists_argmin, dest_inds, c,
-            self.graph_ba.shifts, s2
-        )
-        # plt.plot(path_ac[:, 0], path_ac[:, 1])
-        # plt.plot(path_cb[:, 0], path_cb[:, 1])
-        # plt.show()
-        together = np.concatenate(
-            (np.flip(np.array(path_ac), axis=0), np.array(path_cb)), axis=0
-        )
-
-        path_costs = []
-        for p in together:
-            path_costs.append(self.graph_ab.instance_layers[:, p[0], p[1]])
+        vertices_path = self._combined_paths(start_inds, dest_inds, s1, s2, c)
 
         self.graph_ab.time_logs["best_in_window"] = round(time.time() - tic, 3)
-        return together, path_costs, c_path_cost[best_c]
+        return self.graph_ab.transform_path(vertices_path)
+
+    def _flat_ind_to_inds(self, flat_ind, arr_shape):
+        """
+        Transforms an index of a flattened 3D array to its original coords
+        """
+        _, len2, len3 = arr_shape
+        x1 = flat_ind // (len2 * len3)
+        x2 = (flat_ind % (len2 * len3)) // len3
+        x3 = (flat_ind % (len2 * len3)) % len3
+        return (x1, x2, x3)
+
+    def best_in_window_straight(
+        self, w_xmin, w_xmax, w_ymin, w_ymax, start_inds, dest_inds
+    ):
+        """
+        Faster way to find shortest path through window: Only consider
+        straight connections
+        Arguments:
+            w_xmin, w_xmax, w_ymin, w_ymax: bounds of window
+        """
+        check_x, check_y = self.graph_ab.instance.shape
+        if w_xmax > check_x or w_ymax > check_y:
+            raise ValueError("illegal args: window bounds over image size")
+
+        # iterate over all edges
+        summed_dists = (
+            self.graph_ab.dists + self.graph_ba.dists - self.graph_ab.instance
+        )
+        # get relevant window
+        window_dists = summed_dists[:, w_xmin:w_xmax + 1, w_ymin:w_ymax + 1]
+        best_path_ind = np.argmin(window_dists.flatten())
+        # get actual inds in smaller window
+        best_shift, x, y = self._flat_ind_to_inds(
+            best_path_ind, window_dists.shape
+        )
+        best_node = [w_xmin + x, w_ymin + y]
+
+        vertices_path = self._combined_paths(
+            start_inds, dest_inds, best_shift, best_shift, best_node
+        )
+        return self.graph_ab.transform_path(vertices_path)
 
     def k_shortest_paths(self, source, dest, k, overlap=0.5):
-
-        def flat_ind_to_inds(flat_ind, arr_shape):
-            _, len2, len3 = arr_shape
-            x1 = flat_ind // (len2 * len3)
-            x2 = (flat_ind % (len2 * len3)) // len3
-            x3 = (flat_ind % (len2 * len3)) % len3
-            return (x1, x2, x3)
-
+        """
+        ATTENTION: only finds best one with angle zero at connection
+        """
         tic = time.time()
 
         best_paths = [self.path_ab]
@@ -240,20 +246,15 @@ class TwoPowerBF():
         # iterate over edges from least to most costly
         for e in e_shortest:
             # compute start and dest v
-            x1, x2, x3 = flat_ind_to_inds(e, summed_dists.shape)
-            path_ac = self.get_sp_start_shift(
-                self.graph_ab.dists, self.graph_ab.dists_argmin, source,
-                [x2, x3], self.graph_ab.shifts, x1
+            x1, x2, x3 = self._flat_ind_to_inds(e, summed_dists.shape)
+            # get shortest path through this node
+            vertices_path = self._combined_paths(
+                source, dest, x1, x1, [x2, x3]
             )
-            path_cb = self.get_sp_start_shift(
-                self.graph_ba.dists, self.graph_ba.dists_argmin, dest,
-                [x2, x3], self.graph_ba.shifts, x1
-            )
-            vertices_path = np.concatenate(
-                (np.flip(np.array(path_ac), axis=0), np.array(path_cb)[1:]),
-                axis=0
-            )
+            # compute similarity with previous paths
+            # TODO: similarities
             already = np.array([tuple(u) in sp_set for u in vertices_path])
+            # if similarity < threshold, add
             if np.sum(already) < len(already) * overlap:
                 best_paths.append(vertices_path)
                 tup_path = [tuple(p) for p in vertices_path]

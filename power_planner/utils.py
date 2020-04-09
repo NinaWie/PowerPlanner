@@ -58,6 +58,11 @@ def normalize(instance):
 def rescale(img, scale_factor):
     """
     Scale down image by a factor
+    Arguments:
+        img: numpy array of any dimension
+        scale_factor: integer >= 1
+    Returns:
+        numpy array with 1/scale_factor size along each dimension
     """
     if scale_factor == 1:
         return img
@@ -102,24 +107,26 @@ def angle(vec1, vec2):
     :params vec1, vec2: two 1-dim vectors of same size, can be lists or array
     :returns angle
     """
-    # path = np.asarray(path)
-    # for p, (i, j) in enumerate(path[:-2]):
-    #     v1 = path[p + 1] - path[p]
-    #     v2 = path[p + 1] - path[p + 2]
     vec1 = np.asarray(vec1)
     vec2 = np.asarray(vec2)
+    # normalize
     v1 = vec1 / np.linalg.norm(vec1)
     v2 = vec2 / np.linalg.norm(vec2)
-    if np.all(v1 == v2):
+    # special cases where arcos is nan
+    if np.allclose(v1, v2):
         return 0
-    if -v1[0] == v2[0] and -v1[1] == v2[1]:
+    if np.allclose(-v1, v2):
         return np.pi
+    # compute angle
     angle = np.arccos(np.dot(v1, v2))
+    # want to use full 360 degrees
     if np.sin(angle) < 0:
         angle = 2 * np.pi - angle
+    # can still be nan if v1 or v2 is 0
     if np.isnan(angle):
         print(vec1, vec2, v1, v2)
-        raise ValueError("angle is nan, problem in computation")
+        return 0
+        # raise ValueError("angle is nan, check whether vec1 or vec2 = 0")
     return angle
 
 
@@ -145,9 +152,9 @@ def get_half_donut(radius_low, radius_high, vec, angle_max=0.5 * np.pi):
     pos_x, pos_y = get_donut(radius_low, radius_high)
     new_tuples = []
     for i, j in zip(pos_x, pos_y):
-        # if i > 0 or i == 0 and j > 0:
-        # if i * vec[0] + j * vec[1] >= 0:
+        # compute angle
         ang = angle([i, j], vec)
+        # add all valid ones
         if ang <= angle_max:
             new_tuples.append((i, j))
     return new_tuples
@@ -172,7 +179,7 @@ def get_lg_donut(
         if i * vec[0] + j * vec[1] <= 0:
             for (k, l) in tuple_zip:
                 ang = angle([-k, -l], [i, j])
-                # if smaller max angle and general outgoing edges half
+                # if smaller max angle and general outgoing half
                 if ang <= max_angle_lg and k * vec[0] + l * vec[1] >= 0:
                     angle_norm = ang / max_angle_lg
                     linegraph_tuples.append([[i, j], [k, l], angle_norm])
@@ -192,7 +199,7 @@ def get_path_lines(cost_shape, paths):
         # iterate over path nodes
         for i in range(len(path) - 1):
             line = bresenham_line(*path[i], *path[i + 1])
-            # print(line)
+            # set all pixels on line to 1
             for (j, k) in line:
                 path_dilation[j, k] = 1
     return path_dilation
@@ -212,6 +219,7 @@ def dilation_dist(path_dilation, n_dilate=None):
         # compute number of iterations: maximum distance of pixel to line
         x_coords, y_coords = np.where(path_dilation)
         x_len, y_len = path_dilation.shape
+        # dilate as much as the largest distance from the sides
         n_dilate = max(
             [
                 np.min(x_coords), x_len - np.max(x_coords),
@@ -237,12 +245,15 @@ def cdist_dist(path_dilation):
     """
     saved_arrs = np.zeros(path_dilation.shape)
     x_len, y_len = path_dilation.shape
+    # transform array to indices array as input to cdist
     xa = np.array([[i, j] for i in range(x_len) for j in range(y_len)])
     xb = np.swapaxes(np.vstack(np.where(path_dilation > 0)), 1, 0)
     print(xa.shape, xb.shape)
+    # main computation
     all_dists = cdist(xa, xb)
     print(all_dists.shape)
     out = np.min(all_dists, axis=1)
+    # re-transform indices to image
     k = 0
     for i in range(x_len):
         for j in range(y_len):

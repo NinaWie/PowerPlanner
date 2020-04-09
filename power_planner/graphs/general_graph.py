@@ -47,7 +47,7 @@ class GeneralGraph():
         # save weighted instance for plotting
         self.instance = np.sum(
             np.moveaxis(self.cost_instance, 0, -1) * self.cost_weights, axis=2
-        )
+        ) * self.hard_constraints
 
     def set_shift(self, lower, upper, vec, max_angle):
         """

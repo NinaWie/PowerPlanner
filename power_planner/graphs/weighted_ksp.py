@@ -95,27 +95,10 @@ class WeightedKSP(WeightedGraph):
 
     def k_shortest_paths(self, source, dest, k, margin=0.05):
         tic = time.time()
-        # get optimal costs
-        opt_costs = self.dist_map_ab[dest]
         # initialize list of paths
         sp_set = set(self.best_path)
         # iterate over vertices
         best_paths = [self.best_path]  # TODO: include k
-        # for v in range(np.max(self.pos2node)):
-        #     dists_v = self.dist_map_ab[v] + self.dist_map_ba[v]
-        #     if v not in sp_set and dists_v < opt_costs + opt_costs * margin:
-        #         path_ac = self.get_sp_from_preds(self.pred_map_ab, v, source)
-        #         path_cb = self.get_sp_from_preds(self.pred_map_ba, v, dest)
-        #         path_ac.reverse()
-        #         # leave 1 away because otherwise twice
-        #         vertices_path = path_ac + path_cb[1:]
-        #         already = np.array([u in sp_set for u in vertices_path])
-        #         # if less than half already there
-        #         if np.sum(already) < len(already) / 2:
-        #             # TODO: if it hase more than half overlap, take better one
-        #             # TODO: sort vertices by their cost? to add better first
-        #             best_paths.append(vertices_path)
-        #             sp_set.update(vertices_path)
 
         # new version
         v_dists = [

@@ -79,8 +79,8 @@ class PowerBF():
         print("cost weights", self.cost_weights)
 
         layer_weights = np.asarray(layer_weights)
-        layer_weights = layer_weights / np.sum(layer_weights)
-        print("layer weights", layer_weights)
+        self.layer_weights = layer_weights / np.sum(layer_weights)
+        print("layer weights", self.layer_weights)
 
         # define instance by weighted sum
         self.instance = np.sum(
@@ -101,7 +101,6 @@ class PowerBF():
 
         for _ in range(self.n_iters):
             for i in range(len(self.shifts)):
-
                 # shift dists by this shift
                 # todo: avoid swaping dimenions each time
                 cost_switched = np.moveaxis(self.dists, 0, -1)
@@ -117,15 +116,18 @@ class PowerBF():
                 ) + self.instance
                 # 28 x 10 x 10 + 28 angles + 10 x 10
 
+                # get argmin for each edge
+                # --> remember where the value on this edge came from
+                argmin_together = np.argmin(together, axis=0)
                 # get minimum path cost for each edge
-                weighted_costs_shifted = np.min(together, axis=0)
+                # weighted_costs_shifted = np.min(together, axis=0)
+                weighted_costs_shifted = np.take_along_axis(
+                    together, argmin_together[None, :, :], axis=0
+                )[0, :, :]
 
                 concat = np.array([self.dists[i], weighted_costs_shifted])
                 # get spots that are actually updated
                 changed_ones = np.argmin(concat, axis=0)
-                # get argmin for each edge
-                # --> remember where the value on this edge came from
-                argmin_together = np.argmin(together, axis=0)
                 # update predecessors
                 self.dists_argmin[i, changed_ones > 0] = argmin_together[
                     changed_ones > 0]
@@ -151,15 +153,19 @@ class PowerBF():
         path_costs = np.array(
             [self.instance_layers[:, p[0], p[1]] for p in path]
         )
-        ang_costs = ConstraintUtils.compute_angle_costs(
-            path, self.angle_norm_factor
-        )
-        path_costs = np.concatenate(
-            (np.swapaxes(np.array([ang_costs]), 1, 0), path_costs), axis=1
-        )
+        # NEXT LINES: INCLUDE ANGLE COSTS
+        # ang_costs = ConstraintUtils.compute_angle_costs(
+        #     path, self.angle_norm_factor
+        # )
+        # path_costs = np.concatenate(
+        #     (np.swapaxes(np.array([ang_costs]), 1, 0), path_costs), axis=1
+        # )
+        # cost_sum = np.dot(
+        #     self.cost_weights, np.sum(np.array(path_costs), axis=0)
+        # )
         cost_sum = np.dot(
-            self.cost_weights, np.sum(np.array(path_costs), axis=0)
-        )
+            self.layer_weights, np.sum(np.array(path_costs), axis=0)
+        )  # scalar: weighted sum of the summed class costs
         return np.asarray(path
                           ).tolist(), path_costs.tolist(), cost_sum.tolist()
 

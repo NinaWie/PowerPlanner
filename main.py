@@ -25,7 +25,7 @@ else:
     PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
 
 # DEFINE CONFIGURATION
-ID = "two_power"  # str(round(time.time() / 60))[-5:]
+ID = "angleksp_5"  # str(round(time.time() / 60))[-5:]
 
 OUT_PATH = "outputs/path_" + ID
 SCALE_PARAM = 5  # args.scale
@@ -73,19 +73,11 @@ else:
 vec = dest_inds - start_inds
 print("start-dest-vec", vec)
 
-# # BUILD GRAPH:
-# weighted_inst = np.sum(
-#     np.moveaxis(instance, 0, -1) * data.class_weights, axis=2
-# )
-# w_new = [0.5, 0.5]  # [sum(data.class_weights)] + list(data.class_weights)
-# instance = np.array([weighted_inst])
-
 # DEFINE GRAPH AND ALGORITHM
 graph = GRAPH_TYPE(
     instance, instance_corr, graphtool=cfg.GTNX, verbose=cfg.VERBOSE
 )
 
-# graph.set_edge_costs(["angle", "rest"], w_new)
 graph.set_edge_costs(
     data.layer_classes, data.class_weights, angle_weight=cfg.ANGLE_WEIGHT
 )
@@ -153,7 +145,7 @@ for (factor, dist) in PIPELINE:
         print("6) remove edges")
 
 # path_window, path_window_cost, cost_sum_window = graph.best_in_window(
-#     60, 70, 120, 130, source_v, target_v
+#     30, 35, 60, 70, source_v, target_v
 # )
 # print("cost actually", cost_sum, "cost_new", cost_sum_window)
 
@@ -182,6 +174,7 @@ plot_k_sp(ksp, graph.instance, out_path=OUT_PATH)
 # plot_path(
 #     graph.instance, path_window, buffer=0, out_path=OUT_PATH + "_window.png"
 # )
+# SIMPLE
 # plot_path(graph.instance, path, buffer=0, out_path=OUT_PATH + ".png")
 
 # FOR COST COMPARISON
