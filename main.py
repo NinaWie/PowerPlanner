@@ -10,7 +10,7 @@ import json
 # utils imports
 from power_planner.data_reader import DataReader
 from power_planner import graphs
-from power_planner.plotting import plot_path_costs, plot_pipeline_paths, plot_path, plot_k_sp
+from power_planner.plotting import plot_path_costs, plot_pipeline_paths, plot_path, plot_k_sp, plot_pareto_paths
 from power_planner.utils import get_distance_surface, time_test_csv
 from config import Config
 
@@ -25,7 +25,7 @@ else:
     PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
 
 # DEFINE CONFIGURATION
-ID = "angleksp_5"  # str(round(time.time() / 60))[-5:]
+ID = "pareto_3d_5"  # str(round(time.time() / 60))[-5:]
 
 OUT_PATH = "outputs/path_" + ID
 SCALE_PARAM = 5  # args.scale
@@ -34,7 +34,7 @@ SCALE_PARAM = 5  # args.scale
 # random graph pipeline
 PIPELINE = [(1, 0)]  # [(0.9, 40), (0, 0)]
 
-GRAPH_TYPE = graphs.TwoPowerBF
+GRAPH_TYPE = graphs.WeightedKSP
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, PowerBF
 # TwoPowerBF, WeightedKSP
 print("graph type:", GRAPH_TYPE)
@@ -70,9 +70,6 @@ else:
             pickle.dump(data, outfile)
         print("successfully saved data")
 
-vec = dest_inds - start_inds
-print("start-dest-vec", vec)
-
 # DEFINE GRAPH AND ALGORITHM
 graph = GRAPH_TYPE(
     instance, instance_corr, graphtool=cfg.GTNX, verbose=cfg.VERBOSE
@@ -84,7 +81,7 @@ graph.set_edge_costs(
 graph.set_shift(
     cfg.PYLON_DIST_MIN,
     cfg.PYLON_DIST_MAX,
-    vec,
+    dest_inds - start_inds,
     cfg.MAX_ANGLE,
     max_angle_lg=cfg.MAX_ANGLE_LG
 )
@@ -116,18 +113,15 @@ for (factor, dist) in PIPELINE:
     # save for inspection
     output_paths.append((path, path_costs))
     plot_surfaces.append(graph.cost_rest[2].copy())  # TODO: mean makes black
-    # get several paths --> here: pareto paths
+    # get several paths --> possible to replace by pareto_out[0]
     paths = [path]
-    # graph.get_pareto(
-    #     np.arange(0, 1.1, 0.1), source_v, target_v, compare=[2, 3]
-    # )
 
     time_infos.append(graph.time_logs.copy())
 
-    # if cfg.VERBOSE:
-    #     del graph.time_logs['edge_list_times']
-    #     del graph.time_logs['add_edges_times']
-    #     print(graph.time_logs)
+    if cfg.VERBOSE:
+        del graph.time_logs['edge_list_times']
+        del graph.time_logs['add_edges_times']
+        print(graph.time_logs)
 
     if dist > 0:
         # PRINT AND SAVE timing test
@@ -144,12 +138,25 @@ for (factor, dist) in PIPELINE:
         graph.remove_vertices(corridor, delete_padding=cfg.PYLON_DIST_MAX)
         print("6) remove edges")
 
+# BEST IN WINDOW
 # path_window, path_window_cost, cost_sum_window = graph.best_in_window(
 #     30, 35, 60, 70, source_v, target_v
 # )
 # print("cost actually", cost_sum, "cost_new", cost_sum_window)
 
-ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
+# COMPUTE KSP
+# graph.get_shortest_path_tree(source_v, target_v)
+# ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
+
+pareto_out = graph.get_pareto(
+    10,
+    source_v,
+    target_v,
+    compare=[0, 2, 3],
+    non_compare_weight=0.2,
+    out_path=OUT_PATH
+)
+plot_pareto_paths(pareto_out, graph.instance, out_path=OUT_PATH)
 
 time_pipeline = round(time.time() - tic, 3)
 print("FINISHED PIPELINE:", time_pipeline)
@@ -166,9 +173,9 @@ time_test_csv(
 #     plot_surfaces, output_paths, buffer=2, out_path=OUT_PATH + "_pipeline.png"
 # )
 # FOR KSP:
-with open(OUT_PATH + "_ksp.json", "w") as outfile:
-    json.dump(ksp, outfile)
-plot_k_sp(ksp, graph.instance, out_path=OUT_PATH)
+# with open(OUT_PATH + "_ksp.json", "w") as outfile:
+#     json.dump(ksp, outfile)
+# plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
 
 # FOR WINDOW
 # plot_path(
@@ -191,11 +198,10 @@ plot_k_sp(ksp, graph.instance, out_path=OUT_PATH)
 # graph.save_graph(OUT_PATH + "_graph")
 # np.save(OUT_PATH + "_pos2node.npy", graph.pos2node)
 
-# data.save_coordinates(path, OUT_PATH, scale_factor=SCALE_PARAM)
-# DataReader.save_json(OUT_PATH, path, path_costs, graph.time_logs,SCALE_PARAM)
-DataReader.save_pipeline_infos(
-    OUT_PATH, output_paths, time_infos, PIPELINE, SCALE_PARAM
-)
+# SAVE JSON WITH INFOS
+# DataReader.save_pipeline_infos(
+#     OUT_PATH, output_paths, time_infos, PIPELINE, SCALE_PARAM
+# )
 
 # LINE GRAPH FROM FILE:
 # elif GRAPH_TYPE == "LINE_FILE":

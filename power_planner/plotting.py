@@ -1,6 +1,8 @@
 from power_planner.utils import normalize
 
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.lines import Line2D
 import numpy as np
 # import pwlf
 
@@ -142,41 +144,6 @@ def plot_prior_paths(plot_surfaces, output_paths, buffer=2, out_path=None):
         plt.show()
 
 
-def plot_pareto(pareto0, pareto1, paths, classes, out_path=None):
-    """
-    Plot the pareto curve and paths
-    Arguments:
-        pareto0, pareto1: lists of same length, costs of the two criteria
-            to compare
-        paths: All Paths found by the varied pareto curve
-    Returns:
-        save subplots with pareto fronteir curve and paths together
-    """
-    color = plt.cm.rainbow(np.linspace(0, 1, len(pareto0)))
-    # scatter pareto curve
-    plt.figure(figsize=(20, 10))
-    plt.subplot(1, 2, 1)
-    plt.scatter(pareto0, pareto1, c=color)
-    plt.xlabel(classes[0], fontsize=15)
-    plt.ylabel(classes[1], fontsize=15)
-    plt.title("Pareto frontier for " + classes[0] + " vs " + classes[1])
-
-    # plot paths
-    plt.subplot(1, 2, 2)
-    for i, p in enumerate(paths):
-        p_arr = np.array(p)
-        plt.plot(p_arr[:, 1], p_arr[:, 0], label=str(i), c=color[i])
-    plt.legend(title="Weight of " + classes[0] + " costs")
-    plt.title(
-        "Paths for varied weights for " + classes[0] + " vs " + classes[1]
-    )
-    # save
-    if out_path is not None:
-        plt.savefig(out_path + "_pareto.pdf")
-    else:
-        plt.show()
-
-
 def plot_k_sp(ksp, inst, out_path=None):
     """
     Plot k shortest paths on the instance
@@ -209,20 +176,199 @@ def plot_k_sp(ksp, inst, out_path=None):
         plt.show()
 
 
-def plot_pareto_paths(paths, classes, out_path=None):
+def plot_pareto_paths(pareto_out, inst, out_path=None):
     """
-    See plot_pareto, only bottom part (only plot paths)
+    Plot k shortest paths on the instance
+    Arguments:
+        pareto_out: tuple of pareto outputs: (paths, weights, cost sums)
+        inst: instance to plot on
     """
-    color = iter(plt.cm.rainbow(np.linspace(0, 1, len(paths))))
-    plt.figure(figsize=(20, 10))
-    # iterate over paths
-    for i, p in enumerate(paths):
-        p_arr = np.array(p)
-        c = next(color)
-        plt.plot(p_arr[:, 1], p_arr[:, 0], label=str(i), c=c)
-    plt.legend(title="Weight of " + classes[0] + " costs")
+    # get relevant information
+    paths, weight_colours, cost_sum = pareto_out
+
+    # plot main image (cost surface)
+    plt.figure(figsize=(10, 20))
+    plt.imshow(np.swapaxes(inst, 1, 0))
+    # iterate over k shortest paths
+    for i, path in enumerate(paths):
+        path = np.asarray(path)
+        col = weight_colours[i]
+        if len(col) == 2:
+            col = [col[0], 0, col[1]]
+        plt.plot(
+            path[:, 0],
+            path[:, 1],
+            label=str(round(cost_sum[i], 2)),
+            c=col,
+            linewidth=3
+        )
+    # plot and save
+    leg = plt.legend(fontsize=15)
+    leg.set_title('Weighted costs', prop={'size': 15})
+    plt.axis("off")
     if out_path is not None:
-        plt.savefig(out_path + "_pareto_paths.png")
+        plt.savefig(out_path + "_pareto_paths.pdf")
+    else:
+        plt.show()
+
+
+def plot_pareto_3d(pareto, weights, classes, out_path=None):
+    """
+    3D plot of pareto points from 3 cost classes
+    Arguments:
+        pareto: np array of shape num_paths x 3, with costs for each path
+        weights: array or list of shape num_paths x 3, giving the weights
+                that yielded the pareto costs
+        classes: list of 3 strings, the compared graphs
+    """
+    fig = plt.figure(figsize=(10, 5))
+    ax = Axes3D(fig)
+
+    for i in range(len(pareto)):
+        x, y, z = tuple(pareto[i])
+        col_weights = (np.asarray([weights[i]]) + 0.4) / 1.4
+        # print(x,y,z, weights[i])
+        ax.scatter(x, y, z, marker='o', s=100, c=col_weights, label=weights[i])
+
+    ax.set_xlabel(classes[0], fontsize=15)
+    ax.set_ylabel(classes[1], fontsize=15)
+    ax.set_zlabel(classes[2], fontsize=15)
+    # manually define legend
+    legend_elements = [
+        Line2D(
+            [0], [0],
+            marker='o',
+            color=[1, 0, 0],
+            markersize=10,
+            lw=0.1,
+            label='only ' + classes[0]
+        ),
+        Line2D(
+            [0], [0],
+            marker='o',
+            color=[0, 1, 0],
+            lw=0.1,
+            label='only ' + classes[1],
+            markersize=10
+        ),
+        Line2D(
+            [0], [0],
+            marker='o',
+            color=[0, 0, 1],
+            lw=0.1,
+            label='only ' + classes[2],
+            markersize=10
+        )
+    ]
+
+    # Create the figure
+    ax.legend(handles=legend_elements, loc='upper center', fontsize=17)
+
+    if out_path is not None:
+        plt.savefig(out_path + "_pareto.pdf")
+    else:
+        plt.show()
+
+
+def plot_pareto_scatter_3d(pareto, weights, classes, out_path=None):
+    """
+    3D plot of pareto points from 3 cost classes
+    Arguments:
+        pareto: np array of shape num_paths x 3, with costs for each path
+        weights: array or list of shape num_paths x 3, giving the weights that
+                yielded the pareto costs
+        classes: list of 3 strings, the compared graphs
+    """
+    fig = plt.figure(figsize=(20, 5))
+    for i in range(3):
+        ax = fig.add_subplot(1, 3, i + 1)
+        ind1 = i
+        ind2 = (i + 1) % 3
+        for j in range(len(pareto)):
+            label = np.argmax(weights[j])
+            col_weights = (np.asarray([weights[j]]) + 0.4) / 1.4
+            ax.scatter(
+                pareto[j, ind1], pareto[j, ind2], c=col_weights, label=label
+            )
+        plt.xlabel(classes[ind1], fontsize=17)
+        plt.ylabel(classes[ind2], fontsize=17)
+    legend_elements = [
+        Line2D(
+            [0], [0],
+            marker='o',
+            color=[1, 0, 0],
+            markersize=10,
+            lw=0.1,
+            label='only ' + classes[0]
+        ),
+        Line2D(
+            [0], [0],
+            marker='o',
+            color=[0, 1, 0],
+            lw=0.1,
+            label='only ' + classes[1],
+            markersize=10
+        ),
+        Line2D(
+            [0], [0],
+            marker='o',
+            color=[0, 0, 1],
+            lw=0.1,
+            label='only ' + classes[2],
+            markersize=10
+        )
+    ]
+
+    # Create the figure
+    ax.legend(handles=legend_elements, loc='upper center', fontsize=17)
+    if out_path is not None:
+        plt.savefig(out_path + "_pareto.pdf")
+    else:
+        plt.show()
+
+
+def plot_pareto_scatter_2d(pareto, weights, classes, out_path=None):
+    """
+    Scatter to compare two cost classes
+    Arguments:
+        pareto: np array of shape num_paths x 2, with costs for each path
+        weights: array or list of shape num_paths x 2, giving the weights
+                that yielded the pareto costs
+        classes: list of 2 strings, the compared graphs
+    """
+    color = np.array([[w[0], 0, w[1]] for w in weights])
+    # scatter pareto curve
+    plt.figure(figsize=(20, 10))
+    plt.subplot(1, 2, 1)
+    plt.scatter(pareto[:, 0], pareto[:, 1], c=color)
+    plt.xlabel(classes[0], fontsize=15)
+    plt.ylabel(classes[1], fontsize=15)
+    # manually create legend
+    legend_elements = [
+        Line2D(
+            [0], [0],
+            marker='o',
+            color=[1, 0, 0],
+            markersize=10,
+            lw=0.1,
+            label='only ' + classes[0]
+        ),
+        Line2D(
+            [0], [0],
+            marker='o',
+            color=[0, 0, 1],
+            lw=0.1,
+            label='only ' + classes[1],
+            markersize=10
+        )
+    ]
+    # Create the figure
+    plt.legend(handles=legend_elements, loc='upper center', fontsize=17)
+    plt.title(
+        "Pareto frontier for " + classes[0] + " vs " + classes[1], fontsize=17
+    )
+    if out_path is not None:
+        plt.savefig(out_path + "_pareto.pdf")
     else:
         plt.show()
 

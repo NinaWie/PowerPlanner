@@ -80,6 +80,12 @@ class TwoPowerBF():
         )
         return self.path_ab, path_costs, cost_sum
 
+    def get_shortest_path_tree(self, source, target):
+        """
+        Here the tree is implicit in shortest_path method
+        """
+        pass
+
     @staticmethod
     def get_sp_start_shift(
         dists, dists_argmin, start_inds, dest_inds, shifts, min_shift
