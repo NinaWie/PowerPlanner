@@ -29,14 +29,14 @@ class WeightedKSP(WeightedGraph):
     @staticmethod
     def get_sp_from_preds(pred_map, curr_vertex, start_vertex):
         path = [int(curr_vertex)]
-        # counter = 0
+        counter = 0
         while curr_vertex != start_vertex:
             curr_vertex = pred_map[curr_vertex]
             path.append(curr_vertex)
-            # if counter > 100:
-            #     print(path)
-            #     raise RuntimeWarning("while loop for sp not terminating")
-            # counter += 1
+            if counter > 100:
+                print(path)
+                raise RuntimeWarning("while loop for sp not terminating")
+            counter += 1
         return path
 
     def transform_path(self, vertices_path):
@@ -73,7 +73,7 @@ class WeightedKSP(WeightedGraph):
         )
         # again turn around to recover graph
         self.graph.set_reversed(is_reversed=False)
-        self.time_logs["shortest_path"] = round(time.time() - tic, 3)
+        self.time_logs["shortest_path_tree"] = round(time.time() - tic, 3)
 
         path_ab = self.get_sp_from_preds(self.pred_map_ab, target, source)
         assert self.dist_map_ba[source] < np.inf, "s not reachable from t"
@@ -125,8 +125,14 @@ class WeightedKSP(WeightedGraph):
                        ) == int(v) or int(self.pred_map_ba[v]) == int(v):
                     continue
                 # tic1 = time.time()
-                path_ac = self.get_sp_from_preds(self.pred_map_ab, v, source)
-                path_cb = self.get_sp_from_preds(self.pred_map_ba, v, dest)
+                try:
+                    path_ac = self.get_sp_from_preds(
+                        self.pred_map_ab, v, source
+                    )
+                    path_cb = self.get_sp_from_preds(self.pred_map_ba, v, dest)
+                except RuntimeWarning:
+                    print("while loop not terminating")
+                    continue
                 # times_getpath.append(time.time() - tic1)
                 path_ac.reverse()
                 # concatenate - leave 1 away because otherwise twice
@@ -136,7 +142,7 @@ class WeightedKSP(WeightedGraph):
                 if np.sum(already) < len(already) * overlap:
                     best_paths.append(vertices_path)
                     sp_set.update(vertices_path)
-                    print("added path, already scanned", j)
+                    # print("added path, already scanned", j)
             # stop if k paths are sampled
             if len(best_paths) >= k:
                 break

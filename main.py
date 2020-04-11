@@ -25,16 +25,16 @@ else:
     PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
 
 # DEFINE CONFIGURATION
-ID = "pareto_3d_5"  # str(round(time.time() / 60))[-5:]
+ID = "ksp_random"  # str(round(time.time() / 60))[-5:]
 
 OUT_PATH = "outputs/path_" + ID
-SCALE_PARAM = 5  # args.scale
+SCALE_PARAM = 2  # args.scale
 # normal graph pipeline
-# PIPELINE = [(2, 50), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
+# PIPELINE = [(2, 30), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
-PIPELINE = [(1, 0)]  # [(0.9, 40), (0, 0)]
+PIPELINE = [(0.95, 100), (0.95, 50), (0, 0)]
 
-GRAPH_TYPE = graphs.WeightedKSP
+GRAPH_TYPE = graphs.RandomWeightedGraph
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, PowerBF
 # TwoPowerBF, WeightedKSP
 print("graph type:", GRAPH_TYPE)
@@ -114,8 +114,7 @@ for (factor, dist) in PIPELINE:
     output_paths.append((path, path_costs))
     plot_surfaces.append(graph.cost_rest[2].copy())  # TODO: mean makes black
     # get several paths --> possible to replace by pareto_out[0]
-    paths = [path]
-
+    # paths = [path]
     time_infos.append(graph.time_logs.copy())
 
     if cfg.VERBOSE:
@@ -129,6 +128,13 @@ for (factor, dist) in PIPELINE:
             ID, cfg.CSV_TIMES, SCALE_PARAM, cfg.GTNX, GRAPH_TYPE, graph,
             path_costs, cost_sum, dist, 0, NOTES
         )
+        # Define paths around which to place corridor
+        graph.get_shortest_path_tree(source_v, target_v)
+        ksp = graph.k_shortest_paths(
+            source_v, target_v, 3, overlap=0.2
+        )  # cfg.KSP)
+        paths = [k[0] for k in ksp]
+
         # do specified numer of dilations
         corridor = get_distance_surface(
             graph.pos2node.shape, paths, mode="dilation", n_dilate=dist
@@ -145,18 +151,19 @@ for (factor, dist) in PIPELINE:
 # print("cost actually", cost_sum, "cost_new", cost_sum_window)
 
 # COMPUTE KSP
-# graph.get_shortest_path_tree(source_v, target_v)
-# ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
+graph.get_shortest_path_tree(source_v, target_v)
+ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
 
-pareto_out = graph.get_pareto(
-    10,
-    source_v,
-    target_v,
-    compare=[0, 2, 3],
-    non_compare_weight=0.2,
-    out_path=OUT_PATH
-)
-plot_pareto_paths(pareto_out, graph.instance, out_path=OUT_PATH)
+# PARETO
+# pareto_out = graph.get_pareto(
+#     10,
+#     source_v,
+#     target_v,
+#     compare=[0, 2, 3],
+#     non_compare_weight=0.2,
+#     out_path=OUT_PATH
+# )
+# plot_pareto_paths(pareto_out, graph.instance, out_path=OUT_PATH)
 
 time_pipeline = round(time.time() - tic, 3)
 print("FINISHED PIPELINE:", time_pipeline)
@@ -169,9 +176,9 @@ time_test_csv(
 
 # PLOTTING:
 # FOR PIPELINE
-# plot_pipeline_paths(
-#     plot_surfaces, output_paths, buffer=2, out_path=OUT_PATH + "_pipeline.png"
-# )
+plot_pipeline_paths(
+    plot_surfaces, output_paths, buffer=2, out_path=OUT_PATH + "_pipeline.png"
+)
 # FOR KSP:
 # with open(OUT_PATH + "_ksp.json", "w") as outfile:
 #     json.dump(ksp, outfile)

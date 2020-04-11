@@ -4,13 +4,14 @@ import pickle
 import time
 # import warnings
 import numpy as np
+import json
 # import matplotlib.pyplot as plt
 
 # utils imports
 from power_planner.data_reader import DataReader
 from power_planner import graphs
-from power_planner.plotting import plot_path_costs, plot_pipeline_paths
-from power_planner.utils import get_distance_surface, time_test_csv
+from power_planner.plotting import plot_path_costs, plot_pipeline_paths, plot_path, plot_k_sp, plot_pareto_paths
+from power_planner.utils import get_distance_surface, append_to_csv
 from config import Config
 
 parser = argparse.ArgumentParser()
@@ -23,98 +24,59 @@ if args.cluster:
 else:
     PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
 
-# summarize: mean/max/min, remove: all/surrounding, sample: simple/watershed
+SCALE_PARAM = 1
 NOTES = "None"  # "mean-all-simple"
-LOAD = 1
-SAVE_PICKLE = 0
+
+IOPATH = os.path.join(PATH_FILES, "data_dump_" + str(SCALE_PARAM) + ".dat")
+
+cfg = Config(SCALE_PARAM)
+
+# load from pickle
+with open(IOPATH, "rb") as infile:
+    data = pickle.load(infile)
+    (instance, instance_corr, start_inds, dest_inds) = data.data
 
 COMPARISONS = [
-    ["norm-1-2-100", 1, "Weighted", [(2, 100), (1, 0)]],
-    ["norm-1-4-100-2-50", 1, "Weighted", [(4, 100), (2, 50), (1, 0)]],
-    ["norm-1-5-100-3-50", 1, "Weighted", [(5, 100), (3, 50), (1, 0)]],
+    # BEST ONES FROM BEFORE:
+    ["baseline", "WeightedKSP", [(1, 0)], 0.2],
+    ["2-100-05", "WeightedKSP", [(2, 100), (1, 0)], 0.5],
+    ["2-100-02", "WeightedKSP", [(2, 100), (1, 0)], 0.2],
+    ["3-200-02", "WeightedKSP", [(3, 200), (2, 100)], 0.2],
+    ["09-100-05", "RandomWeightedGraph", [(0.9, 100), (0, 0)], 0.5],
+    ["09-100-02", "RandomWeightedGraph", [(0.9, 100), (0, 0)], 0.2],
     [
-        "norm-1-5-200-3-100-2-50", 1, "Weighted",
-        [(5, 200), (3, 100), (2, 50), (1, 0)]
-    ],
-    ["norm-1-4-200-2-100", 1, "Weighted", [(4, 200), (2, 100), (1, 0)]],
-    ["norm-1-3-150-2-75", 1, "Weighted", [(3, 150), (2, 75), (1, 0)]],
-    ["random-1-9-100", 1, "RandomWeighted", [(0.9, 100), (0, 0)]],
-    [
-        "random-1-9-100-9-50", 1, "RandomWeighted",
-        [(0.9, 100), (0.9, 50), (0, 0)]
-    ],
-    [
-        "random-1-95-100-95-50", 1, "RandomWeighted",
-        [(0.95, 100), (0.95, 50), (0, 0)]
-    ],
-    [
-        "random-1-95-200-95-100", 1, "RandomWeighted",
-        [(0.95, 200), (0.95, 100), (0, 0)]
-    ],
-    [
-        "random-1-9-100-8-50", 1, "RandomWeighted",
-        [(0.9, 100), (0.8, 50), (0, 0)]
-    ],
-    [
-        "random-1-8-200-8-100", 1, "RandomWeighted",
-        [(0.8, 200), (0.8, 100), (0, 0)]
+        "095-100-09-50-02", "RandomWeightedGraph",
+        [(0.95, 100), (0.9, 50), (0, 0)], 0.2
     ],
 ]
-
-# COMPARISONS_1 = [
-#     ["norm-2-direct", 2, "Weighted", [(1, 0)]],
-#     ["norm-2-pipe", 2, "Weighted", [(2, 50), (1, 0)]],
-#     ["line-5-direct", 5, "Line", [(1, 0)]],
-#     ["line-5-pipe", 5, "Line", [(2, 40), (1, 0)]],
-#     ["line-andom-5-pipe", 5, "RandomLine", [(0.9, 40), (0, 0)]],
-#     ["norm-random-2-pipe", 2, "RandomWeighted", [(0.9, 50), (0, 0)]],
-#     ["norm-1-pipe", 1, "Weighted", [(2, 100), (1, 0)]],
-#     ["norm-1-pipe2", 1, "Weighted", [(4, 100), (2, 50), (1, 0)]],
-#     [
-#         "norm-random-1-pipe", 1, "RandomWeighted",
-#         [(0.95, 100), (0.9, 50), (0, 0)]
-#     ], ["norm-random-1-pipe2", 1, "RandomWeighted", [(0.95, 100), (0, 0)]],
-#     ["norm-1-direct", 1, "Weighted", [(1, 0)]]
-# ]
 
 for compare_params in COMPARISONS:
     ID = compare_params[0]
     OUT_PATH = "outputs/path_" + ID
-    SCALE_PARAM = compare_params[1]
-    graph_name = "graphs." + compare_params[2] + "Graph"
+    graph_name = "graphs." + compare_params[1]
     GRAPH_TYPE = eval(graph_name)
-    PIPELINE = compare_params[3]
+    PIPELINE = compare_params[2]
+    ksp_overlap = compare_params[3]
     # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph
     print("graph type:", GRAPH_TYPE)
 
-    IOPATH = os.path.join(PATH_FILES, "data_dump_" + str(SCALE_PARAM) + ".dat")
+    # DEFINE GRAPH AND ALGORITHM
+    graph = GRAPH_TYPE(
+        instance, instance_corr, graphtool=cfg.GTNX, verbose=cfg.VERBOSE
+    )
 
-    cfg = Config(SCALE_PARAM)
-
-    # READ DATA
-    if LOAD:
-        # load from pickle
-        with open(IOPATH, "rb") as infile:
-            data = pickle.load(infile)
-            (instance, instance_corr, start_inds, dest_inds) = data.data
-    else:
-        # read in files
-        data = DataReader(
-            PATH_FILES, cfg.CORR_PATH, cfg.WEIGHT_CSV, cfg.SCENARIO,
-            SCALE_PARAM
-        )
-        instance, instance_corr, start_inds, dest_inds = data.get_data(
-            cfg.START_PATH, cfg.DEST_PATH, emergency_dist=cfg.PYLON_DIST_MAX
-        )
-
-        if SAVE_PICKLE:
-            data.data = (instance, instance_corr, start_inds, dest_inds)
-            with open(IOPATH, "wb") as outfile:
-                pickle.dump(data, outfile)
-            print("successfully saved data")
-
-    vec = dest_inds - start_inds
-    print("start-dest-vec", vec)
+    graph.set_edge_costs(
+        data.layer_classes, data.class_weights, angle_weight=cfg.ANGLE_WEIGHT
+    )
+    graph.set_shift(
+        cfg.PYLON_DIST_MIN,
+        cfg.PYLON_DIST_MAX,
+        dest_inds - start_inds,
+        cfg.MAX_ANGLE,
+        max_angle_lg=cfg.MAX_ANGLE_LG
+    )
+    # add vertices
+    graph.add_nodes()
 
     # START PIPELINE
     tic = time.time()
@@ -125,23 +87,11 @@ for compare_params in COMPARISONS:
 
     for (factor, dist) in PIPELINE:
         print("----------- PIPELINE", factor, dist, "---------------")
-        # DEFINE GRAPH AND ALGORITHM
-        graph = GRAPH_TYPE(
-            instance, instance_corr, graphtool=cfg.GTNX, verbose=cfg.VERBOSE
-        )
-        # BUILD GRAPH:
-        graph.set_edge_costs(data.layer_classes, data.class_weights)
-        graph.set_shift(
-            cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX, vec, cfg.MAX_ANGLE
-        )
-        # add vertices
-        graph.add_nodes()
-        print("0) initialize graph, add nodes")
         graph.set_corridor(factor, corridor, start_inds, dest_inds)
         print("1) set cost rest")
         graph.add_edges()
-        print("2) added edges", len(list(graph.graph.edges())))
-        print("number of vertices:", len(list(graph.graph.vertices())))
+        print("2) added edges", graph.n_edges)
+        print("number of vertices:", graph.n_nodes)
 
         # weighted sum of all costs
         graph.sum_costs()
@@ -151,18 +101,16 @@ for compare_params in COMPARISONS:
         path, path_costs, cost_sum = graph.get_shortest_path(
             source_v, target_v
         )
+        print(path)
+        print(source_v, target_v)
         print("4) shortest path")
         # save for inspection
         output_paths.append((path, path_costs))
         plot_surfaces.append(
             graph.cost_rest[2].copy()
         )  # TODO: mean makes black
-        # get several paths --> here: pareto paths
-        paths = [path]
-        # graph.get_pareto(
-        #     np.arange(0, 1.1, 0.1), source_v, target_v, compare=[2, 3]
-        # )
-
+        # get several paths --> possible to replace by pareto_out[0]
+        # paths = [path]
         time_infos.append(graph.time_logs.copy())
 
         if cfg.VERBOSE:
@@ -171,11 +119,29 @@ for compare_params in COMPARISONS:
             print(graph.time_logs)
 
         if dist > 0:
-            # PRINT AND SAVE timing test
-            time_test_csv(
-                ID, cfg.CSV_TIMES, SCALE_PARAM, cfg.GTNX, GRAPH_TYPE, graph,
-                path_costs, cost_sum, dist, 0, NOTES
+
+            # Define paths around which to place corridor
+            graph.get_shortest_path_tree(source_v, target_v)
+            ksp = graph.k_shortest_paths(
+                source_v, target_v, 3, overlap=ksp_overlap
+            )  # cfg.KSP)
+            paths = [k[0] for k in ksp]
+
+            # time test csv
+            e_c, c_c, p_c, t_c = tuple(
+                [round(s, 3) for s in np.sum(path_costs, axis=0)]
             )
+            param_list = [
+                ID, SCALE_PARAM, compare_params[1], PIPELINE, graph.n_nodes,
+                graph.n_edges, graph.time_logs["add_nodes"],
+                graph.time_logs["add_all_edges"],
+                graph.time_logs["shortest_path"],
+                graph.time_logs["shortest_path_tree"], graph.time_logs["ksp"],
+                0, graph.time_logs["downsample"], e_c, c_c, p_c, t_c, cost_sum,
+                0
+            ]
+            append_to_csv(cfg.CSV_TIMES, param_list)
+
             # do specified numer of dilations
             corridor = get_distance_surface(
                 graph.pos2node.shape, paths, mode="dilation", n_dilate=dist
@@ -185,40 +151,85 @@ for compare_params in COMPARISONS:
             graph.remove_vertices(corridor, delete_padding=cfg.PYLON_DIST_MAX)
             print("6) remove edges")
 
+    # BEST IN WINDOW
+    # path_window, path_window_cost, cost_sum_window = graph.best_in_window(
+    #     30, 35, 60, 70, source_v, target_v
+    # )
+    # print("cost actually", cost_sum, "cost_new", cost_sum_window)
+
+    # COMPUTE KSP
+    graph.get_shortest_path_tree(source_v, target_v)
+    ksp = graph.k_shortest_paths(
+        source_v, target_v, cfg.KSP, overlap=ksp_overlap
+    )
+    plot_k_sp(ksp, graph.instance, out_path=OUT_PATH)
+
+    # PARETO
+    pareto_out = graph.get_pareto(
+        10, source_v, target_v, compare=[2, 3], out_path=OUT_PATH
+    )
+    plot_pareto_paths(pareto_out, graph.instance, out_path=OUT_PATH)
+
     time_pipeline = round(time.time() - tic, 3)
     print("FINISHED PIPELINE:", time_pipeline)
 
     # SAVE timing test
-    time_test_csv(
-        ID, cfg.CSV_TIMES, SCALE_PARAM, cfg.GTNX, GRAPH_TYPE, graph,
-        path_costs, cost_sum, dist, time_pipeline, NOTES
+    e_c, c_c, p_c, t_c = tuple(
+        [round(s, 3) for s in np.sum(path_costs, axis=0)]
     )
+    param_list = [
+        ID, SCALE_PARAM, compare_params[1], PIPELINE, graph.n_nodes,
+        graph.n_edges, graph.time_logs["add_nodes"],
+        graph.time_logs["add_all_edges"], graph.time_logs["shortest_path"],
+        graph.time_logs["shortest_path_tree"], graph.time_logs["ksp"],
+        graph.time_logs["pareto"], graph.time_logs["downsample"], e_c, c_c,
+        p_c, t_c, cost_sum, time_pipeline
+    ]
+    append_to_csv(cfg.CSV_TIMES, param_list)
 
-    # PLOT RESULT
+    # PLOTTING:
+    # FOR PIPELINE
     plot_pipeline_paths(
         plot_surfaces,
         output_paths,
         buffer=2,
         out_path=OUT_PATH + "_pipeline.png"
     )
-    # plot_path(instance * instance_corr, path, buffer=1, out_path=OUT_PATH+".png")
-    plot_path_costs(
-        instance * instance_corr,
-        path,
-        path_costs,
-        graph.cost_classes,
-        buffer=2,
-        out_path=OUT_PATH + ".png"
-    )
+    # FOR KSP:
+    # with open(OUT_PATH + "_ksp.json", "w") as outfile:
+    #     json.dump(ksp, outfile)
+    # plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
+
+    # FOR WINDOW
+    # plot_path(
+    #     graph.instance, path_window, buffer=0, out_path=OUT_PATH + "_window.png"
+    # )
+    # SIMPLE
+    # plot_path(graph.instance, path, buffer=0, out_path=OUT_PATH + ".png")
+
+    # FOR COST COMPARISON
+    # plot_path_costs(
+    #     instance * instance_corr,
+    #     path,
+    #     path_costs,
+    #     data.layer_classes,
+    #     buffer=2,
+    #     out_path=OUT_PATH + "_costs.png"
+    # )
 
     # SAVE graph
     # graph.save_graph(OUT_PATH + "_graph")
     # np.save(OUT_PATH + "_pos2node.npy", graph.pos2node)
 
-    # data.save_coordinates(path, OUT_PATH, scale_factor=SCALE_PARAM)
-    # DataReader.save_json(OUT_PATH, path, path_costs, graph.time_logs,SCALE_PARAM)
+    # SAVE JSON WITH INFOS
     DataReader.save_pipeline_infos(
         OUT_PATH, output_paths, time_infos, PIPELINE, SCALE_PARAM
     )
 
-    graph = None
+    # LINE GRAPH FROM FILE:
+    # elif GRAPH_TYPE == "LINE_FILE":
+    #     # Load file and derive line graph
+    #     graph_file = "outputs/path_02852_graph"
+    #     graph = LineGraphFromGraph(
+    #         graph_file, instance, instance_corr, graphtool=GTNX, verbose=VERBOSE
+    #     )

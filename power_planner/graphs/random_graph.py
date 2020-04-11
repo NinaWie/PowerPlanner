@@ -2,7 +2,7 @@ from power_planner.constraints import ConstraintUtils
 from power_planner.utils import get_donut_vals, normalize
 from power_planner.utils_instance import CostUtils
 #  graph imports
-from .weighted_graph import WeightedGraph
+from .weighted_ksp import WeightedKSP
 from .line_graph import LineGraph
 
 import numpy as np
@@ -28,6 +28,7 @@ class RandomGraph():
         """
         factor: in this case ratio of edges to remove
         """
+        tic = time.time()
         assert factor < 1, "for RandomGraph factor must be smaller 1"
         self.factor = factor
 
@@ -52,6 +53,7 @@ class RandomGraph():
                 np.min(self.corridor)
             )
             print("cutoff corridor vals", cutoff)
+        self.time_logs["downsample"] = round(time.time() - tic, 3)
 
     def set_cost_rest(self):
         prob_arr = np.random.rand(*self.corridor.shape)
@@ -59,7 +61,7 @@ class RandomGraph():
         self.cost_rest = self.cost_instance * prob_arr
 
 
-class RandomWeightedGraph(WeightedGraph, RandomGraph):
+class RandomWeightedGraph(WeightedKSP, RandomGraph):
 
     def __init__(
         self,

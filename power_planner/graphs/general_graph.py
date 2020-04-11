@@ -208,13 +208,7 @@ class GeneralGraph():
         self.time_logs["remove_edges"] = round(time.time() - tic, 3)
 
     def get_pareto(
-        self,
-        vary,
-        source,
-        dest,
-        out_path=None,
-        non_compare_weight=0,
-        compare=[0, 1]
+        self, vary, source, dest, out_path=None, compare=[0, 1], plot=1
     ):
         """
         Arguments:
@@ -227,6 +221,7 @@ class GeneralGraph():
             paths: All found paths
             pareto: The costs for each combination of weights
         """
+        tic = time.time()
         # initialize lists
         pareto = list()
         paths = list()
@@ -249,29 +244,48 @@ class GeneralGraph():
         else:
             raise ValueError("argument compare can only have length 2 or 3")
 
+        # w_avail: keep weights of non-compare classes, get leftover amount
+        w_avail = np.sum(np.asarray(self.cost_weights)[compare])
         # compute paths for each combination of weights
         for j in range(len(weights)):
-            # use the constructed weights and the default for other costs
-            w = np.zeros(len(cost_arrs)) + non_compare_weight
-            w[compare] = weights[j]
+            # option 2: np.zeros(len(cost_arrs)) + non_compare_weight
+            w = self.cost_weights.copy()
+            # replace the ones we want to compare
+            w[compare] = np.array(weights[j]) * w_avail
+
             # weighted sum of edge costs
             self.weight.a = np.sum(
                 [cost_arrs[i] * w[i] for i in range(len(cost_arrs))], axis=0
             )
             # get shortest path
-            path, path_costs, c_sum = self.get_shortest_path(source, dest)
+            path, path_costs, _ = self.get_shortest_path(source, dest)
+            # don't take cost_sum bc this is sum of original weighting
             pareto.append(np.sum(path_costs, axis=0)[compare])
             paths.append(path)
-            cost_sum.append(c_sum)
+            # take overall sum of costs (unweighted) that this w leads to
+            cost_sum.append(np.sum(path_costs))
+
+        # print best weighting
+        best_weight = np.argmin(cost_sum)
+        w = self.cost_weights.copy()
+        w[compare] = np.array(weights[best_weight]) * w_avail
+        print("Best weights:", w, "with (unweighted) costs:", np.min(cost_sum))
+
+        self.time_logs["pareto"] = round(time.time() - tic, 3)
 
         pareto = np.array(pareto)
         classes = [self.cost_classes[comp] for comp in compare]
         # Plotting
-        if len(compare) == 2:
-            plot_pareto_scatter_2d(pareto, weights, classes, out_path=out_path)
-        elif len(compare) == 3:
-            # plot_pareto_3d(pareto, weights, classes)
-            plot_pareto_scatter_3d(pareto, weights, classes, out_path=out_path)
+        if plot:
+            if len(compare) == 2:
+                plot_pareto_scatter_2d(
+                    pareto, weights, classes, out_path=out_path
+                )
+            elif len(compare) == 3:
+                # plot_pareto_3d(pareto, weights, classes)
+                plot_pareto_scatter_3d(
+                    pareto, weights, classes, out_path=out_path
+                )
         return paths, weights, cost_sum
 
     def get_shortest_path(self, source, target):
