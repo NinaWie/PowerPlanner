@@ -59,7 +59,10 @@ class GeneralGraph():
         self.shifts = get_half_donut(lower, upper, vec, angle_max=max_angle)
         self.shift_tuples = self.shifts
 
-    def set_corridor(self, factor, dist_surface, start_inds, dest_inds):
+    def set_corridor(
+        self, factor, dist_surface, start_inds, dest_inds, sample_func,
+        sample_method
+    ):
         # set new corridor
         corridor = (dist_surface > 0).astype(int)
 
@@ -70,8 +73,9 @@ class GeneralGraph():
         tic = time.time()
         if factor > 1:
             self.cost_rest = CostUtils.downsample(
-                self.cost_rest, factor, func="min"
+                self.cost_rest, factor, mode=sample_method, func=sample_func
             )
+
         self.time_logs["downsample"] = round(time.time() - tic, 3)
 
         # repeat because edge artifacts

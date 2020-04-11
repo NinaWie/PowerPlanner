@@ -24,7 +24,7 @@ if args.cluster:
 else:
     PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
 
-SCALE_PARAM = 1
+SCALE_PARAM = 2
 NOTES = "None"  # "mean-all-simple"
 
 IOPATH = os.path.join(PATH_FILES, "data_dump_" + str(SCALE_PARAM) + ".dat")
@@ -38,25 +38,51 @@ with open(IOPATH, "rb") as infile:
 
 COMPARISONS = [
     # BEST ONES FROM BEFORE:
-    ["baseline", "WeightedKSP", [(1, 0)], 0.2],
-    ["2-100-05", "WeightedKSP", [(2, 100), (1, 0)], 0.5],
-    ["2-100-02", "WeightedKSP", [(2, 100), (1, 0)], 0.2],
-    ["3-200-02", "WeightedKSP", [(3, 200), (2, 100)], 0.2],
-    ["09-100-05", "RandomWeightedGraph", [(0.9, 100), (0, 0)], 0.5],
-    ["09-100-02", "RandomWeightedGraph", [(0.9, 100), (0, 0)], 0.2],
+    ["2-100-mean", "WeightedGraph", [(2, 100), (1, 0)], "mean", "simple"],
+    ["2-100-min", "WeightedGraph", [(2, 100), (1, 0)], "min", "simple"],
+    ["2-100-max", "WeightedGraph", [(2, 100), (1, 0)], "max", "simple"],
     [
-        "095-100-09-50-02", "RandomWeightedGraph",
-        [(0.95, 100), (0.9, 50), (0, 0)], 0.2
+        "2-100-mean-watershed", "WeightedGraph", [(2, 100), (1, 0)], "mean",
+        "watershed"
     ],
+    [
+        "2-100-min-watershed", "WeightedGraph", [(2, 100), (1, 0)], "min",
+        "watershed"
+    ],
+    [
+        "2-100-max-watershed", "WeightedGraph", [(2, 100), (1, 0)], "max",
+        "watershed"
+    ],
+    ["4-100-mean", "WeightedGraph", [(4, 100), (1, 0)], "mean", "simple"],
+    [
+        "4-100-mean-watershed", "WeightedGraph", [(4, 100), (1, 0)], "mean",
+        "watershed"
+    ]
+    # COMPARISONS = [
+    #     # BEST ONES FROM BEFORE:
+    #     ["baseline", "WeightedKSP", [(1, 0)], 0.2],
+    #     ["2-100-05", "WeightedKSP", [(2, 100), (1, 0)], 0.5],
+    #     ["2-100-02", "WeightedKSP", [(2, 100), (1, 0)], 0.2],
+    #     ["3-200-02", "WeightedKSP", [(3, 200), (2, 100)], 0.2],
+    #     ["09-100-05", "RandomWeightedGraph", [(0.9, 100), (0, 0)], 0.5],
+    #     ["09-100-02", "RandomWeightedGraph", [(0.9, 100), (0, 0)], 0.2],
+    #     [
+    #         "095-100-09-50-02", "RandomWeightedGraph",
+    #         [(0.95, 100), (0.9, 50), (0, 0)], 0.2
+    #     ],
 ]
 
 for compare_params in COMPARISONS:
+    print("------------------------------------------------")
+    print("---- NEW CONFIG:", compare_params, "------------")
     ID = compare_params[0]
-    OUT_PATH = "outputs/path_" + ID
+    OUT_PATH = "outputs/scale2watershed/" + ID
     graph_name = "graphs." + compare_params[1]
     GRAPH_TYPE = eval(graph_name)
     PIPELINE = compare_params[2]
-    ksp_overlap = compare_params[3]
+    # ksp_overlap = compare_params[3]
+    sample_func = compare_params[3]
+    sample_method = compare_params[4]
     # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph
     print("graph type:", GRAPH_TYPE)
 
@@ -87,7 +113,9 @@ for compare_params in COMPARISONS:
 
     for (factor, dist) in PIPELINE:
         print("----------- PIPELINE", factor, dist, "---------------")
-        graph.set_corridor(factor, corridor, start_inds, dest_inds)
+        graph.set_corridor(
+            factor, corridor, start_inds, dest_inds, sample_func, sample_method
+        )
         print("1) set cost rest")
         graph.add_edges()
         print("2) added edges", graph.n_edges)
@@ -121,23 +149,37 @@ for compare_params in COMPARISONS:
         if dist > 0:
 
             # Define paths around which to place corridor
-            graph.get_shortest_path_tree(source_v, target_v)
-            ksp = graph.k_shortest_paths(
-                source_v, target_v, 3, overlap=ksp_overlap
-            )  # cfg.KSP)
-            paths = [k[0] for k in ksp]
+            # graph.get_shortest_path_tree(source_v, target_v)
+            # ksp = graph.k_shortest_paths(
+            #     source_v, target_v, 3, overlap=ksp_overlap
+            # )  # cfg.KSP)
+            # paths = [k[0] for k in ksp]
+            paths = [path]
 
             # time test csv
             e_c, c_c, p_c, t_c = tuple(
                 [round(s, 3) for s in np.sum(path_costs, axis=0)]
             )
             param_list = [
-                ID, SCALE_PARAM, compare_params[1], PIPELINE, graph.n_nodes,
-                graph.n_edges, graph.time_logs["add_nodes"],
+                ID,
+                SCALE_PARAM,
+                compare_params[1],
+                PIPELINE,
+                graph.n_nodes,
+                graph.n_edges,
+                graph.time_logs["add_nodes"],
                 graph.time_logs["add_all_edges"],
                 graph.time_logs["shortest_path"],
-                graph.time_logs["shortest_path_tree"], graph.time_logs["ksp"],
-                0, graph.time_logs["downsample"], e_c, c_c, p_c, t_c, cost_sum,
+                # graph.time_logs["shortest_path_tree"], graph.time_logs["ksp"],
+                0,
+                0,
+                0,
+                graph.time_logs["downsample"],
+                e_c,
+                c_c,
+                p_c,
+                t_c,
+                cost_sum,
                 0
             ]
             append_to_csv(cfg.CSV_TIMES, param_list)
@@ -157,18 +199,18 @@ for compare_params in COMPARISONS:
     # )
     # print("cost actually", cost_sum, "cost_new", cost_sum_window)
 
-    # COMPUTE KSP
-    graph.get_shortest_path_tree(source_v, target_v)
-    ksp = graph.k_shortest_paths(
-        source_v, target_v, cfg.KSP, overlap=ksp_overlap
-    )
-    plot_k_sp(ksp, graph.instance, out_path=OUT_PATH)
+    # # COMPUTE KSP
+    # graph.get_shortest_path_tree(source_v, target_v)
+    # ksp = graph.k_shortest_paths(
+    #     source_v, target_v, cfg.KSP, overlap=ksp_overlap
+    # )
+    # plot_k_sp(ksp, graph.instance, out_path=OUT_PATH)
 
-    # PARETO
-    pareto_out = graph.get_pareto(
-        10, source_v, target_v, compare=[2, 3], out_path=OUT_PATH
-    )
-    plot_pareto_paths(pareto_out, graph.instance, out_path=OUT_PATH)
+    # # PARETO
+    # pareto_out = graph.get_pareto(
+    #     10, source_v, target_v, compare=[2, 3], out_path=OUT_PATH
+    # )
+    # plot_pareto_paths(pareto_out, graph.instance, out_path=OUT_PATH)
 
     time_pipeline = round(time.time() - tic, 3)
     print("FINISHED PIPELINE:", time_pipeline)
@@ -178,12 +220,27 @@ for compare_params in COMPARISONS:
         [round(s, 3) for s in np.sum(path_costs, axis=0)]
     )
     param_list = [
-        ID, SCALE_PARAM, compare_params[1], PIPELINE, graph.n_nodes,
-        graph.n_edges, graph.time_logs["add_nodes"],
-        graph.time_logs["add_all_edges"], graph.time_logs["shortest_path"],
-        graph.time_logs["shortest_path_tree"], graph.time_logs["ksp"],
-        graph.time_logs["pareto"], graph.time_logs["downsample"], e_c, c_c,
-        p_c, t_c, cost_sum, time_pipeline
+        ID,
+        SCALE_PARAM,
+        compare_params[1],
+        PIPELINE,
+        graph.n_nodes,
+        graph.n_edges,
+        graph.time_logs["add_nodes"],
+        graph.time_logs["add_all_edges"],
+        graph.time_logs["shortest_path"],
+        # graph.time_logs["shortest_path_tree"],
+        # graph.time_logs["ksp"], graph.time_logs["pareto"],
+        0,
+        0,
+        0,
+        graph.time_logs["downsample"],
+        e_c,
+        c_c,
+        p_c,
+        t_c,
+        cost_sum,
+        time_pipeline
     ]
     append_to_csv(cfg.CSV_TIMES, param_list)
 

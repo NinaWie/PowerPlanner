@@ -25,16 +25,17 @@ else:
     PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
 
 # DEFINE CONFIGURATION
-ID = "ksp_random"  # str(round(time.time() / 60))[-5:]
+ID = "ksp_2test"  # str(round(time.time() / 60))[-5:]
 
 OUT_PATH = "outputs/path_" + ID
 SCALE_PARAM = 2  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 30), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
-PIPELINE = [(0.95, 100), (0.95, 50), (0, 0)]
+PIPELINE = [(3, 200), (2, 100), (1, 0)]
+# [(0.95, 100), (0.95, 50), (0, 0)]
 
-GRAPH_TYPE = graphs.RandomWeightedGraph
+GRAPH_TYPE = graphs.WeightedKSP
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, PowerBF
 # TwoPowerBF, WeightedKSP
 print("graph type:", GRAPH_TYPE)

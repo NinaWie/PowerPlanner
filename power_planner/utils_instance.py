@@ -33,12 +33,13 @@ class CostUtils():
         return seeds
 
     @staticmethod
-    def watershed_transform(cost_rest, factor, compact=0.01):
+    def watershed_transform(cost_rest, factor, compact=0.01, func="mean"):
         """
         :param mode: all = all combinations in one cluster possible
                 --> leading to larger distances
                 center = only the center of each cluster can be connected
         """
+        pool_func = eval("np." + func)
         # take mean image for clustering TODO: weighted sum?
         img = np.mean(cost_rest, axis=0)
 
@@ -63,7 +64,7 @@ class CostUtils():
             x_inds, y_inds = np.where(w1_g_zero == lab)
             for j in range(len(cost_rest)):
                 new_cost_rest[j, int(np.mean(x_inds)),
-                              int(np.mean(y_inds))] = np.mean(
+                              int(np.mean(y_inds))] = pool_func(
                                   cost_rest[j, x_inds, y_inds]
                               )
         return new_cost_rest

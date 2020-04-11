@@ -52,11 +52,20 @@ class WeightedGraph(GeneralGraph):
         if self.verbose:
             print("initialized weighted graph pos2node")
 
-    def set_corridor(self, factor, dist_surface, start_inds, dest_inds):
+    def set_corridor(
+        self,
+        factor,
+        dist_surface,
+        start_inds,
+        dest_inds,
+        sample_func="mean",
+        sample_method="simple"
+    ):
         tic = time.time()
         # set cost rest according to corridor
         GeneralGraph.set_corridor(
-            self, factor, dist_surface, start_inds, dest_inds
+            self, factor, dist_surface, start_inds, dest_inds, sample_func,
+            sample_method
         )
 
         # define pos2node accordingly:
