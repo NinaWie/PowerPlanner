@@ -22,7 +22,7 @@ args = parser.parse_args()
 if args.cluster:
     PATH_FILES = os.path.join("..", "data")
 else:
-    PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
+    PATH_FILES = "data/belgium_instance1"
 
 # DEFINE CONFIGURATION
 ID = "ksp_2test"  # str(round(time.time() / 60))[-5:]

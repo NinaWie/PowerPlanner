@@ -5,6 +5,7 @@ outputs/
 test_file.py
 backup.py
 notebooks/config.py
+data/
 
 notebooks/Function*
 *.csv

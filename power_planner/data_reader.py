@@ -118,10 +118,12 @@ class DataReader():
             # geometric bounds and transformation
             self.geo_bounds = dataset.bounds
             self.transform_matrix = dataset.transform
-            #  array itself
-            self.instance = dataset.read()[0]  # TODO: redundant
 
     def compute_class_weights(self):
+        """
+        From the pandas dataframe with weights, get the classes and
+        corresponding weights
+        """
         self.layer_classes = []
         self.class_weights = []
         for c in np.unique(self.class_csv["class"]):  # "+str(self.scenario)
@@ -150,33 +152,6 @@ class DataReader():
             arr = ds.read()
         return arr[0]
 
-    def read_in_tifs(self, path=None):
-        if path is None:
-            path = self.path
-        files = os.listdir(path)
-        tif_list = []
-        file_list = []
-        for f in files:
-            if f[-3:] == "tif":
-                with rasterio.open(os.path.join(path, f), 'r') as ds:
-                    img = ds.read()[0]
-                # img = Image.open(os.path.join(path, f))
-                # img = self._resize_raster(img)
-                tif_list.append(np.array(img))
-                file_list.append(f[:-4])
-        tif_arr = np.array(tif_list)
-        tif_arr = tif_arr / 255.
-        print("shape of tif array:", tif_arr.shape)
-        return tif_arr, file_list
-
-    @padding
-    @reduce_instance
-    def get_values_corridor(self):
-        self.instance = np.array(self.instance)
-        minimum = np.min(self.instance)
-        self.instance[self.instance == 9999] = minimum - 1
-        return self.instance
-
     @padding
     @binarize
     @reduce_instance
@@ -184,20 +159,12 @@ class DataReader():
         return self.corridor
 
     @padding
-    @reduce_instance
-    def get_cost_surface(self, cost_path):
-        # get cost surface
-        with rasterio.open(os.path.join(self.path, cost_path), 'r') as ds:
-            cost_img = ds.read()[0]
-        print("read in cost array", cost_img.shape)
-        # cost_img = Image.fromarray(arr[0])
-        # cost_img = self._resize_raster(cost_img)
-        return np.array(cost_img)
-
-    @padding
     @binarize
     @reduce_instance
     def get_hard_constraints(self):
+        """
+        Intersection of all "Forbidden"-layers
+        """
         hard_cons_rows = self.class_csv[self.class_csv[
             "weight_" + str(self.scenario)] == "Forbidden"]
         # read in corresponding tifs
@@ -216,23 +183,6 @@ class DataReader():
             np.asarray(hard_constraints).astype(int), axis=0
         )
         return hard_constraints
-
-    @padding
-    @reduce_instance
-    def get_weighted_costs(self):
-        cost_sum_arr = np.zeros(self.raster_size)
-        cost_sum_arr = np.swapaxes(cost_sum_arr, 1, 0)
-        layers = self.class_csv[
-            self.class_csv["weight_" + str(self.scenario)] != "Forbidden"]
-        for fname, weight in zip(
-            layers["Layer Name"], layers["weight_" + str(self.scenario)]
-        ):
-            file_path = os.path.join(self.path, "tif_layers", fname + ".tif")
-            if os.path.exists(file_path):
-                costs = self.read_tif(file_path)
-            costs = np.absolute(normalize(costs) - 1)
-            cost_sum_arr = cost_sum_arr + costs * int(weight)
-        return cost_sum_arr
 
     @padding
     @reduce_instance
@@ -299,43 +249,32 @@ class DataReader():
         emergency_dist=None,
         percent_padding=0.25
     ):
-        # corr = np.zeros((1313, 1511))
-        # corr[40:1260, 200:1000] = 1
-        # self.instance = corr
-        # self.corridor = corr
-
         # build rectengular corridor
         start_dest_inds = np.array([start_inds, dest_inds])
         inter_line = start_dest_inds[0] - start_dest_inds[1]
         longer = np.argmin(np.abs(inter_line))
-
+        # define padding size
         padding = [0, 0]
         padding[longer] = abs(int(percent_padding * inter_line[longer]))
-
+        # get four bounds of corridor
         start_x, start_y = np.min(start_dest_inds,
                                   axis=0) - np.asarray(padding)
         end_x, end_y = np.max(start_dest_inds, axis=0) + np.asarray(padding)
 
+        # add rectangle corridor to hard constraints
         corr = np.zeros(hard_constraints.shape)
         corr[start_x:end_x, start_y:end_y] = 1
-
         hard_constraints = np.asarray(corr * hard_constraints)
 
         # add emergency points in regular grid
         if emergency_dist is not None:
-            # w_inds = np.arange(start_x, end_x, emergency_dist).astype(int)
-            # h_inds = np.arange(start_y, end_y, emergency_dist).astype(int)
             max_cost = np.max(instance)
-            # for row in w_inds:
-            #     # give maximal cost to emergency points
-            #     for col in h_inds:
-            #         if hard_constraints[row, col] == 0:
-            #             instance[:, row, col] = max_cost  # TODO
-            #         hard_constraints[row, col] = 1
             d = int(emergency_dist // 2)
             tic = time.time()
+            # iterate over rectangle
             for i in range(start_x, end_x):
                 for j in range(start_y, end_y):
+                    # if no point in distance x
                     if not np.any(hard_constraints[i - d:i + d, j - d:j + d]):
                         hard_constraints[i, j] = 1
                         instance[:, i, j] = max_cost
@@ -380,6 +319,7 @@ class DataReader():
         # assert instance.shape == hard_constraints.shape
         print("start cells:", start_inds, "dest cells:", dest_inds)
 
+        # construct corridor for final data
         instance, hard_constraints = self.construct_corridor(
             instance,
             hard_constraints,
@@ -393,7 +333,7 @@ class DataReader():
 
     def save_coordinates(self, power_path, out_path, scale_factor=1):
         """
-        Save the coordinates in a csv file:
+        Save the coordinates in a csv file --> KEEP for GIS programs
         @param power_path: List of path indices [[x1, y1], [x2,y2] ...]
         @patam out_path: path and filename (without .json) where to write to
         @param scale_factor: if the instance was scaled down,
