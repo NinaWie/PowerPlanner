@@ -5,7 +5,7 @@ from .line_graph import LineGraph
 
 import numpy as np
 import time
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 
 class RandomGraph():

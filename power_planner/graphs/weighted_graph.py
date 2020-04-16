@@ -1,11 +1,9 @@
-from power_planner.constraints import ConstraintUtils
+from power_planner.utils_constraints import ConstraintUtils
 from power_planner.utils import get_donut_vals
 from .general_graph import GeneralGraph
 
 import numpy as np
-from graph_tool.all import Graph, shortest_path, remove_labeled_edges
 import time
-import networkx as nx
 
 
 class WeightedGraph(GeneralGraph):
@@ -154,9 +152,9 @@ class WeightedGraph(GeneralGraph):
         Remove edges in a certain corridor (or all) to replace them by
         a refined surface
 
-        @param dist_surface: a surface where each pixel value corresponds to 
+        @param dist_surface: a surface where each pixel value corresponds to
         the distance of the pixel to the shortest path
-        @param delete_padding: define padding in which part of the corridor to 
+        @param delete_padding: define padding in which part of the corridor to
         delete vertices (cannot delete all because then graph unconnected)
         """
         tic = time.time()

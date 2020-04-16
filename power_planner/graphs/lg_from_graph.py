@@ -3,7 +3,7 @@ import time
 from graph_tool.all import Graph, shortest_path, load_graph
 
 from power_planner.utils import angle, get_lg_donut
-from power_planner.constraints import ConstraintUtils
+from power_planner.utils_constraints import ConstraintUtils
 from power_planner.utils_instance import CostUtils
 
 from .general_graph import GeneralGraph

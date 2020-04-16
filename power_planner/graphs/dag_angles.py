@@ -1,5 +1,5 @@
 from power_planner.utils import get_half_donut, angle
-from power_planner.constraints import ConstraintUtils
+from power_planner.utils_constraints import ConstraintUtils
 import numpy as np
 import time
 import pickle
