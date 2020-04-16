@@ -60,20 +60,28 @@ class GeneralGraph():
         self.shift_tuples = self.shifts
 
     def set_corridor(
-        self, factor, dist_surface, start_inds, dest_inds, sample_func,
-        sample_method
+        self,
+        dist_surface,
+        start_inds,
+        dest_inds,
+        sample_func="mean",
+        sample_method="simple",
+        factor_or_n_edges=1
     ):
         # set new corridor
         corridor = (dist_surface > 0).astype(int)
 
-        self.factor = factor
+        self.factor = factor_or_n_edges
         self.cost_rest = self.cost_instance * (self.hard_constraints >
                                                0).astype(int) * corridor
         # downsample
         tic = time.time()
-        if factor > 1:
+        if self.factor > 1:
             self.cost_rest = CostUtils.downsample(
-                self.cost_rest, factor, mode=sample_method, func=sample_func
+                self.cost_rest,
+                self.factor,
+                mode=sample_method,
+                func=sample_func
             )
 
         self.time_logs["downsample"] = round(time.time() - tic, 3)

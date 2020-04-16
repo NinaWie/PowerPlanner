@@ -54,18 +54,23 @@ class WeightedGraph(GeneralGraph):
 
     def set_corridor(
         self,
-        factor,
         dist_surface,
         start_inds,
         dest_inds,
         sample_func="mean",
-        sample_method="simple"
+        sample_method="simple",
+        factor_or_n_edges=1
     ):
         tic = time.time()
         # set cost rest according to corridor
         GeneralGraph.set_corridor(
-            self, factor, dist_surface, start_inds, dest_inds, sample_func,
-            sample_method
+            self,
+            dist_surface,
+            start_inds,
+            dest_inds,
+            sample_func=sample_func,
+            sample_method=sample_method,
+            factor_or_n_edges=factor_or_n_edges
         )
 
         # define pos2node accordingly:
@@ -104,7 +109,8 @@ class WeightedGraph(GeneralGraph):
         # switch axes back
         costs_shifted = np.moveaxis(costs_shifted, -1, 0)
 
-        weights = (costs_shifted + self.cost_rest) / 2
+        # must be cost instance because otherwise plus zero values!
+        weights = (costs_shifted + self.cost_instance) / 2
         # # WITH EDGE WEIGHTS
         # weights = ConstraintUtils.convolve_faster
         # (self.cost_rest, kernels[i], posneg[i])

@@ -52,10 +52,22 @@ class TwoPowerBF():
         self.n_nodes = self.graph_ab.n_nodes
         self.n_edges = self.graph_ab.n_edges
 
-    def set_corridor(self, factor, corridor, start_inds, dest_inds):
-        self.graph_ab.set_corridor(factor, corridor, start_inds, dest_inds)
-        self.graph_ba.set_corridor(factor, corridor, dest_inds, start_inds)
-        self.factor = factor
+    def set_corridor(
+        self, corridor, start_inds, dest_inds, factor_or_n_edges=1
+    ):
+        self.graph_ab.set_corridor(
+            corridor,
+            start_inds,
+            dest_inds,
+            factor_or_n_edges=factor_or_n_edges
+        )
+        self.graph_ba.set_corridor(
+            corridor,
+            dest_inds,
+            start_inds,
+            factor_or_n_edges=factor_or_n_edges
+        )
+        self.factor = factor_or_n_edges
 
     def add_edges(self):
         self.graph_ab.add_edges()

@@ -22,7 +22,7 @@ args = parser.parse_args()
 if args.cluster:
     PATH_FILES = os.path.join("..", "data")
 else:
-    PATH_FILES = "/Users/ninawiedemann/Downloads/tifs_new"
+    PATH_FILES = "data/belgium_instance1"
 
 SCALE_PARAM = 2
 NOTES = "None"  # "mean-all-simple"
@@ -37,52 +37,34 @@ with open(IOPATH, "rb") as infile:
     (instance, instance_corr, start_inds, dest_inds) = data.data
 
 COMPARISONS = [
-    # BEST ONES FROM BEFORE:
-    ["2-100-mean", "WeightedGraph", [(2, 100), (1, 0)], "mean", "simple"],
-    ["2-100-min", "WeightedGraph", [(2, 100), (1, 0)], "min", "simple"],
-    ["2-100-max", "WeightedGraph", [(2, 100), (1, 0)], "max", "simple"],
+    # ["basel", "RandomWeightedGraph", [(0, 0)], "same"],
+    # ["9-75-3-gauss", "RandomWeightedGraph", [(0.8, 75), (0.3, 0)], "gauss"],
+    # ["9-75-3-same", "RandomWeightedGraph", [(0.8, 75), (0.3, 0)], "same"],
+    # ["9-75-3-square", "RandomWeightedGraph", [(0.8, 75), (0.3, 0)], "squared"],
     [
-        "2-100-mean-watershed", "WeightedGraph", [(2, 100), (1, 0)], "mean",
-        "watershed"
+        "auto-moreedges-75-gauss", "RandomWeightedGraph",
+        [(4000000, 75), (5000000, 0)], "gauss"
     ],
     [
-        "2-100-min-watershed", "WeightedGraph", [(2, 100), (1, 0)], "min",
-        "watershed"
+        "auto-moreedges-75-same", "RandomWeightedGraph",
+        [(4000000, 75), (5000000, 0)], "same"
     ],
     [
-        "2-100-max-watershed", "WeightedGraph", [(2, 100), (1, 0)], "max",
-        "watershed"
-    ],
-    ["4-100-mean", "WeightedGraph", [(4, 100), (1, 0)], "mean", "simple"],
-    [
-        "4-100-mean-watershed", "WeightedGraph", [(4, 100), (1, 0)], "mean",
-        "watershed"
+        "auto-moreedges-75-square", "RandomWeightedGraph",
+        [(4000000, 75), (5000000, 0)], "squared"
     ]
-    # COMPARISONS = [
-    #     # BEST ONES FROM BEFORE:
-    #     ["baseline", "WeightedKSP", [(1, 0)], 0.2],
-    #     ["2-100-05", "WeightedKSP", [(2, 100), (1, 0)], 0.5],
-    #     ["2-100-02", "WeightedKSP", [(2, 100), (1, 0)], 0.2],
-    #     ["3-200-02", "WeightedKSP", [(3, 200), (2, 100)], 0.2],
-    #     ["09-100-05", "RandomWeightedGraph", [(0.9, 100), (0, 0)], 0.5],
-    #     ["09-100-02", "RandomWeightedGraph", [(0.9, 100), (0, 0)], 0.2],
-    #     [
-    #         "095-100-09-50-02", "RandomWeightedGraph",
-    #         [(0.95, 100), (0.9, 50), (0, 0)], 0.2
-    #     ],
 ]
 
 for compare_params in COMPARISONS:
     print("------------------------------------------------")
     print("---- NEW CONFIG:", compare_params, "------------")
     ID = compare_params[0]
-    OUT_PATH = "outputs/scale2watershed/" + ID
+    OUT_PATH = "outputs/scale2modeRandomCompare/" + ID
     graph_name = "graphs." + compare_params[1]
     GRAPH_TYPE = eval(graph_name)
     PIPELINE = compare_params[2]
     # ksp_overlap = compare_params[3]
-    sample_func = compare_params[3]
-    sample_method = compare_params[4]
+    sample_method = compare_params[3]
     # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph
     print("graph type:", GRAPH_TYPE)
 
@@ -114,7 +96,11 @@ for compare_params in COMPARISONS:
     for (factor, dist) in PIPELINE:
         print("----------- PIPELINE", factor, dist, "---------------")
         graph.set_corridor(
-            factor, corridor, start_inds, dest_inds, sample_func, sample_method
+            corridor,
+            start_inds,
+            dest_inds,
+            factor_or_n_edges=factor,
+            mode=sample_method
         )
         print("1) set cost rest")
         graph.add_edges()
@@ -249,7 +235,7 @@ for compare_params in COMPARISONS:
     plot_pipeline_paths(
         plot_surfaces,
         output_paths,
-        buffer=2,
+        buffer=1,
         out_path=OUT_PATH + "_pipeline.png"
     )
     # FOR KSP:
@@ -283,10 +269,42 @@ for compare_params in COMPARISONS:
         OUT_PATH, output_paths, time_infos, PIPELINE, SCALE_PARAM
     )
 
-    # LINE GRAPH FROM FILE:
-    # elif GRAPH_TYPE == "LINE_FILE":
-    #     # Load file and derive line graph
-    #     graph_file = "outputs/path_02852_graph"
-    #     graph = LineGraphFromGraph(
-    #         graph_file, instance, instance_corr, graphtool=GTNX, verbose=VERBOSE
-    #     )
+# OLD COMPARISONS:
+#
+#  Compare Watershed to simple with different aggregation functions
+#
+# COMPARISONS = [
+#     ["2-100-mean", "WeightedGraph", [(2, 100), (1, 0)], "mean", "simple"],
+#     ["2-100-min", "WeightedGraph", [(2, 100), (1, 0)], "min", "simple"],
+#     ["2-100-max", "WeightedGraph", [(2, 100), (1, 0)], "max", "simple"],
+#     [
+#         "2-100-mean-watershed", "WeightedGraph", [(2, 100), (1, 0)], "mean",
+#         "watershed"
+#     ],
+#     [
+#         "2-100-min-watershed", "WeightedGraph", [(2, 100), (1, 0)], "min",
+#         "watershed"
+#     ],
+#     [
+#         "2-100-max-watershed", "WeightedGraph", [(2, 100), (1, 0)], "max",
+#         "watershed"
+#     ],
+#     ["4-100-mean", "WeightedGraph", [(4, 100), (1, 0)], "mean", "simple"],
+#     [
+#         "4-100-mean-watershed", "WeightedGraph", [(4, 100), (1, 0)], "mean",
+#         "watershed"
+#     ]
+
+#  Compare different pipelines with pareto and ksp overlap
+#
+#   COMPARISONS = [
+#     ["baseline", "WeightedKSP", [(1, 0)], 0.2],
+#     ["2-100-05", "WeightedKSP", [(2, 100), (1, 0)], 0.5],
+#     ["2-100-02", "WeightedKSP", [(2, 100), (1, 0)], 0.2],
+#     ["3-200-02", "WeightedKSP", [(3, 200), (2, 100)], 0.2],
+#     ["09-100-05", "RandomWeightedGraph", [(0.9, 100), (0, 0)], 0.5],
+#     ["09-100-02", "RandomWeightedGraph", [(0.9, 100), (0, 0)], 0.2],
+#     [
+#         "095-100-09-50-02", "RandomWeightedGraph",
+#         [(0.95, 100), (0.9, 50), (0, 0)], 0.2
+#     ],

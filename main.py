@@ -25,17 +25,19 @@ else:
     PATH_FILES = "data/belgium_instance1"
 
 # DEFINE CONFIGURATION
-ID = "ksp_2test"  # str(round(time.time() / 60))[-5:]
+ID = "dag50iters70"  # str(round(time.time() / 60))[-5:]
 
 OUT_PATH = "outputs/path_" + ID
-SCALE_PARAM = 2  # args.scale
+SCALE_PARAM = 5  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 30), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
-PIPELINE = [(3, 200), (2, 100), (1, 0)]
-# [(0.95, 100), (0.95, 50), (0, 0)]
+# PIPELINE = [(3, 200), (2, 100), (1, 0)]
+PIPELINE = [(1, 0)]
+# PIPELINE = [(0.8, 100), (0.5, 50), (0, 0)]  # nonauto random
+# PIPELINE = [(5000000, 50), (5500000, 0)]  # auto pipeline
 
-GRAPH_TYPE = graphs.WeightedKSP
+GRAPH_TYPE = graphs.PowerBF
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, PowerBF
 # TwoPowerBF, WeightedKSP
 print("graph type:", GRAPH_TYPE)
@@ -98,7 +100,9 @@ time_infos = []
 
 for (factor, dist) in PIPELINE:
     print("----------- PIPELINE", factor, dist, "---------------")
-    graph.set_corridor(factor, corridor, start_inds, dest_inds)
+    graph.set_corridor(
+        corridor, start_inds, dest_inds, factor_or_n_edges=factor
+    )
     print("1) set cost rest")
     graph.add_edges()
     print("2) added edges", graph.n_edges)
@@ -119,8 +123,8 @@ for (factor, dist) in PIPELINE:
     time_infos.append(graph.time_logs.copy())
 
     if cfg.VERBOSE:
-        del graph.time_logs['edge_list_times']
-        del graph.time_logs['add_edges_times']
+        graph.time_logs.pop('edge_list_times', None)
+        graph.time_logs.pop('add_edges_times', None)
         print(graph.time_logs)
 
     if dist > 0:
@@ -130,11 +134,12 @@ for (factor, dist) in PIPELINE:
             path_costs, cost_sum, dist, 0, NOTES
         )
         # Define paths around which to place corridor
-        graph.get_shortest_path_tree(source_v, target_v)
-        ksp = graph.k_shortest_paths(
-            source_v, target_v, 3, overlap=0.2
-        )  # cfg.KSP)
-        paths = [k[0] for k in ksp]
+        # graph.get_shortest_path_tree(source_v, target_v)
+        # ksp = graph.k_shortest_paths(
+        #     source_v, target_v, 3, overlap=0.2
+        # )  # cfg.KSP)
+        # paths = [k[0] for k in ksp]
+        paths = [path]
 
         # do specified numer of dilations
         corridor = get_distance_surface(
@@ -152,8 +157,8 @@ for (factor, dist) in PIPELINE:
 # print("cost actually", cost_sum, "cost_new", cost_sum_window)
 
 # COMPUTE KSP
-graph.get_shortest_path_tree(source_v, target_v)
-ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
+# graph.get_shortest_path_tree(source_v, target_v)
+# ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
 
 # PARETO
 # pareto_out = graph.get_pareto(
@@ -168,7 +173,7 @@ ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
 
 time_pipeline = round(time.time() - tic, 3)
 print("FINISHED PIPELINE:", time_pipeline)
-
+print(len(path))
 # SAVE timing test
 time_test_csv(
     ID, cfg.CSV_TIMES, SCALE_PARAM, cfg.GTNX, GRAPH_TYPE, graph, path_costs,

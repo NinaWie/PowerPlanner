@@ -49,9 +49,11 @@ class PowerBF():
         self.n_edges = len(self.shifts) * self.x_len * self.y_len
         print("memory taken (dists shape):", self.n_edges)
 
-    def set_corridor(self, factor, corridor, start_inds, dest_inds):
-        assert factor == 1, "pipeline not implemented yet for BF ANG"
-        self.factor = factor
+    def set_corridor(
+        self, corridor, start_inds, dest_inds, factor_or_n_edges=1
+    ):
+        assert factor_or_n_edges == 1, "pipeline not implemented yet"
+        self.factor = factor_or_n_edges
         i, j = start_inds
         self.dists[:, i, j] = self.instance[i, j]
 
@@ -69,22 +71,19 @@ class PowerBF():
         """
         angle_weight: how to consider angles in contrast to all other costs!
         """
-        # # set weights and add angle weight
-        self.angle_weight = angle_weight
+        # set weights and add angle weight
         self.cost_classes = ["angle"] + list(layer_classes)
         ang_weight_norm = angle_weight * np.sum(layer_weights)
         self.cost_weights = np.array([ang_weight_norm] + list(layer_weights))
         # print("class weights", layer_weights)
         self.cost_weights = self.cost_weights / np.sum(self.cost_weights)
         print("cost weights", self.cost_weights)
-
-        layer_weights = np.asarray(layer_weights)
-        self.layer_weights = layer_weights / np.sum(layer_weights)
-        print("layer weights", self.layer_weights)
+        self.angle_weight = self.cost_weights[0]
 
         # define instance by weighted sum
         self.instance = np.sum(
-            np.moveaxis(self.instance_layers, 0, -1) * layer_weights, axis=2
+            np.moveaxis(self.instance_layers, 0, -1) * self.cost_weights[1:],
+            axis=2
         )
         # # cost rest only required for plotting stuff
         self.cost_rest = self.instance_layers * self.instance_corr
@@ -100,6 +99,7 @@ class PowerBF():
         angles_all = self._precompute_angles()
 
         for _ in range(self.n_iters):
+            # iterate over edges
             for i in range(len(self.shifts)):
                 # shift dists by this shift
                 # todo: avoid swaping dimenions each time
@@ -153,19 +153,19 @@ class PowerBF():
         path_costs = np.array(
             [self.instance_layers[:, p[0], p[1]] for p in path]
         )
-        # NEXT LINES: INCLUDE ANGLE COSTS
-        # ang_costs = ConstraintUtils.compute_angle_costs(
-        #     path, self.angle_norm_factor
-        # )
-        # path_costs = np.concatenate(
-        #     (np.swapaxes(np.array([ang_costs]), 1, 0), path_costs), axis=1
-        # )
-        # cost_sum = np.dot(
-        #     self.cost_weights, np.sum(np.array(path_costs), axis=0)
-        # )
+        # include angle costs
+        ang_costs = ConstraintUtils.compute_angle_costs(
+            path, self.angle_norm_factor
+        )
+        path_costs = np.concatenate(
+            (np.swapaxes(np.array([ang_costs]), 1, 0), path_costs), axis=1
+        )
         cost_sum = np.dot(
-            self.layer_weights, np.sum(np.array(path_costs), axis=0)
-        )  # scalar: weighted sum of the summed class costs
+            self.cost_weights, np.sum(np.array(path_costs), axis=0)
+        )
+        # cost_sum = np.dot(
+        #     self.layer_weights, np.sum(np.array(path_costs), axis=0)
+        # )  # scalar: weighted sum of the summed class costs
         return np.asarray(path
                           ).tolist(), path_costs.tolist(), cost_sum.tolist()
 

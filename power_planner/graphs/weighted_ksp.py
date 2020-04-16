@@ -103,12 +103,28 @@ class WeightedKSP(WeightedGraph):
 
         return self.transform_path(vertices_path)
 
-    def k_shortest_paths(self, source, dest, k, overlap=0.5):
+    @staticmethod
+    def similarity(s1, s2, mode="IoU"):
+        path_inter = len(s1.intersection(s2))
+        if mode == "IoU":
+            return path_inter / len(s1.union(s2))
+        elif mode == "sim2paper":
+            return path_inter / (2 * len(s1)) + path_inter / (2 * len(s2))
+        elif mode == "sim3paper":
+            return np.sqrt(path_inter**2 / (len(s1) * len(s2)))
+        elif mode == "max_norm_sim":
+            return path_inter / (max([len(s1), len(s2)]))
+        elif mode == "min_norm_sim":
+            return path_inter / (min([len(s1), len(s2)]))
+        else:
+            raise NotImplementedError("mode wrong, not implemented yet")
+
+    def k_shortest_paths(self, source, dest, k, overlap=0.5, mode="myset"):
         tic = time.time()
         # initialize list of paths
         sp_set = set(self.best_path)
-        # iterate over vertices
         best_paths = [self.best_path]
+        best_path_sets = [set(self.best_path)]
         # get list of vertices = unique values in pos2node except -1
         vertices = np.unique(self.pos2node)[1:]
         v_dists = [self.dist_map_ab[v] + self.dist_map_ba[v] for v in vertices]
@@ -137,11 +153,25 @@ class WeightedKSP(WeightedGraph):
                 path_ac.reverse()
                 # concatenate - leave 1 away because otherwise twice
                 vertices_path = path_ac + path_cb[1:]
-                already = np.array([u in sp_set for u in vertices_path])
-                # if less than half already there
-                if np.sum(already) < len(already) * overlap:
-                    best_paths.append(vertices_path)
-                    sp_set.update(vertices_path)
+
+                # similar = similarity(vertices_path, best_paths, sp_set)
+                if mode != "myset":
+                    sofar = np.array(
+                        [
+                            WeightedKSP.similarity(
+                                sp, set(vertices_path), mode
+                            ) for sp in best_path_sets
+                        ]
+                    )
+                    if np.all(sofar < overlap):
+                        best_paths.append(vertices_path)
+                        best_path_sets.append(set(vertices_path))
+                # mode myset --> my version: set of all paths together
+                else:
+                    already = np.array([u in sp_set for u in vertices_path])
+                    if np.sum(already) < len(already) * overlap:
+                        best_paths.append(vertices_path)
+                        sp_set.update(vertices_path)
                     # print("added path, already scanned", j)
             # stop if k paths are sampled
             if len(best_paths) >= k:

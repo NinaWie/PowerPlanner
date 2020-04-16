@@ -46,7 +46,7 @@ def strip(func):
         x_coords, y_coords = np.where(instance_corr)
         _, x_len, y_len = instance.shape
         print(
-            "abstand vom rand", [
+            "dists from img bounds", [
                 np.min(x_coords), x_len - np.max(x_coords),
                 np.min(y_coords), y_len - np.max(y_coords)
             ]

@@ -64,10 +64,14 @@ class LineGraph(GeneralGraph):
         """
         Initialize edge properties as in super, but add angle costs
         """
+        print(weights, angle_weight)
         classes = ["angle"] + classes
-        ang_weight_norm = angle_weight * np.sum(weights)
-        self.cost_weights = [ang_weight_norm] + list(weights)
-        GeneralGraph.set_edge_costs(self, classes, self.cost_weights)
+        GeneralGraph.set_edge_costs(self, classes, weights)
+        weights_norm = np.array(
+            [angle_weight * np.sum(weights)] + list(weights)
+        )
+        self.cost_weights = weights_norm / np.sum(weights_norm)
+        print(self.cost_classes, self.cost_weights)
 
     def add_nodes(self):
         GeneralGraph.add_nodes(
