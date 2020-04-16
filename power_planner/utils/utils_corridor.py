@@ -1,4 +1,4 @@
-from power_planner.utils import get_distance_surface, rescale, normalize
+from power_planner.utils.utils import get_distance_surface, rescale, normalize
 import numpy as np
 import matplotlib.pyplot as plt
 import rasterio

@@ -10,8 +10,11 @@ import json
 # utils imports
 from power_planner.data_reader import DataReader
 from power_planner import graphs
-from power_planner.plotting import plot_path_costs, plot_pipeline_paths, plot_path, plot_k_sp, plot_pareto_paths
-from power_planner.utils import get_distance_surface, time_test_csv
+from power_planner.plotting import (
+    plot_path_costs, plot_pipeline_paths, plot_path, plot_k_sp,
+    plot_pareto_paths
+)
+from power_planner.utils.utils import get_distance_surface, time_test_csv
 from config import Config
 
 parser = argparse.ArgumentParser()
@@ -25,7 +28,7 @@ else:
     PATH_FILES = "data/belgium_instance1"
 
 # DEFINE CONFIGURATION
-ID = "dag50iters70"  # str(round(time.time() / 60))[-5:]
+ID = "test"  # str(round(time.time() / 60))[-5:]
 
 OUT_PATH = "outputs/path_" + ID
 SCALE_PARAM = 5  # args.scale
@@ -37,9 +40,9 @@ PIPELINE = [(1, 0)]
 # PIPELINE = [(0.8, 100), (0.5, 50), (0, 0)]  # nonauto random
 # PIPELINE = [(5000000, 50), (5500000, 0)]  # auto pipeline
 
-GRAPH_TYPE = graphs.PowerBF
-# LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, PowerBF
-# TwoPowerBF, WeightedKSP
+GRAPH_TYPE = graphs.ImplicitLgKSP
+# LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, ImplicitLG
+# ImplicitLgKSP, WeightedKSP
 print("graph type:", GRAPH_TYPE)
 # summarize: mean/max/min, remove: all/surrounding, sample: simple/watershed
 NOTES = "None"  # "mean-all-simple"
@@ -157,8 +160,8 @@ for (factor, dist) in PIPELINE:
 # print("cost actually", cost_sum, "cost_new", cost_sum_window)
 
 # COMPUTE KSP
-# graph.get_shortest_path_tree(source_v, target_v)
-# ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
+graph.get_shortest_path_tree(source_v, target_v)
+ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
 
 # PARETO
 # pareto_out = graph.get_pareto(
@@ -188,7 +191,7 @@ plot_pipeline_paths(
 # FOR KSP:
 # with open(OUT_PATH + "_ksp.json", "w") as outfile:
 #     json.dump(ksp, outfile)
-# plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
+plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
 
 # FOR WINDOW
 # plot_path(

@@ -1,5 +1,5 @@
 # from constraints import ConstraintUtils
-from power_planner.utils import get_donut_vals
+from power_planner.utils.utils import get_donut_vals
 from .weighted_graph import WeightedGraph
 
 import numpy as np

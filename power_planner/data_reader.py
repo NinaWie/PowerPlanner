@@ -9,7 +9,7 @@ import functools
 import time
 # import matplotlib.pyplot as plt
 
-from power_planner.utils import normalize, rescale
+from power_planner.utils.utils import normalize, rescale
 
 
 # Decorator

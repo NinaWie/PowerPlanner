@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 from power_planner.data_reader import DataReader
 from power_planner import graphs
 from power_planner.plotting import plot_prior_paths
-from power_planner.utils import get_distance_surface, time_test_csv
-from power_planner.utils_corridor import CorridorUtils
+from power_planner.utils.utils import get_distance_surface, time_test_csv
+from power_planner.utils.utils_corridor import CorridorUtils
 from config import Config
 
 parser = argparse.ArgumentParser()

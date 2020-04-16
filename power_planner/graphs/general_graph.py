@@ -2,9 +2,11 @@ import numpy as np
 from graph_tool.all import Graph, shortest_path, load_graph
 import time
 import networkx as nx
-from power_planner.utils import get_half_donut
-from power_planner.plotting import plot_pareto_scatter_2d, plot_pareto_scatter_3d, plot_pareto_3d
-from power_planner.utils_instance import CostUtils
+from power_planner.utils.utils import get_half_donut
+from power_planner.plotting import (
+    plot_pareto_scatter_2d, plot_pareto_scatter_3d, plot_pareto_3d
+)
+from power_planner.utils.utils_costs import CostUtils
 
 
 class GeneralGraph():

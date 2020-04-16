@@ -1,11 +1,11 @@
-from power_planner.utils import angle
+from power_planner.utils.utils import angle
 from power_planner import graphs
 import numpy as np
 import time
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 
-class TwoPowerBF():
+class ImplicitLgKSP():
 
     def __init__(
         self,
@@ -18,10 +18,10 @@ class TwoPowerBF():
         fill_val=np.inf
     ):
         self.cost_rest = instance * instance_corr
-        self.graph_ab = graphs.PowerBF(
+        self.graph_ab = graphs.ImplicitLG(
             instance, instance_corr, graphtool=1, verbose=1
         )
-        self.graph_ba = graphs.PowerBF(
+        self.graph_ba = graphs.ImplicitLG(
             instance, instance_corr, graphtool=1, verbose=1
         )
         self.time_logs = self.graph_ab.time_logs

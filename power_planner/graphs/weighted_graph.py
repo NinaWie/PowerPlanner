@@ -1,5 +1,5 @@
-from power_planner.utils_constraints import ConstraintUtils
-from power_planner.utils import get_donut_vals
+from power_planner.utils.utils_constraints import ConstraintUtils
+from power_planner.utils.utils import get_donut_vals
 from .general_graph import GeneralGraph
 
 import numpy as np

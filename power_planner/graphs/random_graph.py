@@ -1,4 +1,4 @@
-from power_planner.utils import normalize
+from power_planner.utils.utils import normalize
 #  graph imports
 from .weighted_ksp import WeightedKSP
 from .line_graph import LineGraph

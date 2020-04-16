@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from power_planner.utils import linegraph_donut, angle
+from power_planner.utils.utils import linegraph_donut, angle
 
 
 def test_linegraph_donut():

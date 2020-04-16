@@ -1,5 +1,5 @@
 import numpy as np
-from power_planner.utils import bresenham_line, angle
+from power_planner.utils.utils import bresenham_line, angle
 
 
 class ConstraintUtils():

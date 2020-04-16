@@ -10,7 +10,7 @@ import numpy as np
 from power_planner.data_reader import DataReader
 from power_planner import graphs
 from power_planner.plotting import plot_path_costs, plot_pipeline_paths
-from power_planner.utils import get_distance_surface, time_test_csv
+from power_planner.utils.utils import get_distance_surface, time_test_csv
 from config import Config
 
 parser = argparse.ArgumentParser()

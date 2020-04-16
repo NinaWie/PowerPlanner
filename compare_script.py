@@ -11,7 +11,7 @@ import json
 from power_planner.data_reader import DataReader
 from power_planner import graphs
 from power_planner.plotting import plot_path_costs, plot_pipeline_paths, plot_path, plot_k_sp, plot_pareto_paths
-from power_planner.utils import get_distance_surface, append_to_csv
+from power_planner.utils.utils import get_distance_surface, append_to_csv
 from config import Config
 
 parser = argparse.ArgumentParser()

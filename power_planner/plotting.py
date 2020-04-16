@@ -1,4 +1,4 @@
-from power_planner.utils import normalize
+from power_planner.utils.utils import normalize
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
