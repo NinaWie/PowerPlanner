@@ -22,8 +22,8 @@ def plot_path(instance, path, out_path=None, buffer=2):
     expanded = np.tile(expanded, (1, 1, 3))  # overwrite instance by tiled one
     # colour nodes in path in red
     for (x, y) in path:
-        expanded[x - buffer:x + buffer + 1,
-                 y - buffer:y + buffer + 1] = [0.9, 0.2, 0.2]  # colour red
+        expanded[x - buffer:x + buffer + 1, y - buffer:y + buffer +
+                 1] = [0.9, 0.2, 0.2]  # colour red
     # plot and save
     plt.figure(figsize=(25, 15))
     plt.imshow(expanded, origin="lower")
@@ -270,7 +270,9 @@ def plot_pareto_3d(pareto, weights, classes, out_path=None):
         plt.show()
 
 
-def plot_pareto_scatter_3d(pareto, weights, classes, out_path=None):
+def plot_pareto_scatter_3d(
+    pareto, weights, classes, cost_sum=None, out_path=None
+):
     """
     3D plot of pareto points from 3 cost classes
     Arguments:
@@ -279,6 +281,15 @@ def plot_pareto_scatter_3d(pareto, weights, classes, out_path=None):
                 yielded the pareto costs
         classes: list of 3 strings, the compared graphs
     """
+    if cost_sum is not None:
+        norm_cost_sums = np.array(cost_sum)
+        # min max normalization
+        norm_cost_sums = (norm_cost_sums - np.min(norm_cost_sums)) / (
+            np.max(norm_cost_sums) - np.min(norm_cost_sums)
+        )
+    # print(norm_cost_sums)
+    size = 100
+
     fig = plt.figure(figsize=(20, 5))
     for i in range(3):
         ax = fig.add_subplot(1, 3, i + 1)
@@ -286,9 +297,15 @@ def plot_pareto_scatter_3d(pareto, weights, classes, out_path=None):
         ind2 = (i + 1) % 3
         for j in range(len(pareto)):
             label = np.argmax(weights[j])
+            if cost_sum is not None:
+                size = norm_cost_sums[j] * 1000 + 20
             col_weights = (np.asarray([weights[j]]) + 0.4) / 1.4
             ax.scatter(
-                pareto[j, ind1], pareto[j, ind2], c=col_weights, label=label
+                pareto[j, ind1],
+                pareto[j, ind2],
+                c=col_weights,
+                s=size,
+                label=label
             )
         plt.xlabel(classes[ind1], fontsize=17)
         plt.ylabel(classes[ind2], fontsize=17)
@@ -327,7 +344,9 @@ def plot_pareto_scatter_3d(pareto, weights, classes, out_path=None):
         plt.show()
 
 
-def plot_pareto_scatter_2d(pareto, weights, classes, out_path=None):
+def plot_pareto_scatter_2d(
+    pareto, weights, classes, cost_sum=None, out_path=None
+):
     """
     Scatter to compare two cost classes
     Arguments:
@@ -336,11 +355,20 @@ def plot_pareto_scatter_2d(pareto, weights, classes, out_path=None):
                 that yielded the pareto costs
         classes: list of 2 strings, the compared graphs
     """
+    if cost_sum is not None:
+        norm_cost_sums = np.array(cost_sum)
+        # normalize
+        norm_cost_sums = (norm_cost_sums - np.min(norm_cost_sums)) / (
+            np.max(norm_cost_sums) - np.min(norm_cost_sums)
+        )
+        size = norm_cost_sums * 1000 + 20
+    else:
+        size = 100
     color = np.array([[w[0], 0, w[1]] for w in weights])
     # scatter pareto curve
     plt.figure(figsize=(20, 10))
     plt.subplot(1, 2, 1)
-    plt.scatter(pareto[:, 0], pareto[:, 1], c=color)
+    plt.scatter(pareto[:, 0], pareto[:, 1], c=color, s=size)
     plt.xlabel(classes[0], fontsize=15)
     plt.ylabel(classes[1], fontsize=15)
     # manually create legend
