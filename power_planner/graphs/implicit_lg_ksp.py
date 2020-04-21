@@ -19,10 +19,20 @@ class ImplicitLgKSP():
     ):
         self.cost_rest = instance * instance_corr
         self.graph_ab = graphs.ImplicitLG(
-            instance, instance_corr, graphtool=1, verbose=1
+            instance,
+            instance_corr,
+            graphtool=1,
+            verbose=verbose,
+            n_iters=n_iters,
+            fill_val=fill_val
         )
         self.graph_ba = graphs.ImplicitLG(
-            instance, instance_corr, graphtool=1, verbose=1
+            instance,
+            instance_corr,
+            graphtool=1,
+            verbose=1,
+            n_iters=n_iters,
+            fill_val=fill_val
         )
         self.time_logs = self.graph_ab.time_logs
 

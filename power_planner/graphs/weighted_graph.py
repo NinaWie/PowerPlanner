@@ -77,6 +77,8 @@ class WeightedGraph(GeneralGraph):
         inverted_corridor = (dist_surface == 0).astype(bool)
         # set all which are not in the corridor to -1
         self.pos2node[inverted_corridor] = -1
+        # self.pos2node[dest_inds[0], dest_inds[1]] = np.max(self.pos2node) + 1
+        # self.pos2node[start_inds[0], start_inds[1]] = np.max(self.pos2node) + 1
         self.time_logs["set_cost_rest"] = round(time.time() - tic, 3)
 
     def set_shift(self, lower, upper, vec, max_angle, max_angle_lg=0):
@@ -98,8 +100,11 @@ class WeightedGraph(GeneralGraph):
     def _compute_edges(self, shift):
         # inds orig:
         inds_orig = self.pos2node[np.mean(self.cost_rest, axis=0) > 0]
+        if np.any(inds_orig < 0):
+            print("problem")
+            print(inds_orig)
         # switch axes for shift
-        cost_rest_switched = np.moveaxis(self.cost_rest, 0, -1)
+        cost_rest_switched = np.moveaxis(self.cost_rest.copy(), 0, -1)
         # shift by shift
         costs_shifted = ConstraintUtils.shift_surface(
             cost_rest_switched, shift

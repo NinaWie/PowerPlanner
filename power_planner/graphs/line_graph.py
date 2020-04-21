@@ -62,14 +62,14 @@ class LineGraph(GeneralGraph):
         """
         Initialize edge properties as in super, but add angle costs
         """
-        print(weights, angle_weight)
         classes = ["angle"] + classes
         GeneralGraph.set_edge_costs(self, classes, weights)
         weights_norm = np.array(
             [angle_weight * np.sum(weights)] + list(weights)
         )
         self.cost_weights = weights_norm / np.sum(weights_norm)
-        print(self.cost_classes, self.cost_weights)
+        if self.verbose:
+            print(self.cost_classes, self.cost_weights)
 
     def add_nodes(self):
         GeneralGraph.add_nodes(
@@ -160,7 +160,6 @@ class LineGraph(GeneralGraph):
 
         mean_costs = np.mean(self.cost_instance, axis=(1, 2)).tolist()
         mean_costs.insert(0, 0)  # insert zero angle cost
-        print("mean costs:", mean_costs)  # TODO: leave this?
 
         start_edges = [
             [start_ind, u] + mean_costs for u in possible_start_edges
@@ -187,7 +186,8 @@ class LineGraph(GeneralGraph):
             out_path.append(start_pos)
 
         # append last on
-        out_path.append(list(np.array(start_pos) + self.shifts[shift_ind]))
+        if len(out_path) > 0:
+            out_path.append(list(np.array(start_pos) + self.shifts[shift_ind]))
 
         # compute costs: angle costs
         ang_costs = ConstraintUtils.compute_angle_costs(

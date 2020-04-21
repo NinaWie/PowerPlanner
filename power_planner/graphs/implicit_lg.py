@@ -22,7 +22,6 @@ class ImplicitLG():
         self.instance_corr = instance_corr
         self.x_len, self.y_len = instance_corr.shape
         self.fill_val = fill_val
-        self.angle_norm_factor = np.pi / 4
         self.n_iters = n_iters
         self.time_logs = {}
         self.verbose = verbose
@@ -47,7 +46,8 @@ class ImplicitLG():
         self.time_logs["add_nodes"] = round(time.time() - tic, 3)
         self.n_nodes = self.x_len * self.y_len
         self.n_edges = len(self.shifts) * self.x_len * self.y_len
-        print("memory taken (dists shape):", self.n_edges)
+        if self.verbose:
+            print("memory taken (dists shape):", self.n_edges)
 
     def set_corridor(
         self, corridor, start_inds, dest_inds, factor_or_n_edges=1
@@ -77,7 +77,8 @@ class ImplicitLG():
         self.cost_weights = np.array([ang_weight_norm] + list(layer_weights))
         # print("class weights", layer_weights)
         self.cost_weights = self.cost_weights / np.sum(self.cost_weights)
-        print("cost weights", self.cost_weights)
+        if self.verbose:
+            print("cost weights", self.cost_weights)
         self.angle_weight = self.cost_weights[0]
 
         # define instance by weighted sum
@@ -88,12 +89,11 @@ class ImplicitLG():
         # # cost rest only required for plotting stuff
         self.cost_rest = self.instance_layers * self.instance_corr
         self.instance[self.instance_corr == 0] = self.fill_val
-        print("instance shape", self.instance.shape)
+        if self.verbose:
+            print("instance shape", self.instance.shape)
 
     def add_edges(self):
         tic = time.time()
-
-        print("weights", self.angle_weight, 1)
 
         # precompute angles
         angles_all = self._precompute_angles()

@@ -28,7 +28,7 @@ else:
     PATH_FILES = "data/belgium_instance1"
 
 # DEFINE CONFIGURATION
-ID = "test"  # str(round(time.time() / 60))[-5:]
+ID = "nondiscrete"  # str(round(time.time() / 60))[-5:]
 
 OUT_PATH = "outputs/path_" + ID
 SCALE_PARAM = 5  # args.scale
@@ -40,7 +40,7 @@ PIPELINE = [(1, 0)]
 # PIPELINE = [(0.8, 100), (0.5, 50), (0, 0)]  # nonauto random
 # PIPELINE = [(5000000, 50), (5500000, 0)]  # auto pipeline
 
-GRAPH_TYPE = graphs.ImplicitLgKSP
+GRAPH_TYPE = graphs.LineGraph
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, ImplicitLG
 # ImplicitLgKSP, WeightedKSP
 print("graph type:", GRAPH_TYPE)
@@ -120,7 +120,7 @@ for (factor, dist) in PIPELINE:
     print("4) shortest path")
     # save for inspection
     output_paths.append((path, path_costs))
-    plot_surfaces.append(graph.cost_rest[2].copy())  # TODO: mean makes black
+    plot_surfaces.append(graph.cost_rest[2].copy())
     # get several paths --> possible to replace by pareto_out[0]
     # paths = [path]
     time_infos.append(graph.time_logs.copy())
@@ -160,8 +160,8 @@ for (factor, dist) in PIPELINE:
 # print("cost actually", cost_sum, "cost_new", cost_sum_window)
 
 # COMPUTE KSP
-graph.get_shortest_path_tree(source_v, target_v)
-ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
+# graph.get_shortest_path_tree(source_v, target_v)
+# ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
 
 # PARETO
 # pareto_out = graph.get_pareto(
@@ -191,7 +191,7 @@ plot_pipeline_paths(
 # FOR KSP:
 # with open(OUT_PATH + "_ksp.json", "w") as outfile:
 #     json.dump(ksp, outfile)
-plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
+# plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
 
 # FOR WINDOW
 # plot_path(

@@ -45,7 +45,8 @@ class GeneralGraph():
             self.graph.new_edge_property("float") for _ in range(len(classes))
         ]
         self.cost_weights = weights / np.sum(weights)
-        print(self.cost_classes, self.cost_weights)
+        if self.verbose:
+            print(self.cost_classes, self.cost_weights)
         # save weighted instance for plotting
         self.instance = np.sum(
             np.moveaxis(self.cost_instance, 0, -1) * self.cost_weights, axis=2
@@ -93,12 +94,10 @@ class GeneralGraph():
                                            0).astype(int) * corridor
 
         # add start and end TODO ugly
-        self.cost_rest[:, dest_inds[0],
-                       dest_inds[1]] = self.cost_instance[:, dest_inds[0],
-                                                          dest_inds[1]]
-        self.cost_rest[:, start_inds[0],
-                       start_inds[1]] = self.cost_instance[:, start_inds[0],
-                                                           start_inds[1]]
+        self.cost_rest[:, dest_inds[0], dest_inds[1]
+                       ] = self.cost_instance[:, dest_inds[0], dest_inds[1]]
+        self.cost_rest[:, start_inds[0], start_inds[1]
+                       ] = self.cost_instance[:, start_inds[0], start_inds[1]]
 
     def add_nodes(self, nodes):
         """
@@ -143,8 +142,8 @@ class GeneralGraph():
             out = self._compute_edges(self.shift_tuples[i])
 
             # Error if -1 entries because graph-tool crashes with -1 nodes
-            if np.any(out[:2].flatten() == -1):
-                print(np.where(out[:2] == -1))
+            if np.any(out[:, :2].flatten() < 0):
+                print(np.where(out[:, :2] < 0))
                 raise RuntimeError
 
             n_edges += len(out)
@@ -293,12 +292,20 @@ class GeneralGraph():
         if plot:
             if len(compare) == 2:
                 plot_pareto_scatter_2d(
-                    pareto, weights, classes, out_path=out_path
+                    pareto,
+                    weights,
+                    classes,
+                    cost_sum=cost_sum,
+                    out_path=out_path
                 )
             elif len(compare) == 3:
                 # plot_pareto_3d(pareto, weights, classes)
                 plot_pareto_scatter_3d(
-                    pareto, weights, classes, out_path=out_path
+                    pareto,
+                    weights,
+                    classes,
+                    cost_sum=cost_sum,
+                    out_path=out_path
                 )
         return paths, weights, cost_sum
 

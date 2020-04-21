@@ -71,8 +71,8 @@ def rescale(img, scale_factor):
     new_img = np.zeros((x_len_new, y_len_new))
     for i in range(x_len_new):
         for j in range(y_len_new):
-            patch = img[i * scale_factor:(i + 1) * scale_factor,
-                        j * scale_factor:(j + 1) * scale_factor]
+            patch = img[i * scale_factor:(i + 1) * scale_factor, j *
+                        scale_factor:(j + 1) * scale_factor]
             new_img[i, j] = np.mean(patch)
     return new_img
 
@@ -160,6 +160,27 @@ def get_half_donut(radius_low, radius_high, vec, angle_max=0.5 * np.pi):
     return new_tuples
 
 
+def discrete_angle_costs(ang, max_angle_lg):
+    """
+    Define angle costs for each angle
+    Arguments:
+        ang: float between 0 and pi, angle between edges
+        max_angle_lg: maximum angle cutoff
+    returns: angle costs
+    Here computed as Stefano said: up to 30 degrees + 50%, up to 60 degrees
+    3 times the cost, up to 90 5 times the cost --> norm: 1.5 / 5 = 0.3
+    """
+    # TODO: 3 times technical costs for example
+    # previously:
+    # return ang / max_angle_lg
+    if ang <= np.pi / 6:
+        return 0.3
+    elif ang <= np.pi / 3:
+        return 0.6
+    else:
+        return 1
+
+
 def get_lg_donut(
     radius_low, radius_high, vec, max_angle, max_angle_lg=np.pi / 4
 ):
@@ -181,7 +202,7 @@ def get_lg_donut(
                 ang = angle([-k, -l], [i, j])
                 # if smaller max angle and general outgoing half
                 if ang <= max_angle_lg and k * vec[0] + l * vec[1] >= 0:
-                    angle_norm = ang / max_angle_lg
+                    angle_norm = discrete_angle_costs(ang, max_angle_lg)
                     linegraph_tuples.append([[i, j], [k, l], angle_norm])
     return linegraph_tuples
 

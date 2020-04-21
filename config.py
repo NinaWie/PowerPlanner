@@ -8,8 +8,10 @@ class Config():
         self.HARD_CONS_PATH = "hard_constraints"
         self.CORR_PATH = "corridor/Corridor_BE.tif"
         self.COST_PATH = "COSTSURFACE.tif"
-        self.START_PATH = "start_point/Start"
-        self.DEST_PATH = "dest_point/Destination"
+        # self.START_PATH = "start_point/Start"
+        # self.DEST_PATH = "dest_point/Destination"
+        self.START_PATH = "start_point/large_instance_start"
+        self.DEST_PATH = "dest_point/large_instance_destination"
         self.WEIGHT_CSV = "layer_weights.csv"
         self.CSV_TIMES = "outputs/time_tests.csv"
 
