@@ -47,6 +47,16 @@ def time_test_csv(
     append_to_csv(CSV_TIMES, param_list)
 
 
+def compute_pylon_dists(PYLON_DIST_MIN, PYLON_DIST_MAX, RASTER, SCALE_PARAM):
+    PYLON_DIST_MIN = PYLON_DIST_MIN / RASTER
+    PYLON_DIST_MAX = PYLON_DIST_MAX / RASTER
+    if SCALE_PARAM > 1:
+        PYLON_DIST_MIN /= SCALE_PARAM
+        PYLON_DIST_MAX /= SCALE_PARAM
+    print("defined pylon distances in raster:", PYLON_DIST_MIN, PYLON_DIST_MAX)
+    return PYLON_DIST_MIN, PYLON_DIST_MAX
+
+
 def normalize(instance):
     """
     0-1 normalization of values of instance

@@ -1,0 +1,19 @@
+{
+    "HARD_CONS_PATH": "hard_constraints",
+    "CORR_PATH": "corridor/Corridor_BE.tif",
+    "COST_PATH": "COSTSURFACE.tif",
+    "START_PATH": "start_point/large_instance_start",
+    "DEST_PATH": "dest_point/large_instance_destination",
+    "WEIGHT_CSV": "layer_weights.csv",
+    "CSV_TIMES": "time_tests.csv",
+    "RASTER": 10,
+    "PYLON_DIST_MIN": 150,
+    "PYLON_DIST_MAX": 250,
+    "MAX_ANGLE": 1.57079632679489,
+    "MAX_ANGLE_LG": 0.7853981633974483,
+    "SCENARIO": 1,
+    "VERBOSE": 1,
+    "GTNX": 1,
+    "ANGLE_WEIGHT": 0.1,
+    "KSP": 10
+}

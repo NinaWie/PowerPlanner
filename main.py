@@ -5,6 +5,7 @@ import time
 # import warnings
 import numpy as np
 import json
+from types import SimpleNamespace
 # import matplotlib.pyplot as plt
 
 # utils imports
@@ -14,7 +15,9 @@ from power_planner.plotting import (
     plot_path_costs, plot_pipeline_paths, plot_path, plot_k_sp,
     plot_pareto_paths
 )
-from power_planner.utils.utils import get_distance_surface, time_test_csv
+from power_planner.utils.utils import (
+    get_distance_surface, time_test_csv, compute_pylon_dists
+)
 from config import Config
 
 parser = argparse.ArgumentParser()
@@ -22,25 +25,22 @@ parser.add_argument('-cluster', action='store_true')
 # parser.add_argument('scale', help="downsample", type=int, default=1)
 args = parser.parse_args()
 
-if args.cluster:
-    PATH_FILES = os.path.join("..", "data")
-else:
-    PATH_FILES = "data/belgium_instance1"
+# define out save name
+ID = "test"  # str(round(time.time() / 60))[-5:]
+OUT_DIR = os.path.join("..", "outputs")
+OUT_PATH = os.path.join(OUT_DIR, ID)
 
 # DEFINE CONFIGURATION
-ID = "nondiscrete"  # str(round(time.time() / 60))[-5:]
-
-OUT_PATH = "outputs/path_" + ID
 SCALE_PARAM = 5  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 30), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
 # PIPELINE = [(3, 200), (2, 100), (1, 0)]
-PIPELINE = [(1, 0)]
+PIPELINE = [(1, 0)]  # (2, 200),
 # PIPELINE = [(0.8, 100), (0.5, 50), (0, 0)]  # nonauto random
 # PIPELINE = [(5000000, 50), (5500000, 0)]  # auto pipeline
 
-GRAPH_TYPE = graphs.LineGraph
+GRAPH_TYPE = graphs.WeightedGraph
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, ImplicitLG
 # ImplicitLgKSP, WeightedKSP
 print("graph type:", GRAPH_TYPE)
@@ -51,9 +51,22 @@ LOAD = 1
 if args.cluster:
     LOAD = 1
 SAVE_PICKLE = 0
+
+# define IO paths
+if LOAD:
+    PATH_FILES = os.path.join("data")
+else:
+    PATH_FILES = "/Volumes/Nina Backup/data_master_thesis/large_instance"
+    # belgium_instance1"
 IOPATH = os.path.join(PATH_FILES, "data_dump_" + str(SCALE_PARAM) + ".dat")
 
-cfg = Config(SCALE_PARAM)
+# LOAD CONFIG
+with open("config.json", "r") as infile:
+    cfg_dict = json.load(infile)  # Config(SCALE_PARAM)
+    cfg = SimpleNamespace(**cfg_dict)
+    cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX = compute_pylon_dists(
+        cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX, cfg.RASTER, SCALE_PARAM
+    )
 
 # READ DATA
 if LOAD:
@@ -185,9 +198,9 @@ time_test_csv(
 
 # PLOTTING:
 # FOR PIPELINE
-plot_pipeline_paths(
-    plot_surfaces, output_paths, buffer=2, out_path=OUT_PATH + "_pipeline.png"
-)
+# plot_pipeline_paths(
+#     plot_surfaces, output_paths, buffer=2, out_path=OUT_PATH + "_pipeline.png"
+# )
 # FOR KSP:
 # with open(OUT_PATH + "_ksp.json", "w") as outfile:
 #     json.dump(ksp, outfile)
@@ -198,7 +211,7 @@ plot_pipeline_paths(
 #     graph.instance, path_window, buffer=0, out_path=OUT_PATH + "_window.png"
 # )
 # SIMPLE
-# plot_path(graph.instance, path, buffer=0, out_path=OUT_PATH + ".png")
+plot_path(graph.instance, path, buffer=0, out_path=OUT_PATH + ".png")
 
 # FOR COST COMPARISON
 # plot_path_costs(

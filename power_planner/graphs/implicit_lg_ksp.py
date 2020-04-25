@@ -215,7 +215,8 @@ class ImplicitLgKSP():
         self.graph_ab.time_logs["best_in_window"] = round(time.time() - tic, 3)
         return self.graph_ab.transform_path(vertices_path)
 
-    def _flat_ind_to_inds(self, flat_ind, arr_shape):
+    @staticmethod
+    def _flat_ind_to_inds(flat_ind, arr_shape):
         """
         Transforms an index of a flattened 3D array to its original coords
         """
@@ -246,7 +247,7 @@ class ImplicitLgKSP():
         window_dists = summed_dists[:, w_xmin:w_xmax + 1, w_ymin:w_ymax + 1]
         best_path_ind = np.argmin(window_dists.flatten())
         # get actual inds in smaller window
-        best_shift, x, y = self._flat_ind_to_inds(
+        best_shift, x, y = ImplicitLgKSP._flat_ind_to_inds(
             best_path_ind, window_dists.shape
         )
         best_node = [w_xmin + x, w_ymin + y]
@@ -274,7 +275,7 @@ class ImplicitLgKSP():
         # iterate over edges from least to most costly
         for e in e_shortest:
             # compute start and dest v
-            x1, x2, x3 = self._flat_ind_to_inds(e, summed_dists.shape)
+            x1, x2, x3 = ImplicitLgKSP._flat_ind_to_inds(e, summed_dists.shape)
             # get shortest path through this node
             vertices_path = self._combined_paths(
                 source, dest, x1, x1, [x2, x3]

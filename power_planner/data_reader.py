@@ -105,6 +105,8 @@ class DataReader():
         self.scale_factor = scale_factor
         weights = pd.read_csv(os.path.join(base_path, weight_csv))
         self.class_csv = weights.dropna()
+        if len(weights) < 1:
+            raise ValueError("layer weights csv file empty")
         self.padding = 0
         self.scenario = scenario
         # get classes and corresponding weights from csv
@@ -214,8 +216,8 @@ class DataReader():
                     # -1  because in tifs the costly areas are black
                     costs = np.absolute(normalize(costs) - 1)
                     cost_sum_arr[i] = cost_sum_arr[i] + costs * int(weight)
-                # else:
-                #     print("file not found:", fname)
+                else:
+                    print("file not found:", fname)
             # normalize cost surface with all tifs together
             norm_costs = normalize(cost_sum_arr[i])
             # norm_costs[norm_costs == 0] = 0.0001  # cost cannot be zero!
@@ -247,7 +249,7 @@ class DataReader():
         start_inds,
         dest_inds,
         emergency_dist=None,
-        percent_padding=0.25
+        percent_padding=2
     ):
         # build rectengular corridor
         start_dest_inds = np.array([start_inds, dest_inds])
@@ -326,7 +328,7 @@ class DataReader():
             start_inds,
             dest_inds,
             emergency_dist=emergency_dist,
-            percent_padding=0.25
+            percent_padding=4
         )
 
         return instance, hard_constraints, start_inds, dest_inds
