@@ -39,7 +39,7 @@ def time_test_csv(
     # scale,graphtool,graphtype,n_nodes,n_edges,add_nodes_time,add_edge_time,
     # shortest_path_time, notes
     param_list = [
-        ID,  , GTNX, GRAPH_TYPE, factor, dist, n_pixels,
+        ID, SCALE_PARAM, GTNX, GRAPH_TYPE, factor, dist, n_pixels,
         graph.n_nodes, graph.n_edges, graph.time_logs["add_nodes"],
         graph.time_logs["add_all_edges"], graph.time_logs["shortest_path"],
         costs, cost_sum, time_pipeline, notes
