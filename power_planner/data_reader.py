@@ -328,7 +328,7 @@ class DataReader():
             start_inds,
             dest_inds,
             emergency_dist=emergency_dist,
-            percent_padding=4
+            percent_padding=5
         )
 
         return instance, hard_constraints, start_inds, dest_inds

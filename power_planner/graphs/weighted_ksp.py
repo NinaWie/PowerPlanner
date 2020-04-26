@@ -33,7 +33,7 @@ class WeightedKSP(WeightedGraph):
         while curr_vertex != start_vertex:
             curr_vertex = pred_map[curr_vertex]
             path.append(curr_vertex)
-            if counter > 100:
+            if counter > 1000:
                 print(path)
                 raise RuntimeWarning("while loop for sp not terminating")
             counter += 1

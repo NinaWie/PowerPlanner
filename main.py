@@ -18,7 +18,6 @@ from power_planner.plotting import (
 from power_planner.utils.utils import (
     get_distance_surface, time_test_csv, compute_pylon_dists
 )
-from config import Config
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-cluster', action='store_true')
@@ -26,21 +25,21 @@ parser.add_argument('-cluster', action='store_true')
 args = parser.parse_args()
 
 # define out save name
-ID = "test"  # str(round(time.time() / 60))[-5:]
+ID = "large_1_ksp"  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
 # DEFINE CONFIGURATION
-SCALE_PARAM = 5  # args.scale
+SCALE_PARAM = 1  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 30), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
 # PIPELINE = [(3, 200), (2, 100), (1, 0)]
-PIPELINE = [(1, 0)]  # (2, 200),
+PIPELINE = [(4, 200), (2, 50), (1, 0)]  # (2, 200),
 # PIPELINE = [(0.8, 100), (0.5, 50), (0, 0)]  # nonauto random
 # PIPELINE = [(5000000, 50), (5500000, 0)]  # auto pipeline
 
-GRAPH_TYPE = graphs.WeightedGraph
+GRAPH_TYPE = graphs.WeightedKSP
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, ImplicitLG
 # ImplicitLgKSP, WeightedKSP
 print("graph type:", GRAPH_TYPE)
@@ -58,7 +57,9 @@ if LOAD:
 else:
     PATH_FILES = "/Volumes/Nina Backup/data_master_thesis/large_instance"
     # belgium_instance1"
-IOPATH = os.path.join(PATH_FILES, "data_dump_" + str(SCALE_PARAM) + ".dat")
+IOPATH = os.path.join(
+    PATH_FILES, "data_dump_large_" + str(SCALE_PARAM) + ".dat"
+)
 
 # LOAD CONFIG
 with open("config.json", "r") as infile:
@@ -173,8 +174,8 @@ for (factor, dist) in PIPELINE:
 # print("cost actually", cost_sum, "cost_new", cost_sum_window)
 
 # COMPUTE KSP
-# graph.get_shortest_path_tree(source_v, target_v)
-# ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
+graph.get_shortest_path_tree(source_v, target_v)
+ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
 
 # PARETO
 # pareto_out = graph.get_pareto(
@@ -189,39 +190,39 @@ for (factor, dist) in PIPELINE:
 
 time_pipeline = round(time.time() - tic, 3)
 print("FINISHED PIPELINE:", time_pipeline)
-print(len(path))
+print("path length", len(path))
 # SAVE timing test
 time_test_csv(
-    ID, cfg.CSV_TIMES, SCALE_PARAM, cfg.GTNX, GRAPH_TYPE, graph, path_costs,
-    cost_sum, dist, time_pipeline, NOTES
+    ID, cfg.CSV_TIMES, SCALE_PARAM * cfg.RASTER, cfg.GTNX, GRAPH_TYPE, graph,
+    path_costs, cost_sum, dist, time_pipeline, NOTES
 )
 
 # PLOTTING:
 # FOR PIPELINE
-# plot_pipeline_paths(
-#     plot_surfaces, output_paths, buffer=2, out_path=OUT_PATH + "_pipeline.png"
-# )
+plot_pipeline_paths(
+    plot_surfaces, output_paths, buffer=2, out_path=OUT_PATH + "_pipeline.png"
+)
 # FOR KSP:
 # with open(OUT_PATH + "_ksp.json", "w") as outfile:
 #     json.dump(ksp, outfile)
-# plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
+plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
 
 # FOR WINDOW
 # plot_path(
 #     graph.instance, path_window, buffer=0, out_path=OUT_PATH + "_window.png"
 # )
 # SIMPLE
-plot_path(graph.instance, path, buffer=0, out_path=OUT_PATH + ".png")
+# plot_path(graph.instance, path, buffer=0, out_path=OUT_PATH + ".png")
 
 # FOR COST COMPARISON
-# plot_path_costs(
-#     instance * instance_corr,
-#     path,
-#     path_costs,
-#     data.layer_classes,
-#     buffer=2,
-#     out_path=OUT_PATH + "_costs.png"
-# )
+plot_path_costs(
+    instance * instance_corr,
+    path,
+    path_costs,
+    data.layer_classes,
+    buffer=4,
+    out_path=OUT_PATH + "_costs.png"
+)
 
 # SAVE graph
 # graph.save_graph(OUT_PATH + "_graph")
