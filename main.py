@@ -35,11 +35,11 @@ SCALE_PARAM = 1  # args.scale
 # PIPELINE = [(2, 30), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
 # PIPELINE = [(3, 200), (2, 100), (1, 0)]
-PIPELINE = [(4, 200), (2, 50), (1, 0)]  # (2, 200),
+# PIPELINE = [(4, 200), (2, 50), (1, 0)]  # (2, 200),
 # PIPELINE = [(0.8, 100), (0.5, 50), (0, 0)]  # nonauto random
-# PIPELINE = [(5000000, 50), (5500000, 0)]  # auto pipeline
+PIPELINE = [(50000000, 100), (50000000, 50), (50000000, 0)]  # auto pipeline
 
-GRAPH_TYPE = graphs.WeightedKSP
+GRAPH_TYPE = graphs.RandomWeightedGraph
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, ImplicitLG
 # ImplicitLgKSP, WeightedKSP
 print("graph type:", GRAPH_TYPE)
