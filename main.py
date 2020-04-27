@@ -25,21 +25,21 @@ parser.add_argument('-cluster', action='store_true')
 args = parser.parse_args()
 
 # define out save name
-ID = "large_1_ksp"  # str(round(time.time() / 60))[-5:]
+ID = "test_lg_dag"  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
 # DEFINE CONFIGURATION
-SCALE_PARAM = 1  # args.scale
+SCALE_PARAM = 5  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 30), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
-# PIPELINE = [(3, 200), (2, 100), (1, 0)]
+PIPELINE = [(1, 0)]
 # PIPELINE = [(4, 200), (2, 50), (1, 0)]  # (2, 200),
 # PIPELINE = [(0.8, 100), (0.5, 50), (0, 0)]  # nonauto random
-PIPELINE = [(50000000, 100), (50000000, 50), (50000000, 0)]  # auto pipeline
+# PIPELINE = [(50000000, 100), (50000000, 50), (50000000, 0)]  # auto pipeline
 
-GRAPH_TYPE = graphs.RandomWeightedGraph
+GRAPH_TYPE = graphs.ImplicitLG
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, ImplicitLG
 # ImplicitLgKSP, WeightedKSP
 print("graph type:", GRAPH_TYPE)
@@ -95,9 +95,6 @@ graph = GRAPH_TYPE(
     instance, instance_corr, graphtool=cfg.GTNX, verbose=cfg.VERBOSE
 )
 
-graph.set_edge_costs(
-    data.layer_classes, data.class_weights, angle_weight=cfg.ANGLE_WEIGHT
-)
 graph.set_shift(
     cfg.PYLON_DIST_MIN,
     cfg.PYLON_DIST_MAX,
@@ -105,6 +102,11 @@ graph.set_shift(
     cfg.MAX_ANGLE,
     max_angle_lg=cfg.MAX_ANGLE_LG
 )
+
+graph.set_edge_costs(
+    data.layer_classes, data.class_weights, angle_weight=cfg.ANGLE_WEIGHT
+)
+
 # add vertices
 graph.add_nodes()
 
@@ -174,8 +176,8 @@ for (factor, dist) in PIPELINE:
 # print("cost actually", cost_sum, "cost_new", cost_sum_window)
 
 # COMPUTE KSP
-graph.get_shortest_path_tree(source_v, target_v)
-ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
+# graph.get_shortest_path_tree(source_v, target_v)
+# ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
 
 # PARETO
 # pareto_out = graph.get_pareto(
@@ -205,7 +207,7 @@ plot_pipeline_paths(
 # FOR KSP:
 # with open(OUT_PATH + "_ksp.json", "w") as outfile:
 #     json.dump(ksp, outfile)
-plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
+# plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
 
 # FOR WINDOW
 # plot_path(

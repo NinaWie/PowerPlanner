@@ -182,13 +182,13 @@ def discrete_angle_costs(ang, max_angle_lg):
     """
     # TODO: 3 times technical costs for example
     # previously:
-    # return ang / max_angle_lg
-    if ang <= np.pi / 6:
-        return 0.3
-    elif ang <= np.pi / 3:
-        return 0.6
-    else:
-        return 1
+    return ang / max_angle_lg
+    # if ang <= np.pi / 6:
+    #     return 0.3
+    # elif ang <= np.pi / 3:
+    #     return 0.6
+    # else:
+    #     return 1
 
 
 def get_lg_donut(

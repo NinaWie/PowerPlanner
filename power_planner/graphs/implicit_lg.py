@@ -1,9 +1,50 @@
-from power_planner.utils.utils import get_half_donut, angle
+from power_planner.utils.utils import (
+    get_half_donut, angle, discrete_angle_costs
+)
 from power_planner.utils.utils_constraints import ConstraintUtils
 import numpy as np
 import time
 import pickle
+from numba import jit
+from numba.typed import List
 # import matplotlib.pyplot as plt
+
+
+@jit(nopython=True)
+def update_neighbors(
+    v_x, v_y, shifts, angles_all, dists, dists_argmin, instance
+):
+    i = 0
+    for s in shifts:
+        neigh_x = v_x + s[0]
+        neigh_y = v_y + s[1]
+        if 0 <= neigh_x < dists.shape[1] and 0 <= neigh_y < dists.shape[2]:
+            cost_per_angle = dists[:, v_x, v_y] + angles_all[i] + instance[
+                neigh_x, neigh_y]
+            dists[i, neigh_x, neigh_y] = np.min(cost_per_angle)
+            dists_argmin[i, neigh_x, neigh_y] = np.argmin(cost_per_angle)
+        i += 1
+
+
+@jit(nopython=True)
+def topological_sort_jit(v_x, v_y, shifts, visited, stack):
+    # Mark the current node as visited.
+    visited[v_x, v_y] = 1
+
+    # Recur for all the vertices adjacent to this vertex
+    for s in shifts:
+        neigh_x = v_x + s[0]
+        neigh_y = v_y + s[1]
+        if 0 <= neigh_x < visited.shape[0] and 0 <= neigh_y < visited.shape[1]:
+            if visited[neigh_x, neigh_y] == 0:
+                topological_sort_jit(neigh_x, neigh_y, shifts, visited, stack)
+
+    # Push current vertex to stack which stores result
+    l = List()
+    l.append(v_x)
+    l.append(v_y)
+    stack.append(l)
+    return stack
 
 
 class ImplicitLG():
@@ -26,6 +67,20 @@ class ImplicitLG():
         self.time_logs = {}
         self.verbose = verbose
         self.directed = directed
+
+    def _precompute_angles(self):
+        tic = time.time()
+        angles_all = np.zeros((len(self.shifts), len(self.shifts)))
+        angles_all += np.inf
+        for i in range(len(self.shifts)):
+            for j, s in enumerate(self.shifts):
+                ang = angle(s, self.shifts[i])
+                if ang <= self.angle_norm_factor:
+                    angles_all[i, j] = discrete_angle_costs(
+                        ang, self.angle_norm_factor
+                    )
+        self.time_logs["compute_angles"] = round(time.time() - tic, 3)
+        return angles_all
 
     def set_shift(self, lower, upper, vec, max_angle, max_angle_lg=np.pi / 4):
         """
@@ -54,18 +109,9 @@ class ImplicitLG():
     ):
         assert factor_or_n_edges == 1, "pipeline not implemented yet"
         self.factor = factor_or_n_edges
+        self.start_inds = start_inds
         i, j = start_inds
         self.dists[:, i, j] = self.instance[i, j]
-
-    def _precompute_angles(self):
-        tic = time.time()
-        angles_all = np.zeros((len(self.shifts), len(self.shifts)))
-        for i in range(len(self.shifts)):
-            angles_all[i] = [angle(s, self.shifts[i]) for s in self.shifts]
-        angles_all = angles_all / self.angle_norm_factor
-        angles_all[angles_all > 1] = np.inf
-        self.time_logs["compute_angles"] = round(time.time() - tic, 3)
-        return angles_all
 
     def set_edge_costs(self, layer_classes, layer_weights, angle_weight=0.5):
         """
@@ -79,7 +125,10 @@ class ImplicitLG():
         self.cost_weights = self.cost_weights / np.sum(self.cost_weights)
         if self.verbose:
             print("cost weights", self.cost_weights)
+
+        # set angle weight and already multiply with angles
         self.angle_weight = self.cost_weights[0]
+        self.angle_cost_array = self.angle_weight * self._precompute_angles()
 
         # define instance by weighted sum
         self.instance = np.sum(
@@ -92,11 +141,8 @@ class ImplicitLG():
         if self.verbose:
             print("instance shape", self.instance.shape)
 
-    def add_edges(self):
+    def add_edges_BF(self):
         tic = time.time()
-
-        # precompute angles
-        angles_all = self._precompute_angles()
 
         for _ in range(self.n_iters):
             # iterate over edges
@@ -110,7 +156,7 @@ class ImplicitLG():
                 )
 
                 # add new costs for current edge
-                angle_cost = angles_all[i] * self.angle_weight
+                angle_cost = self.angle_cost_array[i]
                 together = np.moveaxis(
                     costs_shifted + angle_cost, -1, 0
                 ) + self.instance
@@ -141,6 +187,45 @@ class ImplicitLG():
                           tic) / (self.n_iters * len(self.shifts))
         self.time_logs["add_edge"] = round(time_per_iter, 3)
         self.time_logs["edge_list"] = round(time_per_shift, 3)
+
+    def add_edges_DAG(self, stack):
+        # TODO: build stack and graph at the same time?
+        tic = time.time()
+        shifts = np.asarray(self.shifts)
+        for i in range(len(stack)):
+            v_x, v_y = tuple(stack[-i - 1])
+            update_neighbors(
+                v_x, v_y, shifts, self.angle_cost_array, self.dists,
+                self.dists_argmin, self.instance
+            )
+        self.time_logs["add_all_edges"] = round(time.time() - tic, 3)
+
+    def add_edges(self, mode="DAG"):
+        if mode == "BF":
+            self.add_edges_BF()
+        elif mode == "DAG":
+            visited = np.zeros(self.instance.shape)
+            tic = time.time()
+            # make helper list
+            tmp_list = List()
+            tmp_list_inner = List()
+            tmp_list_inner.append(0)
+            tmp_list_inner.append(0)
+            tmp_list.append(tmp_list_inner)
+            # SORT
+            stack = topological_sort_jit(
+                self.start_inds[0], self.start_inds[1],
+                np.asarray(self.shifts), visited, tmp_list
+            )
+            # prev version
+            # self.stack = self.topological_sort(self.start_inds, visited, [])
+            if self.verbose:
+                print("time topo sort:", round(time.time() - tic, 3))
+            tic = time.time()
+            # RUN
+            self.add_edges_DAG(stack[1:])
+            if self.verbose:
+                print("time edges:", round(time.time() - tic, 3))
 
     def add_start_and_dest(self, source, dest):
         # here simply return the indices for start and destination
