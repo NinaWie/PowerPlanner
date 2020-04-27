@@ -25,12 +25,12 @@ parser.add_argument('-cluster', action='store_true')
 args = parser.parse_args()
 
 # define out save name
-ID = "test_lg_dag"  # str(round(time.time() / 60))[-5:]
+ID = "test_lg_dag_1"  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
 # DEFINE CONFIGURATION
-SCALE_PARAM = 5  # args.scale
+SCALE_PARAM = 1  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 30), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
@@ -57,9 +57,7 @@ if LOAD:
 else:
     PATH_FILES = "/Volumes/Nina Backup/data_master_thesis/large_instance"
     # belgium_instance1"
-IOPATH = os.path.join(
-    PATH_FILES, "data_dump_large_" + str(SCALE_PARAM) + ".dat"
-)
+IOPATH = os.path.join(PATH_FILES, "data_dump_" + str(SCALE_PARAM) + ".dat")
 
 # LOAD CONFIG
 with open("config.json", "r") as infile:
