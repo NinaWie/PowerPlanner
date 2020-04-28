@@ -58,7 +58,9 @@ if LOAD:
 else:
     PATH_FILES = "/Volumes/Nina Backup/data_master_thesis/large_instance"
     # belgium_instance1"
-IOPATH = os.path.join(PATH_FILES, "data_dump_" + str(SCALE_PARAM) + ".dat")
+IOPATH = os.path.join(
+    PATH_FILES, "data_dump_large_" + str(SCALE_PARAM) + ".dat"
+)
 
 # LOAD CONFIG
 with open("config.json", "r") as infile:
