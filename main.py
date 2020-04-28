@@ -25,12 +25,12 @@ parser.add_argument('-cluster', action='store_true')
 args = parser.parse_args()
 
 # define out save name
-ID = "test_lg_dag_1"  # str(round(time.time() / 60))[-5:]
+ID = "check_stack_corr"  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
 # DEFINE CONFIGURATION
-SCALE_PARAM = 1  # args.scale
+SCALE_PARAM = 2  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 30), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
@@ -38,6 +38,7 @@ PIPELINE = [(1, 0)]
 # PIPELINE = [(4, 200), (2, 50), (1, 0)]  # (2, 200),
 # PIPELINE = [(0.8, 100), (0.5, 50), (0, 0)]  # nonauto random
 # PIPELINE = [(50000000, 100), (50000000, 50), (50000000, 0)]  # auto pipeline
+USE_KSP = 0
 
 GRAPH_TYPE = graphs.ImplicitLG
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, ImplicitLG
@@ -151,12 +152,20 @@ for (factor, dist) in PIPELINE:
             path_costs, cost_sum, dist, 0, NOTES
         )
         # Define paths around which to place corridor
-        # graph.get_shortest_path_tree(source_v, target_v)
-        # ksp = graph.k_shortest_paths(
-        #     source_v, target_v, 3, overlap=0.2
-        # )  # cfg.KSP)
-        # paths = [k[0] for k in ksp]
-        paths = [path]
+        if USE_KSP:
+            graph.get_shortest_path_tree(source_v, target_v)
+            ksp = graph.k_shortest_paths(source_v, target_v, 3, overlap=0.2)
+            paths = [k[0] for k in ksp]
+            flat_list = [item for sublist in paths for item in sublist]
+            del output_paths[-1]
+            output_paths.append((flat_list, path_costs))
+            plot_k_sp(
+                ksp,
+                graph.instance * (corridor > 0).astype(int),
+                out_path=OUT_PATH + str(factor)
+            )
+        else:
+            paths = [path]
 
         # do specified numer of dilations
         corridor = get_distance_surface(

@@ -7,10 +7,10 @@ from power_planner.utils.utils import bresenham_line
 class TestImplicitLG(unittest.TestCase):
 
     # construct simple line instance
-    expl_shape = (40, 40)
+    expl_shape = (50, 50)
     working_expl = np.zeros(expl_shape)
-    start_inds = np.array([1, 1])
-    dest_inds = np.array([38, 36])
+    start_inds = np.array([6, 6])
+    dest_inds = np.array([41, 43])
     working_expl += np.inf
     line = bresenham_line(
         start_inds[0], start_inds[1], dest_inds[0], dest_inds[1]
@@ -28,6 +28,13 @@ class TestImplicitLG(unittest.TestCase):
     # construct random cost surface to assure that lg and impl output same
     example3 = np.random.rand(*expl_shape)
 
+    # constuct hard_cons with padding
+    hard_cons = np.ones(expl_shape)
+    hard_cons[:, :5] = 0
+    hard_cons[:, -5:] = 0
+    hard_cons[:5, :] = 0
+    hard_cons[-5:, :] = 0
+
     def test_equal_to_lg(self) -> None:
         # compare whether angle costs are decreasing
         ang_costs_prev = np.inf
@@ -36,7 +43,7 @@ class TestImplicitLG(unittest.TestCase):
             max_angle = np.pi / 2
             impl_lg = graphs.ImplicitLG(
                 np.array([self.example3]),
-                np.ones(self.expl_shape),
+                self.hard_cons,
                 n_iters=10,
                 verbose=0
             )
@@ -48,7 +55,7 @@ class TestImplicitLG(unittest.TestCase):
             )
             # get lg path
             lg_graph = graphs.LineGraph(
-                np.array([self.example3]), np.ones(self.expl_shape), verbose=0
+                np.array([self.example3]), self.hard_cons, verbose=0
             )
             lg_graph = self.build_graph(
                 lg_graph, max_angle_lg=max_angle, ang_weight=ang_weight
@@ -94,7 +101,7 @@ class TestImplicitLG(unittest.TestCase):
         """ Test the implicit line graph construction """
         graph = graphs.ImplicitLG(
             np.array([self.working_expl]),
-            np.ones(self.expl_shape),
+            self.hard_cons,
             n_iters=10,
             verbose=0
         )
@@ -136,10 +143,7 @@ class TestImplicitLG(unittest.TestCase):
 
     def test_angle_sp(self) -> None:
         graph = graphs.ImplicitLG(
-            np.array([self.example2]),
-            np.ones(self.expl_shape),
-            n_iters=10,
-            verbose=0
+            np.array([self.example2]), self.hard_cons, n_iters=10, verbose=0
         )
         graph = self.build_graph(graph, max_angle_lg=np.pi / 4)
         # assert that destination can NOT be reached
@@ -149,10 +153,7 @@ class TestImplicitLG(unittest.TestCase):
         )
         # NEXT TRY: more angles allowed
         graph = graphs.ImplicitLG(
-            np.array([self.example2]),
-            np.ones(self.expl_shape),
-            n_iters=10,
-            verbose=0
+            np.array([self.example2]), self.hard_cons, n_iters=10, verbose=0
         )
         graph = self.build_graph(graph, max_angle_lg=np.pi)
         # assert that dest CAN be reached
@@ -163,7 +164,7 @@ class TestImplicitLG(unittest.TestCase):
 
         # same with linegraph:
         lg_graph = graphs.LineGraph(
-            np.array([self.example2]), np.ones(self.expl_shape), verbose=0
+            np.array([self.example2]), self.hard_cons, verbose=0
         )
         lg_graph = self.build_graph(lg_graph, max_angle_lg=np.pi)
         lg_graph.sum_costs()
@@ -184,7 +185,7 @@ class TestImplicitLG(unittest.TestCase):
             self.assertEqual(self.example2[i, j], 1)
 
         lg_graph = graphs.LineGraph(
-            np.array([self.example2]), np.ones(self.expl_shape), verbose=0
+            np.array([self.example2]), self.hard_cons, verbose=0
         )
         lg_graph = self.build_graph(lg_graph, max_angle_lg=np.pi / 4)
         lg_graph.sum_costs()

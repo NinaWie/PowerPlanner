@@ -11,40 +11,62 @@ from numba.typed import List
 
 
 @jit(nopython=True)
-def update_neighbors(
-    v_x, v_y, shifts, angles_all, dists, dists_argmin, instance
-):
-    i = 0
-    for s in shifts:
-        neigh_x = v_x + s[0]
-        neigh_y = v_y + s[1]
-        if 0 <= neigh_x < dists.shape[1] and 0 <= neigh_y < dists.shape[2]:
-            cost_per_angle = dists[:, v_x, v_y] + angles_all[i] + instance[
-                neigh_x, neigh_y]
-            dists[i, neigh_x, neigh_y] = np.min(cost_per_angle)
-            dists_argmin[i, neigh_x, neigh_y] = np.argmin(cost_per_angle)
-        i += 1
-
-
-@jit(nopython=True)
-def topological_sort_jit(v_x, v_y, shifts, visited, stack):
+def topological_sort_jit(v_x, v_y, shifts, to_visit, stack):
+    """
+    Fast C++ (numba) recursive method for topological sorting
+    Arguments:
+        v_x, v_y: current vertex
+        shifts: array of length n_neighborsx2 to iterate over neighbors
+        to_visit: 2D array of size of instance to remember visited nodes
+        stack: list of topologically sorted vertices
+    Returns:
+        stack
+    """
     # Mark the current node as visited.
-    visited[v_x, v_y] = 1
-
+    to_visit[v_x, v_y] = 0
     # Recur for all the vertices adjacent to this vertex
     for s in shifts:
         neigh_x = v_x + s[0]
         neigh_y = v_y + s[1]
-        if 0 <= neigh_x < visited.shape[0] and 0 <= neigh_y < visited.shape[1]:
-            if visited[neigh_x, neigh_y] == 0:
-                topological_sort_jit(neigh_x, neigh_y, shifts, visited, stack)
-
+        if to_visit[neigh_x, neigh_y] == 1:
+            topological_sort_jit(neigh_x, neigh_y, shifts, to_visit, stack)
     # Push current vertex to stack which stores result
-    l = List()
-    l.append(v_x)
-    l.append(v_y)
-    stack.append(l)
+    l_tmp = List()
+    l_tmp.append(v_x)
+    l_tmp.append(v_y)
+    stack.append(l_tmp)
     return stack
+
+
+@jit(nopython=True)
+def del_after_dest(stack, d_x, d_y):
+    for i in range(len(stack)):
+        if stack[i][0] == d_x and stack[i][1] == d_y:
+            return stack[i:]
+
+
+@jit(nopython=True)
+def add_edges_outer_jit(
+    stack, shifts, angles_all, dists, dists_argmin, instance
+):
+    """
+    Fast C++ (numba) method to compute the cumulative distances from start
+    """
+    # print(len(stack))
+    for i in range(len(stack)):
+        v_x = stack[-i - 1][0]
+        v_y = stack[-i - 1][1]
+        for s in range(len(shifts)):
+            neigh_x = v_x + shifts[s][0]
+            neigh_y = v_y + shifts[s][1]
+            if 0 <= neigh_x < dists.shape[1] and 0 <= neigh_y < dists.shape[2]:
+                cost_per_angle = dists[:, v_x, v_y] + angles_all[s] + instance[
+                    neigh_x, neigh_y]
+                dists[s, neigh_x, neigh_y] = np.min(cost_per_angle)
+                dists_argmin[s, neigh_x, neigh_y] = np.argmin(cost_per_angle)
+        # if i % 100000 == 0:
+        #     print(i)
+    return dists, dists_argmin
 
 
 class ImplicitLG():
@@ -110,6 +132,7 @@ class ImplicitLG():
         assert factor_or_n_edges == 1, "pipeline not implemented yet"
         self.factor = factor_or_n_edges
         self.start_inds = start_inds
+        self.dest_inds = dest_inds
         i, j = start_inds
         self.dists[:, i, j] = self.instance[i, j]
 
@@ -188,44 +211,38 @@ class ImplicitLG():
         self.time_logs["add_edge"] = round(time_per_iter, 3)
         self.time_logs["edge_list"] = round(time_per_shift, 3)
 
-    def add_edges_DAG(self, stack):
-        # TODO: build stack and graph at the same time?
-        tic = time.time()
-        shifts = np.asarray(self.shifts)
-        for i in range(len(stack)):
-            v_x, v_y = tuple(stack[-i - 1])
-            update_neighbors(
-                v_x, v_y, shifts, self.angle_cost_array, self.dists,
-                self.dists_argmin, self.instance
-            )
-        self.time_logs["add_all_edges"] = round(time.time() - tic, 3)
-
     def add_edges(self, mode="DAG"):
         if mode == "BF":
             self.add_edges_BF()
         elif mode == "DAG":
-            visited = np.zeros(self.instance.shape)
             tic = time.time()
-            # make helper list
-            tmp_list = List()
-            tmp_list_inner = List()
-            tmp_list_inner.append(0)
-            tmp_list_inner.append(0)
-            tmp_list.append(tmp_list_inner)
             # SORT
+            tmp_list = self._helper_list()
             stack = topological_sort_jit(
                 self.start_inds[0], self.start_inds[1],
-                np.asarray(self.shifts), visited, tmp_list
+                np.asarray(self.shifts), self.instance_corr.copy(), tmp_list
             )
-            # prev version
-            # self.stack = self.topological_sort(self.start_inds, visited, [])
+            # stack = del_after_dest(stack, self.dest_inds[0], self.dest_inds[1])
             if self.verbose:
                 print("time topo sort:", round(time.time() - tic, 3))
             tic = time.time()
             # RUN
-            self.add_edges_DAG(stack[1:])
+            # self.add_edges_DAG(stack[1:])
+            self.dists, self.dists_argmin = add_edges_outer_jit(
+                stack, np.array(self.shifts), self.angle_cost_array,
+                self.dists, self.dists_argmin, self.instance
+            )
+            self.time_logs["add_all_edges"] = round(time.time() - tic, 3)
             if self.verbose:
                 print("time edges:", round(time.time() - tic, 3))
+
+    def _helper_list(self):
+        tmp_list = List()
+        tmp_list_inner = List()
+        tmp_list_inner.append(0)
+        tmp_list_inner.append(0)
+        tmp_list.append(tmp_list_inner)
+        return tmp_list
 
     def add_start_and_dest(self, source, dest):
         # here simply return the indices for start and destination
@@ -281,3 +298,29 @@ class ImplicitLG():
     def save_graph(self, out_path):
         with open(out_path + ".dat", "wb") as outfile:
             pickle.dump((self.dists, self.dists_argmin), outfile)
+
+
+# def add_edges_DAG(self, stack):
+#     # TODO: build stack and graph at the same time?
+#     shifts = np.asarray(self.shifts)
+#     for i in range(len(stack)):
+#         v_x, v_y = tuple(stack[-i - 1])
+#         update_neighbors(
+#             v_x, v_y, shifts, self.angle_cost_array, self.dists,
+#             self.dists_argmin, self.instance
+#         )
+
+# @jit(nopython=True)
+# def update_neighbors(
+#     v_x, v_y, shifts, angles_all, dists, dists_argmin, instance
+# ):
+#     i = 0
+#     for s in shifts:
+#         neigh_x = v_x + s[0]
+#         neigh_y = v_y + s[1]
+#         if 0 <= neigh_x < dists.shape[1] and 0 <= neigh_y < dists.shape[2]:
+#             cost_per_angle = dists[:, v_x, v_y] + angles_all[i] + instance[
+#                 neigh_x, neigh_y]
+#             dists[i, neigh_x, neigh_y] = np.min(cost_per_angle)
+#             dists_argmin[i, neigh_x, neigh_y] = np.argmin(cost_per_angle)
+#         i += 1
