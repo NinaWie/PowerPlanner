@@ -20,13 +20,10 @@ class TestImplicitLG(unittest.TestCase):
 
     # construct instance that required 90 degree angle
     example2 = np.zeros(expl_shape)
-    example2 += np.inf
+    example2 += np.inf  # TODO: leads to invalid_value encounter
     example2[start_inds[0], start_inds[1]:dest_inds[1] - 3] = 1
     example2[start_inds[0], dest_inds[1]] = 1
     example2[start_inds[0] + 3:dest_inds[0] + 1, dest_inds[1]] = 1
-
-    # construct random cost surface to assure that lg and impl output same
-    example3 = np.random.rand(*expl_shape)
 
     # constuct hard_cons with padding
     hard_cons = np.ones(expl_shape)
@@ -34,51 +31,6 @@ class TestImplicitLG(unittest.TestCase):
     hard_cons[:, -5:] = 0
     hard_cons[:5, :] = 0
     hard_cons[-5:, :] = 0
-
-    def test_equal_to_lg(self) -> None:
-        # compare whether angle costs are decreasing
-        ang_costs_prev = np.inf
-        all_angle_costs = []
-        for ang_weight in [0.1, 0.3, 0.5, 0.7]:
-            max_angle = np.pi / 2
-            impl_lg = graphs.ImplicitLG(
-                np.array([self.example3]),
-                self.hard_cons,
-                n_iters=10,
-                verbose=0
-            )
-            impl_lg = self.build_graph(
-                impl_lg, max_angle_lg=max_angle, ang_weight=ang_weight
-            )
-            path, path_costs, cost_sum = impl_lg.get_shortest_path(
-                self.start_inds, self.dest_inds
-            )
-            # get lg path
-            lg_graph = graphs.LineGraph(
-                np.array([self.example3]), self.hard_cons, verbose=0
-            )
-            lg_graph = self.build_graph(
-                lg_graph, max_angle_lg=max_angle, ang_weight=ang_weight
-            )
-            lg_graph.sum_costs()
-            source_v, target_v = lg_graph.add_start_and_dest(
-                self.start_inds, self.dest_inds
-            )
-            path_lg, path_costs_lg, cost_sum_lg = lg_graph.get_shortest_path(
-                source_v, target_v
-            )
-            # assert that lg and other one are equal
-            self.assertListEqual(list(path_lg), list(path))
-            self.assertListEqual(list(path_costs_lg), list(path_costs))
-            self.assertEqual(cost_sum, cost_sum_lg)
-
-            angle_costs = np.sum(np.asarray(path_costs)[:, 0])
-            all_angle_costs.append(angle_costs)
-            self.assertLessEqual(angle_costs, ang_costs_prev)
-            ang_costs_prev = angle_costs
-        # check that diverse costs appear when varying the angle
-        self.assertTrue(len(np.unique(all_angle_costs)) > 1)
-        print("Done testing equal LG and Implicit")
 
     def build_graph(self, graph, max_angle_lg=np.pi / 4, ang_weight=0.25):
         graph.set_shift(

@@ -102,6 +102,9 @@ class ImplicitLG():
                         ang, self.angle_norm_factor
                     )
         self.time_logs["compute_angles"] = round(time.time() - tic, 3)
+        # multiply with angle weights, need to prevent that not inf * 0
+        angles_all[angles_all < np.inf
+                   ] = angles_all[angles_all < np.inf] * self.angle_weight
         return angles_all
 
     def set_shift(self, lower, upper, vec, max_angle, max_angle_lg=np.pi / 4):
@@ -151,7 +154,8 @@ class ImplicitLG():
 
         # set angle weight and already multiply with angles
         self.angle_weight = self.cost_weights[0]
-        self.angle_cost_array = self.angle_weight * self._precompute_angles()
+        # in precomute angles, it is multiplied with angle weights
+        self.angle_cost_array = self._precompute_angles()
 
         # define instance by weighted sum
         self.instance = np.sum(
