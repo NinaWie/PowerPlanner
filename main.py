@@ -25,12 +25,12 @@ parser.add_argument('-cluster', action='store_true')
 args = parser.parse_args()
 
 # define out save name
-ID = "check_stack_corr"  # str(round(time.time() / 60))[-5:]
+ID = "test_div_eucl_mean"  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
 # DEFINE CONFIGURATION
-SCALE_PARAM = 2  # args.scale
+SCALE_PARAM = 5  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 30), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
@@ -40,7 +40,7 @@ PIPELINE = [(1, 0)]
 # PIPELINE = [(50000000, 100), (50000000, 50), (50000000, 0)]  # auto pipeline
 USE_KSP = 0
 
-GRAPH_TYPE = graphs.ImplicitLG
+GRAPH_TYPE = graphs.WeightedKSP
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, ImplicitLG
 # ImplicitLgKSP, WeightedKSP
 print("graph type:", GRAPH_TYPE)
@@ -58,9 +58,7 @@ if LOAD:
 else:
     PATH_FILES = "/Volumes/Nina Backup/data_master_thesis/large_instance"
     # belgium_instance1"
-IOPATH = os.path.join(
-    PATH_FILES, "data_dump_large_" + str(SCALE_PARAM) + ".dat"
-)
+IOPATH = os.path.join(PATH_FILES, "data_dump_" + str(SCALE_PARAM) + ".dat")
 
 # LOAD CONFIG
 with open("config.json", "r") as infile:
@@ -185,8 +183,16 @@ for (factor, dist) in PIPELINE:
 # print("cost actually", cost_sum, "cost_new", cost_sum_window)
 
 # COMPUTE KSP
-# graph.get_shortest_path_tree(source_v, target_v)
+graph.get_shortest_path_tree(source_v, target_v)
 # ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
+ksp = graph.k_diverse_paths(
+    source_v,
+    target_v,
+    cfg.KSP,
+    cost_thresh=1.01,
+    dist_mode="eucl_mean",
+    count_thresh=5
+)
 
 # PARETO
 # pareto_out = graph.get_pareto(
@@ -210,13 +216,13 @@ time_test_csv(
 
 # PLOTTING:
 # FOR PIPELINE
-plot_pipeline_paths(
-    plot_surfaces, output_paths, buffer=2, out_path=OUT_PATH + "_pipeline.png"
-)
+# plot_pipeline_paths(
+#     plot_surfaces, output_paths, buffer=2, out_path=OUT_PATH + "_pipeline.png"
+# )
 # FOR KSP:
 # with open(OUT_PATH + "_ksp.json", "w") as outfile:
 #     json.dump(ksp, outfile)
-# plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
+plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
 
 # FOR WINDOW
 # plot_path(
@@ -226,14 +232,14 @@ plot_pipeline_paths(
 # plot_path(graph.instance, path, buffer=0, out_path=OUT_PATH + ".png")
 
 # FOR COST COMPARISON
-plot_path_costs(
-    instance * instance_corr,
-    path,
-    path_costs,
-    data.layer_classes,
-    buffer=4,
-    out_path=OUT_PATH + "_costs.png"
-)
+# plot_path_costs(
+#     instance * instance_corr,
+#     path,
+#     path_costs,
+#     data.layer_classes,
+#     buffer=0,
+#     out_path=OUT_PATH + "_costs.png"
+# )
 
 # SAVE graph
 # graph.save_graph(OUT_PATH + "_graph")

@@ -1,7 +1,6 @@
 import numpy as np
 import unittest
 from power_planner import graphs
-from power_planner.utils.utils import bresenham_line
 
 
 class TestCompGraphs(unittest.TestCase):

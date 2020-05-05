@@ -1,5 +1,6 @@
 from graph_tool.all import shortest_distance
 from .weighted_graph import WeightedGraph
+from power_planner.utils.utils_ksp import KspUtils
 import numpy as np
 import time
 import matplotlib.pyplot as plt
@@ -25,19 +26,6 @@ class WeightedKSP(WeightedGraph):
         # load graph from file
         # self.graph = graph
         # self.weight = self.graph.ep.weight
-
-    @staticmethod
-    def get_sp_from_preds(pred_map, curr_vertex, start_vertex):
-        path = [int(curr_vertex)]
-        counter = 0
-        while curr_vertex != start_vertex:
-            curr_vertex = pred_map[curr_vertex]
-            path.append(curr_vertex)
-            if counter > 1000:
-                print(path)
-                raise RuntimeWarning("while loop for sp not terminating")
-            counter += 1
-        return path
 
     def transform_path(self, vertices_path):
         path = [(ind // self.y_len, ind % self.y_len) for ind in vertices_path]
@@ -75,7 +63,7 @@ class WeightedKSP(WeightedGraph):
         self.graph.set_reversed(is_reversed=False)
         self.time_logs["shortest_path_tree"] = round(time.time() - tic, 3)
 
-        path_ab = self.get_sp_from_preds(self.pred_map_ab, target, source)
+        path_ab = KspUtils.get_sp_from_preds(self.pred_map_ab, target, source)
         assert self.dist_map_ba[source] < np.inf, "s not reachable from t"
         path_ab.reverse()
         self.best_path = path_ab
@@ -93,31 +81,18 @@ class WeightedKSP(WeightedGraph):
                         min_dist = dists_v
                         best_v = v
 
-        path_ac = self.get_sp_from_preds(self.pred_map_ab, best_v, source)
-        path_cb = self.get_sp_from_preds(self.pred_map_ba, best_v, dest)
-        path_ac.reverse()
-        # leave 1 away because otherwise twice
-        vertices_path = path_ac + path_cb[1:]
-
-        self.time_logs["best_in_window"] = round(time.time() - tic, 3)
+        vertices_path = self.compute_sp(best_v, source, dest)
 
         return self.transform_path(vertices_path)
 
-    @staticmethod
-    def similarity(s1, s2, mode="IoU"):
-        path_inter = len(s1.intersection(s2))
-        if mode == "IoU":
-            return path_inter / len(s1.union(s2))
-        elif mode == "sim2paper":
-            return path_inter / (2 * len(s1)) + path_inter / (2 * len(s2))
-        elif mode == "sim3paper":
-            return np.sqrt(path_inter**2 / (len(s1) * len(s2)))
-        elif mode == "max_norm_sim":
-            return path_inter / (max([len(s1), len(s2)]))
-        elif mode == "min_norm_sim":
-            return path_inter / (min([len(s1), len(s2)]))
-        else:
-            raise NotImplementedError("mode wrong, not implemented yet")
+    def compute_sp(self, v, source, dest):
+        path_ac = KspUtils.get_sp_from_preds(self.pred_map_ab, v, source)
+        path_cb = KspUtils.get_sp_from_preds(self.pred_map_ba, v, dest)
+        # times_getpath.append(time.time() - tic1)
+        path_ac.reverse()
+        # concatenate - leave 1 away because otherwise twice
+        vertices_path = path_ac + path_cb[1:]
+        return vertices_path
 
     def k_shortest_paths(self, source, dest, k, overlap=0.5, mode="myset"):
         tic = time.time()
@@ -132,7 +107,7 @@ class WeightedKSP(WeightedGraph):
         v_shortest = np.argsort(v_dists)
         # iterate over vertices starting from shortest paths
         # times_getpath = []
-        for j, v_ind in enumerate(v_shortest):
+        for _, v_ind in enumerate(v_shortest):
             v = vertices[v_ind]
             # TODO: for runtime scan only every xth one (anyways diverse)
             if v not in sp_set:
@@ -141,26 +116,14 @@ class WeightedKSP(WeightedGraph):
                        ) == int(v) or int(self.pred_map_ba[v]) == int(v):
                     continue
                 # tic1 = time.time()
-                try:
-                    path_ac = self.get_sp_from_preds(
-                        self.pred_map_ab, v, source
-                    )
-                    path_cb = self.get_sp_from_preds(self.pred_map_ba, v, dest)
-                except RuntimeWarning:
-                    print("while loop not terminating")
-                    continue
-                # times_getpath.append(time.time() - tic1)
-                path_ac.reverse()
-                # concatenate - leave 1 away because otherwise twice
-                vertices_path = path_ac + path_cb[1:]
+                vertices_path = self.compute_sp(v, source, dest)
 
                 # similar = similarity(vertices_path, best_paths, sp_set)
                 if mode != "myset":
                     sofar = np.array(
                         [
-                            WeightedKSP.similarity(
-                                sp, set(vertices_path), mode
-                            ) for sp in best_path_sets
+                            KspUtils.similarity(sp, set(vertices_path), mode)
+                            for sp in best_path_sets
                         ]
                     )
                     if np.all(sofar < overlap):
@@ -179,3 +142,101 @@ class WeightedKSP(WeightedGraph):
 
         self.time_logs["ksp"] = round(time.time() - tic, 3)
         return [self.transform_path(p) for p in best_paths]
+
+    def collect_paths(
+        self, sorted_dists, vertices, v_shortest, source_v, target_v,
+        max_costs, count_thresh
+    ):
+        start = 0
+        counter = 20
+        collected_paths = []
+        for c in range(len(v_shortest)):
+            new = sorted_dists[c]
+            # check whether exactly the same
+            if np.isclose(new, start):
+                counter += 1
+                continue
+
+            # counter: many new nodes this path has in contrast to the one
+            # before --> skip if not very different
+            if counter < count_thresh:
+                counter = 1
+                start = new
+                continue
+
+            # elidgible: compute path
+            # print(start, counter)
+            vertices_path = self.compute_sp(
+                vertices[v_shortest[c]], source_v, target_v
+            )
+            if vertices_path[0] != source_v or vertices_path[-1] != target_v:
+                print(vertices[v_shortest[c]])
+                print(vertices_path)
+                raise RuntimeError("source or target not contained")
+            collected_paths.append(vertices_path)
+
+            # renew the current mindist
+            start = new
+            counter = 1
+
+            # stop to collect paths if costs too high
+            if start > max_costs:
+                break
+        return collected_paths
+
+    def simple_transform(self, path):
+        return np.array(
+            [(ind // self.y_len, ind % self.y_len) for ind in path]
+        )
+
+    def k_diverse_paths(
+        self,
+        source,
+        dest,
+        k,
+        cost_thresh=1.01,
+        dist_mode="jaccard",
+        count_thresh=5
+    ):
+        """
+        Implement reversed formulation: Given a threshold on the costs,
+        compute the k most diverse paths (p-dispersion)
+        Arguments:
+            cost_thresh: threshold on the costs (1.01 means 1% more than
+                            best path costs)
+        """
+        # compute sorted list of paths
+        vertices = np.unique(self.pos2node)[1:]
+        v_dists = [self.dist_map_ab[v] + self.dist_map_ba[v] for v in vertices]
+        v_shortest = np.argsort(v_dists)
+        sorted_dists = np.array(v_dists)[v_shortest]
+        # set maximum on costs
+        best_path_cells, _, best_cost = self.transform_path(self.best_path)
+        correction = 0.5 * (
+            self.instance[tuple(best_path_cells[0])] +
+            self.instance[tuple(best_path_cells[-1])]
+        )
+        max_costs = cost_thresh * (best_cost - correction)
+
+        # enumerate paths and collect
+        collected_paths = self.collect_paths(
+            sorted_dists, vertices, v_shortest, source, dest, max_costs,
+            count_thresh
+        )
+        # transform into coordinates
+        collected_coords = [self.simple_transform(p) for p in collected_paths]
+
+        # compute all pairwise distances
+        dists = KspUtils.pairwise_dists(collected_coords, mode=dist_mode)
+
+        # find the two which are most diverse (following 2-approx)
+        max_dist_pair = np.argmax(dists)
+        div_ksp = [max_dist_pair // len(dists), max_dist_pair % len(dists)]
+        # greedily add the others
+        for _ in range(k - 2):
+            min_dists = []
+            for i in range(len(dists)):
+                min_dists.append(np.min([dists[i, div_ksp]]))
+            div_ksp.append(np.argmax(min_dists))
+
+        return [self.transform_path(collected_paths[p]) for p in div_ksp]

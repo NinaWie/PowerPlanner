@@ -218,4 +218,4 @@ class WeightedGraph(GeneralGraph):
         cost_sum = np.dot(
             self.cost_weights, np.sum(np.array(out_costs), axis=0)
         )
-        return path, out_costs, cost_sum
+        return np.array(path).tolist(), out_costs, cost_sum
