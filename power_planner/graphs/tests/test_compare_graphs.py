@@ -1,6 +1,7 @@
 import numpy as np
 import unittest
 from power_planner import graphs
+from power_planner.utils.utils import get_distance_surface
 
 
 class TestCompGraphs(unittest.TestCase):
@@ -8,6 +9,9 @@ class TestCompGraphs(unittest.TestCase):
     expl_shape = (100, 100)
     start_inds = np.array([6, 6])
     dest_inds = np.array([90, 85])
+
+    # define corridor
+    corridor = np.ones(expl_shape) * 0.5
 
     # construct random cost surface to assure that lg and impl output same
     example3 = np.random.rand(*expl_shape)
@@ -27,12 +31,12 @@ class TestCompGraphs(unittest.TestCase):
             np.pi / 2,
             max_angle_lg=max_angle_lg
         )
-        graph.set_edge_costs(["dummy_class"], [1], angle_weight=ang_weight)
-        graph.add_nodes()
-        corridor = np.ones(self.expl_shape) * 0.5
+        corridor = self.corridor
         graph.set_corridor(
             corridor, self.start_inds, self.dest_inds, factor_or_n_edges=1
         )
+        graph.set_edge_costs(["dummy_class"], [1], angle_weight=ang_weight)
+        graph.add_nodes()
         graph.add_edges()
         return graph
 
@@ -127,9 +131,20 @@ class TestCompGraphs(unittest.TestCase):
             all_angle_costs.append(angle_costs)
             self.assertLessEqual(angle_costs, ang_costs_prev)
             ang_costs_prev = angle_costs
+
         # check that diverse costs appear when varying the angle
         self.assertTrue(len(np.unique(all_angle_costs)) > 1)
         print("Done testing equal LG and Implicit")
+
+    def test_corridor(self) -> None:
+        # compare whether angle costs are decreasing
+        path_artificial = [[self.start_inds.tolist(), self.dest_inds.tolist()]]
+        self.corridor = get_distance_surface(
+            self.expl_shape, path_artificial, mode="dilation", n_dilate=20
+        )
+        self.test_equal_to_lg()
+        print("done in method")
+        self.corridor = np.ones(self.expl_shape) * 0.5
 
 
 if __name__ == '__main__':

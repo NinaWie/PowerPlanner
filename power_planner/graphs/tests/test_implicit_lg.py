@@ -40,12 +40,13 @@ class TestImplicitLG(unittest.TestCase):
             np.pi / 2,
             max_angle_lg=max_angle_lg
         )
-        graph.set_edge_costs(["dummy_class"], [1], angle_weight=ang_weight)
-        graph.add_nodes()
         corridor = np.ones(self.expl_shape) * 0.5
         graph.set_corridor(
             corridor, self.start_inds, self.dest_inds, factor_or_n_edges=1
         )
+        graph.set_edge_costs(["dummy_class"], [1], angle_weight=ang_weight)
+        graph.add_nodes()
+
         graph.add_edges()
         return graph
 

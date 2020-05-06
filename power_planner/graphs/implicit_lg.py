@@ -2,6 +2,8 @@ from power_planner.utils.utils import (
     get_half_donut, angle, discrete_angle_costs
 )
 from power_planner.utils.utils_constraints import ConstraintUtils
+from power_planner.utils.utils_costs import CostUtils
+from power_planner.graphs.general_graph import GeneralGraph
 import numpy as np
 import time
 import pickle
@@ -69,7 +71,7 @@ def add_edges_outer_jit(
     return dists, dists_argmin
 
 
-class ImplicitLG():
+class ImplicitLG(GeneralGraph):
 
     def __init__(
         self,
@@ -81,8 +83,8 @@ class ImplicitLG():
         n_iters=50,
         fill_val=np.inf
     ):
-        self.instance_layers = instance
-        self.instance_corr = instance_corr
+        self.cost_instance = instance
+        self.hard_constraints = instance_corr
         self.x_len, self.y_len = instance_corr.shape
         self.fill_val = fill_val
         self.n_iters = n_iters
@@ -122,6 +124,8 @@ class ImplicitLG():
 
         self.dists = np.zeros((len(self.shifts), self.x_len, self.y_len))
         self.dists += self.fill_val
+        i, j = self.start_inds
+        self.dists[:, i, j] = self.instance[i, j]
         self.dists_argmin = np.zeros(self.dists.shape)
         self.time_logs["add_nodes"] = round(time.time() - tic, 3)
         self.n_nodes = self.x_len * self.y_len
@@ -130,14 +134,22 @@ class ImplicitLG():
             print("memory taken (dists shape):", self.n_edges)
 
     def set_corridor(
-        self, corridor, start_inds, dest_inds, factor_or_n_edges=1
-    ):
-        assert factor_or_n_edges == 1, "pipeline not implemented yet"
-        self.factor = factor_or_n_edges
+        self, corridor, start_inds, dest_inds, sample_func="mean",
+        sample_method="simple", factor_or_n_edges=1
+    ):  # yapf: disable
+        # assert factor_or_n_edges == 1, "pipeline not implemented yet"
+        GeneralGraph.set_corridor(
+            self,
+            corridor,
+            start_inds,
+            dest_inds,
+            sample_func=sample_func,
+            sample_method=sample_method,
+            factor_or_n_edges=factor_or_n_edges
+        )
+
         self.start_inds = start_inds
         self.dest_inds = dest_inds
-        i, j = start_inds
-        self.dists[:, i, j] = self.instance[i, j]
 
     def set_edge_costs(self, layer_classes, layer_weights, angle_weight=0.5):
         """
@@ -159,12 +171,9 @@ class ImplicitLG():
 
         # define instance by weighted sum
         self.instance = np.sum(
-            np.moveaxis(self.instance_layers, 0, -1) * self.cost_weights[1:],
-            axis=2
+            np.moveaxis(self.cost_rest, 0, -1) * self.cost_weights[1:], axis=2
         )
-        # # cost rest only required for plotting stuff
-        self.cost_rest = self.instance_layers * self.instance_corr
-        self.instance[self.instance_corr == 0] = self.fill_val
+        # self.instance[np.sum(self.cost_rest, axis=0) == 0] = self.fill_val
         if self.verbose:
             print("instance shape", self.instance.shape)
 
@@ -222,9 +231,10 @@ class ImplicitLG():
             tic = time.time()
             # SORT
             tmp_list = self._helper_list()
+            visit_points = (self.instance > 0).astype(int)
             stack = topological_sort_jit(
                 self.start_inds[0], self.start_inds[1],
-                np.asarray(self.shifts), self.instance_corr.copy(), tmp_list
+                np.asarray(self.shifts), visit_points, tmp_list
             )
             # stack = del_after_dest(stack, self.dest_inds[0], self.dest_inds[1])
             if self.verbose:
@@ -255,9 +265,12 @@ class ImplicitLG():
     def sum_costs(self):
         pass
 
+    def remove_vertices(self, dist_surface, delete_padding=0):
+        pass
+
     def transform_path(self, path):
         path_costs = np.array(
-            [self.instance_layers[:, p[0], p[1]] for p in path]
+            [self.cost_instance[:, p[0], p[1]] for p in path]
         )
         # include angle costs
         ang_costs = ConstraintUtils.compute_angle_costs(
