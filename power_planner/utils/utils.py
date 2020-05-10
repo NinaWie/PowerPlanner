@@ -1,8 +1,11 @@
 import numpy as np
 from csv import writer
 
-from scipy.ndimage.morphology import binary_dilation
-from scipy.spatial.distance import cdist
+try:
+    from scipy.ndimage.morphology import binary_dilation
+    from scipy.spatial.distance import cdist
+except ImportError:
+    print("WARNING: scipy couldnot be loaded")
 # from numba import jit, njit
 
 
@@ -85,6 +88,26 @@ def rescale(img, scale_factor):
                         scale_factor:(j + 1) * scale_factor]
             new_img[i, j] = np.mean(patch)
     return new_img
+
+
+def upscale_corr(instance_corr, downsampled_corr, factor):
+    """
+    change instance corr according to values in downsampled
+    Arguments:
+        instance_corr: original hard constraints (2D np array)
+        downsampled_corr: new hard constraints in lower dimension
+    """
+    instance_corr_new = np.zeros(instance_corr.shape)
+    x_len, y_len = instance_corr.shape
+    new_x_len = x_len // factor
+    new_y_len = y_len // factor
+    for x in range(x_len):
+        for y in range(y_len):
+            new_x, new_y = x // factor, y // factor
+            if new_x < new_x_len and new_y < new_y_len:
+                if downsampled_corr[new_x, new_y]:
+                    instance_corr_new[x, y] = instance_corr[x, y]
+    return instance_corr_new
 
 
 def get_donut(radius_low, radius_high):
@@ -170,25 +193,29 @@ def get_half_donut(radius_low, radius_high, vec, angle_max=0.5 * np.pi):
     return new_tuples
 
 
-def discrete_angle_costs(ang, max_angle_lg):
+def discrete_angle_costs(ang, max_angle_lg, mode="norm"):
     """
     Define angle costs for each angle
     Arguments:
         ang: float between 0 and pi, angle between edges
         max_angle_lg: maximum angle cutoff
+        mode: "norm" or "discrete"
     returns: angle costs
     Here computed as Stefano said: up to 30 degrees + 50%, up to 60 degrees
     3 times the cost, up to 90 5 times the cost --> norm: 1.5 / 5 = 0.3
     """
     # TODO: 3 times technical costs for example
-    # previously:
-    return ang / max_angle_lg
-    # if ang <= np.pi / 6:
-    #     return 0.3
-    # elif ang <= np.pi / 3:
-    #     return 0.6
-    # else:
-    #     return 1
+    if mode == "norm":
+        return ang / max_angle_lg
+    elif mode == "discrete":
+        if ang <= np.pi / 6:
+            return 0.3
+        elif ang <= np.pi / 3:
+            return 0.6
+        else:
+            return 1
+    else:
+        raise NotImplementedError
 
 
 def get_lg_donut(

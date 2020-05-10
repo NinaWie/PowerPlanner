@@ -2,6 +2,7 @@ import unittest
 import numpy as np
 
 from power_planner.graphs.weighted_ksp import WeightedKSP
+from power_planner.graphs.impl_ksp import ImplicitKSP
 
 
 class TestKsp(unittest.TestCase):
@@ -69,6 +70,32 @@ class TestKsp(unittest.TestCase):
         # TEST LC KSP
         # ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
         # TODO
+
+    def compare_ksp(self) -> None:
+        max_angle_lg = np.pi
+        # get impl lg ksp
+        impl_lg = ImplicitKSP(
+            np.array([self.example3]), self.hard_cons, verbose=0
+        )
+        impl_lg, _, _ = self.build_graph(
+            impl_lg, max_angle_lg=max_angle_lg, ang_weight=0
+        )
+        impl_lg.get_shortest_path_tree(self.start_inds, self.dest_inds)
+        ksp_lg = impl_lg.k_shortest_paths(self.start_inds, self.dest_inds, 10)
+        # get weighted ksp
+        wg_graph = WeightedKSP(
+            np.array([self.example3]), self.hard_cons, verbose=0
+        )
+        wg_graph, source_v, target_v = self.build_graph(
+            wg_graph, max_angle_lg=max_angle_lg
+        )
+        wg_graph.get_shortest_path_tree(source_v, target_v)
+        ksp_wg = wg_graph.k_shortest_paths(source_v, target_v, 10)
+        for k in range(10):
+            path1 = ksp_wg[k][0]
+            path2 = ksp_lg[k][0]
+            for p in range(len(path1)):
+                self.assertListEqual(list(path1[p]), list(path2[p]))
 
 
 if __name__ == "__main__":

@@ -16,7 +16,8 @@ from power_planner.plotting import (
     plot_pareto_paths
 )
 from power_planner.utils.utils import (
-    get_distance_surface, time_test_csv, compute_pylon_dists
+    get_distance_surface, time_test_csv, compute_pylon_dists, rescale,
+    upscale_corr
 )
 
 parser = argparse.ArgumentParser()
@@ -25,12 +26,12 @@ parser.add_argument('-cluster', action='store_true')
 args = parser.parse_args()
 
 # define out save name
-ID = "test"  # str(round(time.time() / 60))[-5:]
+ID = "impl_2"  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
 # DEFINE CONFIGURATION
-SCALE_PARAM = 5  # args.scale
+SCALE_PARAM = 2  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 30), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
@@ -40,7 +41,7 @@ PIPELINE = [(1, 0)]
 # PIPELINE = [(5000000, 100), (5000000, 0)]  # auto pipeline
 USE_KSP = 0
 
-GRAPH_TYPE = graphs.ImplicitKSP
+GRAPH_TYPE = graphs.ImplicitLG
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, ImplicitLG
 # ImplicitLgKSP, WeightedKSP
 print("graph type:", GRAPH_TYPE)
@@ -89,29 +90,36 @@ else:
             pickle.dump(data, outfile)
         print("successfully saved data")
 
-# DEFINE GRAPH AND ALGORITHM
-graph = GRAPH_TYPE(
-    instance, instance_corr, graphtool=cfg.GTNX, verbose=cfg.VERBOSE
-)
-
 # START PIPELINE
 tic = time.time()
-corridor = np.ones(instance_corr.shape) * 0.5  # start with all
 output_paths = []
 plot_surfaces = []
 time_infos = []
 
 for (factor, dist) in PIPELINE:
     print("----------- PIPELINE", factor, dist, "---------------")
+    # rescale
+    inst_curr = np.array([rescale(img_i, factor) for img_i in instance])
+    inst_corr_curr = rescale(instance_corr, factor)
+    start_inds_curr = (start_inds / factor).astype(int)
+    dest_inds_curr = (dest_inds / factor).astype(int)
+    min_dist = cfg.PYLON_DIST_MIN / factor
+    max_dist = cfg.PYLON_DIST_MAX / factor
+    # DEFINE GRAPH AND ALGORITHM
+    graph = GRAPH_TYPE(
+        inst_curr, inst_corr_curr, graphtool=cfg.GTNX, verbose=cfg.VERBOSE
+    )
+
     graph.set_shift(
-        cfg.PYLON_DIST_MIN,
-        cfg.PYLON_DIST_MAX,
-        dest_inds - start_inds,
+        min_dist,
+        max_dist,
+        dest_inds_curr - start_inds_curr,
         cfg.MAX_ANGLE,
         max_angle_lg=cfg.MAX_ANGLE_LG
     )
+    corridor = np.ones(inst_corr_curr.shape) * 0.5  # start with all
     graph.set_corridor(
-        corridor, start_inds, dest_inds, factor_or_n_edges=factor
+        corridor, start_inds_curr, dest_inds_curr, factor_or_n_edges=1
     )
     print("1) set shift and corridor")
     graph.set_edge_costs(
@@ -126,7 +134,9 @@ for (factor, dist) in PIPELINE:
 
     # weighted sum of all costs
     graph.sum_costs()
-    source_v, target_v = graph.add_start_and_dest(start_inds, dest_inds)
+    source_v, target_v = graph.add_start_and_dest(
+        start_inds_curr, dest_inds_curr
+    )
     print("3) summed cost, get source and dest")
     # get actual best path
     path, path_costs, cost_sum = graph.get_shortest_path(source_v, target_v)
@@ -170,12 +180,14 @@ for (factor, dist) in PIPELINE:
             graph.hard_constraints.shape,
             paths,
             mode="dilation",
-            n_dilate=dist
+            n_dilate=dist // factor
         )
         print("5) compute distance surface")
         # remove the edges of vertices in the corridor (to overwrite)
         graph.remove_vertices(corridor, delete_padding=cfg.PYLON_DIST_MAX)
         print("6) remove edges")
+
+        instance_corr = upscale_corr(instance_corr, corridor > 0, factor)
 
 # BEST IN WINDOW
 # path_window, path_window_cost, cost_sum_window = graph.best_in_window(
@@ -184,7 +196,8 @@ for (factor, dist) in PIPELINE:
 # print("cost actually", cost_sum, "cost_new", cost_sum_window)
 
 # COMPUTE KSP
-
+# graph.get_shortest_path_tree(source_v, target_v)
+# ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
 # ksp = graph.k_diverse_paths(
 #     source_v,
 #     target_v,
@@ -214,10 +227,6 @@ time_test_csv(
     path_costs, cost_sum, dist, time_pipeline, NOTES
 )
 
-graph.get_shortest_path_tree(source_v, target_v)
-ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
-print(sum([k[2] for k in ksp]))
-
 # PLOTTING:
 # FOR PIPELINE
 plot_pipeline_paths(
@@ -226,7 +235,7 @@ plot_pipeline_paths(
 # FOR KSP:
 # with open(OUT_PATH + "_ksp.json", "w") as outfile:
 #     json.dump(ksp, outfile)
-plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
+# plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
 
 # FOR WINDOW
 # plot_path(
@@ -236,14 +245,14 @@ plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
 # plot_path(graph.instance, path, buffer=0, out_path=OUT_PATH + ".png")
 
 # FOR COST COMPARISON
-# plot_path_costs(
-#     instance * instance_corr,
-#     path,
-#     path_costs,
-#     data.layer_classes,
-#     buffer=0,
-#     out_path=OUT_PATH + "_costs.png"
-# )
+plot_path_costs(
+    instance * instance_corr,
+    path,
+    path_costs,
+    data.layer_classes,
+    buffer=0,
+    out_path=OUT_PATH + "_costs.png"
+)
 
 # SAVE graph
 # graph.save_graph(OUT_PATH + "_graph")

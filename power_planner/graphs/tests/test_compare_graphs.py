@@ -86,7 +86,7 @@ class TestCompGraphs(unittest.TestCase):
         self.assertListEqual(costs_lg_wo_angle, flat_costs_wg)
         self.assertListEqual(list(path), list(path_wg))
         self.assertListEqual(costs_wo_angle, flat_costs_wg)
-        # COST SUMS ARE NOT EQUAL! - angle costs mit drin
+        # COST SUMS ARE EQUAL! - angle costs multiplied by zero
         self.assertAlmostEqual(cost_sum_wg, cost_sum_lg)
         self.assertAlmostEqual(cost_sum_wg, cost_sum)
 

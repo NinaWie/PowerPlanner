@@ -66,6 +66,12 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(np.max(out), 6)
         self.assertEqual(out[5, 6], 5)
 
+    def test_upscale(self) -> None:
+        instance_corr = (np.random.rand(40, 40) > 0.2).astype(int)
+        downsampled_corr = np.ceil(rescale(instance_corr, 2))
+        upsampled = upscale_corr(instance_corr, downsampled_corr, 2)
+        self.assertTrue(np.all(upsampled == instance_corr))
+
 
 if __name__ == "__main__":
     unittest.main()

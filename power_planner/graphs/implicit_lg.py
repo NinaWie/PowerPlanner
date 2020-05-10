@@ -48,9 +48,7 @@ def del_after_dest(stack, d_x, d_y):
 
 
 @jit(nopython=True)
-def add_edges_outer_jit(
-    stack, shifts, angles_all, dists, dists_argmin, instance
-):
+def add_in_edges(stack, shifts, angles_all, dists, preds, instance):
     """
     Fast C++ (numba) method to compute the cumulative distances from start
     """
@@ -62,13 +60,12 @@ def add_edges_outer_jit(
             neigh_x = v_x + shifts[s][0]
             neigh_y = v_y + shifts[s][1]
             if 0 <= neigh_x < dists.shape[1] and 0 <= neigh_y < dists.shape[2]:
+                # TODO: updating lots of useless neighbors
                 cost_per_angle = dists[:, v_x, v_y] + angles_all[s] + instance[
                     neigh_x, neigh_y]
                 dists[s, neigh_x, neigh_y] = np.min(cost_per_angle)
-                dists_argmin[s, neigh_x, neigh_y] = np.argmin(cost_per_angle)
-        # if i % 100000 == 0:
-        #     print(i)
-    return dists, dists_argmin
+                preds[s, neigh_x, neigh_y] = np.argmin(cost_per_angle)
+    return dists, preds
 
 
 class ImplicitLG(GeneralGraph):
@@ -126,7 +123,7 @@ class ImplicitLG(GeneralGraph):
         self.dists += self.fill_val
         i, j = self.start_inds
         self.dists[:, i, j] = self.instance[i, j]
-        self.dists_argmin = np.zeros(self.dists.shape)
+        self.preds = np.zeros(self.dists.shape)
         self.time_logs["add_nodes"] = round(time.time() - tic, 3)
         self.n_nodes = self.x_len * self.y_len
         self.n_edges = len(self.shifts) * self.x_len * self.y_len
@@ -173,7 +170,9 @@ class ImplicitLG(GeneralGraph):
         self.instance = np.sum(
             np.moveaxis(self.cost_rest, 0, -1) * self.cost_weights[1:], axis=2
         )
-        # self.instance[np.sum(self.cost_rest, axis=0) == 0] = self.fill_val
+        # line below doesn't work, but would be necessary if not taking
+        # instance[neigh_x, neig_y]
+        # self.instance[self.instance == 0] = self.fill_val
         if self.verbose:
             print("instance shape", self.instance.shape)
 
@@ -211,7 +210,7 @@ class ImplicitLG(GeneralGraph):
                 # get spots that are actually updated
                 changed_ones = np.argmin(concat, axis=0)
                 # update predecessors
-                self.dists_argmin[i, changed_ones > 0] = argmin_together[
+                self.preds[i, changed_ones > 0] = argmin_together[
                     changed_ones > 0]
 
                 # update accumulated path costs
@@ -242,9 +241,9 @@ class ImplicitLG(GeneralGraph):
             tic = time.time()
             # RUN
             # self.add_edges_DAG(stack[1:])
-            self.dists, self.dists_argmin = add_edges_outer_jit(
+            self.dists, self.preds = add_in_edges(
                 stack, np.array(self.shifts), self.angle_cost_array,
-                self.dists, self.dists_argmin, self.instance
+                self.dists, self.preds, self.instance
             )
             self.time_logs["add_all_edges"] = round(time.time() - tic, 3)
             if self.verbose:
@@ -300,8 +299,8 @@ class ImplicitLG(GeneralGraph):
         while np.any(curr_point - start_inds):
             new_point = curr_point - self.shifts[int(min_shift)]
             # get new shift from argmins
-            min_shift = self.dists_argmin[int(min_shift), curr_point[0],
-                                          curr_point[1]]
+            min_shift = self.preds[int(min_shift), curr_point[0], curr_point[1]
+                                   ]
             path.append(new_point)
             curr_point = new_point
 
@@ -314,7 +313,7 @@ class ImplicitLG(GeneralGraph):
 
     def save_graph(self, out_path):
         with open(out_path + ".dat", "wb") as outfile:
-            pickle.dump((self.dists, self.dists_argmin), outfile)
+            pickle.dump((self.dists, self.preds), outfile)
 
 
 # def add_edges_DAG(self, stack):
@@ -324,12 +323,12 @@ class ImplicitLG(GeneralGraph):
 #         v_x, v_y = tuple(stack[-i - 1])
 #         update_neighbors(
 #             v_x, v_y, shifts, self.angle_cost_array, self.dists,
-#             self.dists_argmin, self.instance
+#             self.preds, self.instance
 #         )
 
 # @jit(nopython=True)
 # def update_neighbors(
-#     v_x, v_y, shifts, angles_all, dists, dists_argmin, instance
+#     v_x, v_y, shifts, angles_all, dists, preds, instance
 # ):
 #     i = 0
 #     for s in shifts:
@@ -339,5 +338,5 @@ class ImplicitLG(GeneralGraph):
 #             cost_per_angle = dists[:, v_x, v_y] + angles_all[i] + instance[
 #                 neigh_x, neigh_y]
 #             dists[i, neigh_x, neigh_y] = np.min(cost_per_angle)
-#             dists_argmin[i, neigh_x, neigh_y] = np.argmin(cost_per_angle)
+#             preds[i, neigh_x, neigh_y] = np.argmin(cost_per_angle)
 #         i += 1

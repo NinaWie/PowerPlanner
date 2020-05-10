@@ -1,5 +1,7 @@
 import numpy as np
-from power_planner.utils.utils import bresenham_line, angle
+from power_planner.utils.utils import (
+    bresenham_line, angle, discrete_angle_costs
+)
 
 
 class ConstraintUtils():
@@ -141,7 +143,9 @@ class ConstraintUtils():
         for p in range(len(path) - 2):
             vec1 = path[p + 1] - path[p]
             vec2 = path[p + 2] - path[p + 1]
-            ang_out.append(round(angle(vec1, vec2) / angle_norm_factor, 2))
+            ang_out.append(
+                discrete_angle_costs(angle(vec1, vec2), angle_norm_factor)
+            )
         ang_out.append(0)
 
         return ang_out
