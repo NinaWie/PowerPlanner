@@ -25,22 +25,22 @@ parser.add_argument('-cluster', action='store_true')
 args = parser.parse_args()
 
 # define out save name
-ID = "test"  # str(round(time.time() / 60))[-5:]
+ID = "edge_cost_2"  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
 # DEFINE CONFIGURATION
-SCALE_PARAM = 5  # args.scale
+SCALE_PARAM = 2  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 30), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
-PIPELINE = [(1, 0)]
+PIPELINE = [(2, 50), (1, 0)]
 # PIPELINE = [(4, 200), (2, 50), (1, 0)]  # (2, 200),
 # PIPELINE = [(0.8, 100), (0.5, 50), (0, 0)]  # nonauto random
 # PIPELINE = [(5000000, 100), (5000000, 0)]  # auto pipeline
 USE_KSP = 0
 
-GRAPH_TYPE = graphs.ImplicitKSP
+GRAPH_TYPE = graphs.ImplicitLG
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, ImplicitLG
 # ImplicitLgKSP, WeightedKSP
 print("graph type:", GRAPH_TYPE)
@@ -184,7 +184,9 @@ for (factor, dist) in PIPELINE:
 # print("cost actually", cost_sum, "cost_new", cost_sum_window)
 
 # COMPUTE KSP
-
+# graph.get_shortest_path_tree(source_v, target_v)
+# ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
+# print(sum([k[2] for k in ksp]))
 # ksp = graph.k_diverse_paths(
 #     source_v,
 #     target_v,
@@ -214,10 +216,6 @@ time_test_csv(
     path_costs, cost_sum, dist, time_pipeline, NOTES
 )
 
-graph.get_shortest_path_tree(source_v, target_v)
-ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
-print(sum([k[2] for k in ksp]))
-
 # PLOTTING:
 # FOR PIPELINE
 plot_pipeline_paths(
@@ -226,7 +224,7 @@ plot_pipeline_paths(
 # FOR KSP:
 # with open(OUT_PATH + "_ksp.json", "w") as outfile:
 #     json.dump(ksp, outfile)
-plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
+# plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
 
 # FOR WINDOW
 # plot_path(
@@ -236,14 +234,14 @@ plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
 # plot_path(graph.instance, path, buffer=0, out_path=OUT_PATH + ".png")
 
 # FOR COST COMPARISON
-# plot_path_costs(
-#     instance * instance_corr,
-#     path,
-#     path_costs,
-#     data.layer_classes,
-#     buffer=0,
-#     out_path=OUT_PATH + "_costs.png"
-# )
+plot_path_costs(
+    instance * instance_corr,
+    path,
+    path_costs,
+    data.layer_classes,
+    buffer=0,
+    out_path=OUT_PATH + "_costs.png"
+)
 
 # SAVE graph
 # graph.save_graph(OUT_PATH + "_graph")

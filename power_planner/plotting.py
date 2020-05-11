@@ -171,7 +171,7 @@ def plot_k_sp(ksp, inst, out_path=None):
     leg.set_title('Costs', prop={'size': 15})
     plt.axis("off")
     if out_path is not None:
-        plt.savefig(out_path + "_ksp.pdf")
+        plt.savefig(out_path + "_ksp.png")
     else:
         plt.show()
 
@@ -207,7 +207,7 @@ def plot_pareto_paths(pareto_out, inst, out_path=None):
     leg.set_title('Weighted costs', prop={'size': 15})
     plt.axis("off")
     if out_path is not None:
-        plt.savefig(out_path + "_pareto_paths.pdf")
+        plt.savefig(out_path + "_pareto_paths.png")
     else:
         plt.show()
 
@@ -265,7 +265,7 @@ def plot_pareto_3d(pareto, weights, classes, out_path=None):
     ax.legend(handles=legend_elements, loc='upper center', fontsize=17)
 
     if out_path is not None:
-        plt.savefig(out_path + "_pareto.pdf")
+        plt.savefig(out_path + "_pareto.png")
     else:
         plt.show()
 
@@ -339,7 +339,7 @@ def plot_pareto_scatter_3d(
     # Create the figure
     ax.legend(handles=legend_elements, loc='upper center', fontsize=17)
     if out_path is not None:
-        plt.savefig(out_path + "_pareto.pdf")
+        plt.savefig(out_path + "_pareto.png")
     else:
         plt.show()
 
@@ -396,7 +396,7 @@ def plot_pareto_scatter_2d(
         "Pareto frontier for " + classes[0] + " vs " + classes[1], fontsize=17
     )
     if out_path is not None:
-        plt.savefig(out_path + "_pareto.pdf")
+        plt.savefig(out_path + "_pareto.png")
     else:
         plt.show()
 

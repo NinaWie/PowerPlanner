@@ -13,23 +13,35 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.textinput import TextInput
 from kivy.core.window import Window
 from kivy.lang import Builder
+from PIL import Image as im
+
+from power_planner.utils.utils import (
+    get_distance_surface, time_test_csv, compute_pylon_dists
+)
+from power_planner.graphs.impl_ksp import ImplicitKSP
 
 
 class Test(Widget):
 
-    def __init__(self, **kwargs):
+    def __init__(self, width, height, **kwargs):
         super(Test, self).__init__(**kwargs)
-
-        img = (np.random.rand(400, 400, 3) * 255)
+        self.max_width = width
+        self.max_height = height
+        img = np.random.rand(width, height, 3) * 255
         self.set_array(img)
 
-    def set_array(self, img):
-        img = img.astype(np.uint8)
-        w, h, _ = img.shape
-        texture = Texture.create(size=(w, h))
+    def set_array(self, img_in):
+        w, h, _ = img_in.shape
+        img_in = img_in.astype(np.uint8)
+        ratio_resize = max([w / self.max_width, h / self.max_height])
+        img_in = im.fromarray(img_in)
+        new_img_size = (int(w / ratio_resize), int(h / ratio_resize))
+        img = np.array(img_in.resize(new_img_size, resample=im.BILINEAR))
+
+        texture = Texture.create(size=new_img_size)
         texture.blit_buffer(img.flatten(), colorfmt='rgb', bufferfmt='ubyte')
 
-        w_img = Image(size=(w, h), texture=texture)
+        w_img = Image(size=new_img_size, texture=texture)
         self.add_widget(w_img)
 
 
@@ -89,7 +101,7 @@ class DemoApp(App):
 
         # make horizontal box with canvas and buttons
         canv_box = BoxLayout(orientation='horizontal')
-        self.img_widget = Test()
+        self.img_widget = Test(500, 500)
         canv_box.add_widget(self.img_widget)
         canv_box.add_widget(button_box)
 
@@ -110,21 +122,49 @@ class DemoApp(App):
                     self.dest_inds
                 ) = data.data
             print(self.instance.shape)
+            disp_inst = np.moveaxis(self.instance, 0, -1)[:, :, :3] * 255
+            self.img_widget.set_array(disp_inst)
+            self.graph = ImplicitKSP(self.instance, self.instance_corr)
+            self.layer_classes = data.layer_classes
+            self.class_weights = data.class_weights
 
     def load_json(self, instance):
         with open(self.json_fp.text, "r") as infile:
-            cfg_dict = json.load(infile)  # Config(SCALE_PARAM)
-            cfg = SimpleNamespace(**cfg_dict)
-            cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX = compute_pylon_dists(
-                cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX, cfg.RASTER, 5
+            self.cfg_dict = json.load(infile)  # Config(SCALE_PARAM)
+            self.cfg = SimpleNamespace(**self.cfg_dict)
+            self.cfg.PYLON_DIST_MIN, self.cfg.PYLON_DIST_MAX = compute_pylon_dists(
+                self.cfg.PYLON_DIST_MIN, self.cfg.PYLON_DIST_MAX,
+                self.cfg.RASTER, 5
             )
 
     def initialize(self, instance):
-        new_img = (np.random.rand(1000, 400, 3) * 150)
-        self.img_widget.set_array(new_img)
+        # new_img = (np.random.rand(1000, 400, 3) * 150)
+        # self.img_widget.set_array(new_img)
+        self.graph.set_shift(
+            self.cfg.PYLON_DIST_MIN,
+            self.cfg.PYLON_DIST_MAX,
+            self.dest_inds - self.start_inds,
+            self.cfg.MAX_ANGLE,
+            max_angle_lg=self.cfg.MAX_ANGLE_LG
+        )
+        self.graph.set_corridor(
+            np.ones(self.instance_corr.shape) * 0.5,
+            self.start_inds,
+            self.dest_inds,
+            factor_or_n_edges=1
+        )
+        print("1) set shift and corridor")
+        self.graph.set_edge_costs(
+            self.layer_classes,
+            self.class_weights,
+            angle_weight=self.cfg.ANGLE_WEIGHT
+        )
+        # add vertices
+        self.graph.add_nodes()
         print("initialize button")
 
     def build_graph(self, instance):
+        self.graph.add_edges()
         print("build_graph button")
 
     def shortest_path(self, instance):

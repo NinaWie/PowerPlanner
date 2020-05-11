@@ -64,7 +64,7 @@ class ConstraintUtils():
         :param shifts: possible circle points
         :returns kernel: all possible kernels
         shape: (number of circle points x upper x upper)
-        :returns posneg: a list indicating whether it is a path to the left =1 
+        :returns posneg: a list indicating whether it is a path to the left =1
         or to the right =0
         """
         upper = np.amax(np.absolute(shifts)) + 1

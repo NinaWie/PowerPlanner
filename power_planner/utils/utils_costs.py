@@ -1,6 +1,7 @@
 import numpy as np
 from skimage.segmentation import watershed
 from skimage import filters
+from power_planner.utils.utils import bresenham_line
 
 
 class CostUtils():
@@ -87,14 +88,14 @@ class CostUtils():
         pool_func = eval("np." + func)
         for i in range(x_len_new):
             for j in range(y_len_new):
-                patch = img[:, i * factor:(i + 1) * factor,
-                            j * factor:(j + 1) * factor]
+                patch = img[:, i * factor:(i + 1) * factor, j *
+                            factor:(j + 1) * factor]
                 if np.any(patch):
                     for k in range(len(new_img)):
                         part = patch[k]
                         if np.any(part):
-                            new_img[k, i * factor,
-                                    j * factor] = pool_func(part[part > 0])
+                            new_img[k, i * factor, j *
+                                    factor] = pool_func(part[part > 0])
         return new_img
 
     @staticmethod
@@ -105,6 +106,37 @@ class CostUtils():
             return CostUtils.watershed_transform(img, factor, compact=compact)
         else:
             raise NotImplementedError
+
+    @staticmethod
+    def inf_downsample(img, factor, func="mean"):
+        x_len_new = img.shape[1] // factor
+        y_len_new = img.shape[2] // factor
+        new_img = np.zeros(img.shape)
+        new_img += np.inf
+        pool_func = eval("np." + func)
+        for i in range(x_len_new):
+            for j in range(y_len_new):
+                patch = img[:, i * factor:(i + 1) * factor, j *
+                            factor:(j + 1) * factor]
+                if np.any(patch < np.inf):
+                    for k in range(len(new_img)):
+                        part = patch[k]
+                        new_img[k, i * factor, j *
+                                factor] = pool_func(part[part < np.inf])
+        return new_img
+
+    @staticmethod
+    def compute_edge_costs(path, edge_weight, instance):
+        e_costs = []
+        for p in range(len(path) - 1):
+            point_list = bresenham_line(
+                path[p][0], path[p][1], path[p + 1][0], path[p + 1][1]
+            )
+            costs = np.mean([instance[i, j] for (i, j) in point_list[1:-1]])
+            e_costs.append(edge_weight * costs)
+        # to make it the same size as other costs
+        e_costs.append(0)
+        return e_costs
 
     @staticmethod
     def emergency_points(hard_cons, costs, max_dist, start_inds, dest_inds):
