@@ -206,10 +206,14 @@ class ImplicitLG():
         self.instance = np.sum(
             np.moveaxis(self.cost_rest, 0, -1) * self.cost_weights[1:], axis=2
         )
+        edge_inst = self.instance.copy()
+        edge_inst[edge_inst == np.inf] = np.max(edge_inst[edge_inst < np.inf])
+        self.edge_inst = edge_inst
+
         if self.verbose:
             print("instance shape", self.instance.shape)
 
-    def add_edges(self, mode="DAG", edge_weight=0.2):
+    def add_edges(self, mode="DAG", edge_weight=0):
         self.edge_weight = edge_weight
         if mode == "BF":
             self.add_edges_BF()
@@ -226,15 +230,11 @@ class ImplicitLG():
             if self.verbose:
                 print("time topo sort:", round(time.time() - tic, 3))
             tic = time.time()
-            # compute edge instance - can later be input
-            edge_inst = self.instance.copy()
-            edge_inst[edge_inst == np.inf
-                      ] = np.max(edge_inst[edge_inst < np.inf])
             # RUN - add edges
             self.dists, self.preds = add_in_edges(
                 stack, np.array(self.shifts), self.angle_cost_array,
-                self.dists, self.preds, self.instance, edge_inst,
-                self.shift_lines, edge_weight
+                self.dists, self.preds, self.instance, self.edge_inst,
+                self.shift_lines, self.edge_weight
             )
             self.time_logs["add_all_edges"] = round(time.time() - tic, 3)
             if self.verbose:
@@ -268,14 +268,16 @@ class ImplicitLG():
         )
         if self.edge_weight != 0:
             edge_costs = CostUtils.compute_edge_costs(
-                path, self.edge_weight, self.instance
+                path, self.edge_weight, self.edge_inst
             )
+        else:
+            edge_costs = 0
         path_costs = np.concatenate(
             (np.swapaxes(np.array([ang_costs]), 1, 0), path_costs), axis=1
         )
         cost_sum = np.dot(
             self.cost_weights, np.sum(np.array(path_costs), axis=0)
-        )
+        ) + np.sum(edge_costs)
         # cost_sum = np.dot(
         #     self.layer_weights, np.sum(np.array(path_costs), axis=0)
         # )  # scalar: weighted sum of the summed class costs
@@ -302,7 +304,7 @@ class ImplicitLG():
         path = np.flip(np.asarray(path), axis=0)
         if ret_only_path:
             return path
-
+        self.sp = path
         self.time_logs["shortest_path"] = round(time.time() - tic, 3)
         return self.transform_path(path)
 

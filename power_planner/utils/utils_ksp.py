@@ -18,36 +18,7 @@ def compute_eucl(path1, path2, mode="mean"):
 
 
 @jit(nopython=True)
-def add_out_edges(stack, shifts, angles_all, dists, instance):
-    """
-    Compute cumulative distances with each point of dists containing OUT edges
-    """
-    preds = np.zeros(dists.shape)
-    preds = preds - 1
-    # print(len(stack))
-    for i in range(len(stack)):
-        v_x = stack[-i - 1][0]
-        v_y = stack[-i - 1][1]
-        for s in range(len(shifts)):
-            neigh_x = v_x + shifts[s][0]
-            neigh_y = v_y + shifts[s][1]
-            if 0 <= neigh_x < dists.shape[1] and 0 <= neigh_y < dists.shape[2]:
-                cost_per_angle = np.zeros(len(shifts))
-                for s2 in range(len(shifts)):
-                    in_neigh_x = v_x - shifts[s2][0]
-                    in_neigh_y = v_y - shifts[s2][1]
-                    cost_per_angle[
-                        s2] = dists[s2, in_neigh_x, in_neigh_y
-                                    ] + angles_all[s, s2] + instance[v_x, v_y]
-                dists[s, v_x, v_y] = np.min(cost_per_angle)
-                preds[s, v_x, v_y] = np.argmin(cost_per_angle)
-    return dists, preds
-
-
-@jit(nopython=True)
-def get_sp_start_shift(
-    dists, dists_argmin, start_inds, dest_inds, shifts, min_shift
-):
+def get_sp_start_shift(dists, preds, start_inds, dest_inds, shifts, min_shift):
     if not np.any(dists[:, dest_inds[0], dest_inds[1]] < np.inf):
         raise RuntimeWarning("empty path")
     curr_point = np.asarray(dest_inds)
@@ -59,7 +30,7 @@ def get_sp_start_shift(
     # min_shift = np.argmin(dists[:, dest_inds[0], dest_inds[1]])
     while np.any(curr_point - start_inds):
         new_point = curr_point - shifts[int(min_shift)]
-        min_shift = dists_argmin[int(min_shift), curr_point[0], curr_point[1]]
+        min_shift = preds[int(min_shift), curr_point[0], curr_point[1]]
         my_path.append(List(new_point))
         curr_point = new_point
     return my_path
@@ -67,11 +38,13 @@ def get_sp_start_shift(
 
 @jit(nopython=True)
 def get_sp_dest_shift(
-    dists, dists_argmin, start_inds, dest_inds, shifts, min_shift
+    dists, preds, start_inds, dest_inds, shifts, min_shift, dest_edge=False
 ):
-    if not np.any(dists[:, dest_inds[0], dest_inds[1]] < np.inf):
-        raise RuntimeWarning("empty path")
-    min_shift = dists_argmin[int(min_shift), dest_inds[0], dest_inds[1]]
+    """
+    dest_edge: If it's the edge at destination, we cannot take the current one
+    """
+    if not dest_edge:
+        min_shift = preds[int(min_shift), dest_inds[0], dest_inds[1]]
     curr_point = np.asarray(dest_inds)
     my_path = List()
     tmp_list_inner = List()
@@ -81,7 +54,7 @@ def get_sp_dest_shift(
     # min_shift = np.argmin(dists[:, dest_inds[0], dest_inds[1]])
     while np.any(curr_point - start_inds):
         new_point = curr_point - shifts[int(min_shift)]
-        min_shift = dists_argmin[int(min_shift), new_point[0], new_point[1]]
+        min_shift = preds[int(min_shift), new_point[0], new_point[1]]
         my_path.append(List(new_point))
         curr_point = new_point
     return my_path
