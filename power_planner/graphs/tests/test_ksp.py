@@ -48,24 +48,26 @@ class TestKsp(unittest.TestCase):
         bestpath, _, best_cost_sum = wg.get_shortest_path(source_v, target_v)
         # self.assertListEqual(bestpath.)
         wg.get_shortest_path_tree(source_v, target_v)
-        best2, _, _ = wg.transform_path(wg.best_path)
+        best2, _, best_cost_sum2 = wg.transform_path(wg.best_path)
         # assert that SP tree path is optimal one
         for b in range(len(best2)):
             self.assertListEqual(list(best2[b]), list(bestpath[b]))
+        self.assertEqual(best_cost_sum, best_cost_sum2)
         # TEST DIVERSE
         ksp = wg.k_diverse_paths(
             source_v,
             target_v,
-            10,
+            9,
             cost_thresh=1.05,
             dist_mode="eucl_mean",
-            count_thresh=5
+            count_thresh=3
         )
         for k in ksp:
             path = k[0]
             self.assertListEqual(list(self.start_inds), list(path[0]))
             self.assertListEqual(list(self.dest_inds), list(path[-1]))
             cost = k[2]
+            # print(k[1])
             self.assertLessEqual(cost, best_cost_sum * 1.05)
         # TEST LC KSP
         # ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)

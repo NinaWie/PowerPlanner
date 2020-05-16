@@ -157,6 +157,10 @@ class WeightedKSP(WeightedGraph):
                 counter += 1
                 continue
 
+            # stop to collect paths if costs too high
+            if new > max_costs:
+                break
+
             # counter: many new nodes this path has in contrast to the one
             # before --> skip if not very different
             if counter < count_thresh:
@@ -179,9 +183,6 @@ class WeightedKSP(WeightedGraph):
             start = new
             counter = 1
 
-            # stop to collect paths if costs too high
-            if start > max_costs:
-                break
         return collected_paths
 
     def simple_transform(self, path):
@@ -216,13 +217,17 @@ class WeightedKSP(WeightedGraph):
             self.instance[tuple(best_path_cells[0])] +
             self.instance[tuple(best_path_cells[-1])]
         )
-        max_costs = cost_thresh * (best_cost - correction)
+        assert np.isclose(best_cost, sorted_dists[0] + correction)
+        max_costs = best_cost * cost_thresh - correction
 
         # enumerate paths and collect
         collected_paths = self.collect_paths(
             sorted_dists, vertices, v_shortest, source, dest, max_costs,
             count_thresh
         )
+        path_costs = [self.transform_path(c) for c in collected_paths]
+        path_costs = [p[2] for p in path_costs]
+
         # transform into coordinates
         collected_coords = [self.simple_transform(p) for p in collected_paths]
 
