@@ -204,9 +204,8 @@ class DataReader():
                 class_r = layers
             else:
                 class_r = layers[layers["class"] == classname]
-            for fname, weight in zip(
-                class_r["Layer Name"], class_r["weight_" + str(self.scenario)]
-            ):
+            all_weights = class_r["weight_" + str(self.scenario)].values
+            for fname, weight in zip(class_r["Layer Name"], all_weights):
                 file_path = os.path.join(
                     self.path, "tif_layers", fname + ".tif"
                 )
@@ -229,7 +228,8 @@ class DataReader():
         startendpoint = sf.shapes()[0].points
         transformed = ~self.transform_matrix * startendpoint[0]
         resized = np.asarray(transformed) / self.scale_factor
-        return resized.astype(int) + self.padding
+        return resized.astype(int) + self.padding, np.asarray(transformed
+                                                              ).astype(int)
 
     def _resize_raster(self, raster):
         """
@@ -249,23 +249,45 @@ class DataReader():
         start_inds,
         dest_inds,
         emergency_dist=None,
-        percent_padding=2
+        percent_padding=0.25
     ):
+        """
+        construct a rectengular corridor that is relevant for path computation
+        Arguments:
+            instance: 3D array of resistance values
+            hard_constraints: 2D array of forbidden areas
+            start_inds, dest_inds: tuples/lists with two entries (x&y coord)
+            emergency_dist: distance in which emergency points should be
+                placed in forbidden regions
+            percent_padding: padding around start-dest-line distance
+        """
         # build rectengular corridor
         start_dest_inds = np.array([start_inds, dest_inds])
         inter_line = start_dest_inds[0] - start_dest_inds[1]
         longer = np.argmin(np.abs(inter_line))
         # define padding size
-        padding = [0, 0]
-        padding[longer] = abs(int(percent_padding * inter_line[longer]))
-        # get four bounds of corridor
-        start_x, start_y = np.min(start_dest_inds,
-                                  axis=0) - np.asarray(padding)
-        end_x, end_y = np.max(start_dest_inds, axis=0) + np.asarray(padding)
+        if percent_padding is not None:
+            padding = [0, 0]
+            padding[longer] = abs(int(percent_padding * inter_line[longer]))
+            # get four bounds of corridor
+            start_x, start_y = np.min(start_dest_inds,
+                                      axis=0) - np.asarray(padding)
+            end_x, end_y = np.max(start_dest_inds,
+                                  axis=0) + np.asarray(padding)
+        else:
+            # if None, only cut off a small frame around everything
+            start_x, start_y = np.min(start_dest_inds, axis=0)
+            end_x, end_y = np.max(start_dest_inds, axis=0)
+            x_len, y_len = hard_constraints.shape
+            min_startend = np.min(
+                [start_x, start_y, x_len - end_x, y_len - end_y]
+            )
+            start_x, start_y = (min_startend, min_startend)
+            end_x, end_y = (x_len - min_startend, y_len - min_startend)
 
         # add rectangle corridor to hard constraints
         corr = np.zeros(hard_constraints.shape)
-        corr[start_x:end_x, start_y:end_y] = 1
+        corr[start_x:end_x + 1, start_y:end_y + 1] = 1
         hard_constraints = np.asarray(corr * hard_constraints)
 
         # add emergency points in regular grid
@@ -274,8 +296,8 @@ class DataReader():
             d = int(emergency_dist // 2)
             tic = time.time()
             # iterate over rectangle
-            for i in range(start_x, end_x):
-                for j in range(start_y, end_y):
+            for i in range(start_x, end_x + 1):
+                for j in range(start_y, end_y + 1):
                     # if no point in distance x
                     if not np.any(hard_constraints[i - d:i + d, j - d:j + d]):
                         hard_constraints[i, j] = 1
@@ -295,7 +317,9 @@ class DataReader():
         return instance, hard_constraints
 
     @strip
-    def get_data(self, start_path, dest_path, emergency_dist=None):
+    def get_data(
+        self, start_path, dest_path, percent_padding=0.25, emergency_dist=None
+    ):
         """
         Get all data at once: intersection of hard constraints and return
         weighted sum of all layers as cost
@@ -315,8 +339,8 @@ class DataReader():
         # instance = normalize(self.get_weighted_costs())
 
         # Get start and end point
-        start_inds = self.get_shape_point(start_path)
-        dest_inds = self.get_shape_point(dest_path)
+        start_inds, self.orig_start = self.get_shape_point(start_path)
+        dest_inds, self.orig_dest = self.get_shape_point(dest_path)
         print("shape of inst and corr", instance.shape, hard_constraints.shape)
         # assert instance.shape == hard_constraints.shape
         print("start cells:", start_inds, "dest cells:", dest_inds)
@@ -328,10 +352,59 @@ class DataReader():
             start_inds,
             dest_inds,
             emergency_dist=emergency_dist,
-            percent_padding=5
+            percent_padding=percent_padding
         )
+        # percent_padding: 5 for large instance, 0.25 small
 
         return instance, hard_constraints, start_inds, dest_inds
+
+    @staticmethod
+    def get_raw_data(layer_path, csv_path, scenario=1):
+        """
+        Get original data without any scaling, croppting etc
+        Arguments:
+            layer_path: file path to folder with layer tifs
+            csv_path: file path to csv file with weights
+            scenario: indiates which columns of the csv is relevant
+        Returns:
+            layer_arr: 3D numpy array #layers x width x height
+            forb_arr: 3D numpy array of the forbidden layers
+            df: pandas dataframe with metainfo about each layer (by index)
+        """
+        layer_list = pd.read_csv(csv_path).dropna()
+        # layer_list = layer_csv[layer_csv["weight_" + str(scenario)] != "Forbidden"]
+        cost_classes = np.unique(layer_list["class"])
+        layer_arr = []
+        layer_weights, layer_names, layer_classes = [], [], []
+        forb_arr = []
+        for _, row in layer_list.iterrows():
+            file_path = os.path.join(layer_path, row["Layer Name"] + ".tif")
+            if os.path.exists(file_path):
+                with rasterio.open(file_path, 'r') as ds:
+                    arr = ds.read()[0]
+                # binarize single tif layer so it can be weighted
+                # -1  because in tifs the costly areas are black
+
+                # add to hard constraints or general instance
+                if row["weight_" + str(scenario)] == "Forbidden":
+                    constraint = arr.astype(int) > 0.5 * np.max(arr)
+                    forb_arr.append(constraint)
+                    print(constraint.shape)
+                else:
+                    costs = np.absolute(normalize(arr) - 1)
+                    layer_arr.append(costs)
+                    layer_weights.append(row["weight_" + str(scenario)])
+                    layer_classes.append(row["class"])
+                    layer_names.append(row["Corresponding Name"])
+            else:
+                print("file not found:", row["Layer Name"])
+        df = pd.DataFrame()
+        df["weights"] = layer_weights
+        df["arr_inds"] = [i for i in range(len(layer_arr))]
+        df["class"] = layer_classes
+        df["layer"] = layer_names
+        return np.swapaxes(np.array(layer_arr), 2,
+                           1), np.swapaxes(np.array(forb_arr), 2, 1), df
 
     def save_coordinates(self, power_path, out_path, scale_factor=1):
         """
@@ -392,3 +465,28 @@ class DataReader():
         # save as json
         with open(out_path + "_infos.json", "w") as outfile:
             json.dump(out_dict, outfile)
+
+    def save_original_path(
+        self, save_path, paths
+    ):  # , orig_start, scale_factor=1):
+        """
+        save coordinates in original instance (tifs) without padding etc
+        """
+        out_path_list = []
+        for path in paths:
+            scaled_path = np.asarray(path) * self.scale_factor
+            shift_to_orig = self.orig_start - scaled_path[0]
+            # print(self.orig_start, shift_to_orig)
+            shifted_path = scaled_path + shift_to_orig
+            out_path_list.append(shifted_path.tolist())
+
+        # save as json
+        with open(save_path + "_orig.json", "w") as outfile:
+            json.dump(out_path_list, outfile)
+
+
+# FUNCTION to resize image and save as tif
+# from PIL import Image
+# img = Image.open(os.path.join(layer_path, "Buildingftp_taken_before.tif"))
+# img = img.resize((1511, 1313), resample=Image.BILINEAR)
+# img.save(os.path.join(layer_path, "Buildingftp_new.tif"))
