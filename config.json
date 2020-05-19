@@ -2,8 +2,9 @@
     "HARD_CONS_PATH": "hard_constraints",
     "CORR_PATH": "corridor/Corridor_BE.tif",
     "COST_PATH": "COSTSURFACE.tif",
-    "START_PATH": "start_point/large_instance_start",
-    "DEST_PATH": "dest_point/large_instance_destination",
+    "START_PATH": "start_point/Start",
+    "DEST_PATH": "dest_point/Destination",
+    "PERC_PAD": 0.25,
     "WEIGHT_CSV": "layer_weights.csv",
     "CSV_TIMES": "../outputs/time_tests.csv",
     "RASTER": 10,
@@ -14,6 +15,7 @@
     "SCENARIO": 1,
     "VERBOSE": 1,
     "GTNX": 1,
-    "ANGLE_WEIGHT": 0.1,
+    "ANGLE_WEIGHT": 0.2,
+    "EDGE_WEIGHT": 0.2,
     "KSP": 10
 }

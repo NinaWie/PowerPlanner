@@ -99,6 +99,14 @@ class TestKsp(unittest.TestCase):
             for p in range(len(path1)):
                 self.assertListEqual(list(path1[p]), list(path2[p]))
 
+    # # test that all fulfill hard constraints
+    # paths = [k[0] for k in ksp]
+    # for p in paths:
+    #     p = np.array(p)
+    #     plt.scatter(p[:,1], p[:,0])
+    #     for (i,j) in p:
+    #         self.assertEqual(instance_corr[i,j],0)
+
 
 if __name__ == "__main__":
     unittest.main()

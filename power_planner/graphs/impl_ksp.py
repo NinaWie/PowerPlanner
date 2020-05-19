@@ -157,6 +157,26 @@ class ImplicitKSP(ImplicitLG):
         return together
 
     def k_shortest_paths(self, source, dest, k, overlap=0.5):
+        """
+        Iterate over edge costs!
+        # FOR EDGES instead of vertices (replace from summed_dists onwards)
+        # summed_dists = (self.dists + self.dists_ba - self.instance)
+        # # argsort
+        # e_shortest = np.argsort(summed_dists.flatten())
+        # # sorted dists:
+        # sorted_dists = summed_dists.flatten()[e_shortest]
+        # # iterate over edges from least to most costly
+        # for j in range(len(e_shortest)):
+        #     if sorted_dists[j] == sorted_dists[j - 1] or np.isnan(
+        #         sorted_dists[j]
+        #     ):
+        #         # already checked
+        #         continue
+        #     e = e_shortest[j]
+        #     # compute start and dest v
+        #     x1, x2, x3 = KspUtils._flat_ind_to_inds(e, summed_dists.shape)
+        # if self.dists_ba[x1, x2, x3] != 0: ... insert the rest
+        """
         tic = time.time()
 
         best_paths = [self.best_path]
@@ -164,20 +184,25 @@ class ImplicitKSP(ImplicitLG):
         sp_set = set(tuple_path)
         # sum both dists_ab and dists_ba, subtract inst because counted twice
         summed_dists = (self.dists + self.dists_ba - self.instance)
+
+        min_node_dists = np.min(summed_dists, axis=0)
+        min_shift_dists = np.argmin(summed_dists, axis=0)
         # argsort
-        e_shortest = np.argsort(summed_dists.flatten())
+        v_shortest = np.argsort(min_node_dists.flatten())
+        _, arr_len = min_node_dists.shape
         # sorted dists:
-        sorted_dists = summed_dists.flatten()[e_shortest]
+        sorted_dists = min_node_dists.flatten()[v_shortest]
         # iterate over edges from least to most costly
-        for j in range(len(e_shortest)):
-            if sorted_dists[j] == sorted_dists[j - 1] or np.isnan(
-                sorted_dists[j]
-            ):
-                # already checked
+        for j in range(len(v_shortest)):
+            if sorted_dists[j] == sorted_dists[j - 1]:
+                # on the same path as the vertex before
                 continue
-            e = e_shortest[j]
-            # compute start and dest v
-            x1, x2, x3 = KspUtils._flat_ind_to_inds(e, summed_dists.shape)
+            (x2, x3) = v_shortest[j] // arr_len, v_shortest[j] % arr_len
+            if (x2, x3) in sp_set:
+                # vertex already belongs to some other path
+                continue
+            x1 = min_shift_dists[x2, x3]
+
             # get shortest path through this node
             if self.dists_ba[x1, x2, x3] != 0:
                 # = 0 for inc edges of dest_inds (init of dists_ba)
@@ -196,6 +221,7 @@ class ImplicitKSP(ImplicitLG):
                 # print("found new path with cost", cost)
                 # print("sorted dist:", sorted_dists[j])
             if len(best_paths) >= k:
+                print(j)
                 break
 
         self.time_logs["ksp"] = round(time.time() - tic, 3)

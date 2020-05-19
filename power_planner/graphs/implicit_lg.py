@@ -206,9 +206,15 @@ class ImplicitLG():
         self.instance = np.sum(
             np.moveaxis(self.cost_rest, 0, -1) * self.cost_weights[1:], axis=2
         )
-        edge_inst = self.instance.copy()
-        edge_inst[edge_inst == np.inf] = np.max(edge_inst[edge_inst < np.inf])
-        self.edge_inst = edge_inst
+        # edge inst: without inf values
+        self.edge_inst = np.sum(
+            np.moveaxis(self.cost_instance, 0, -1) * self.cost_weights[1:],
+            axis=2
+        )
+        # # other method: fill with max - problematic for evaluation
+        # edge_inst = self.instance.copy()
+        # edge_inst[edge_inst == np.inf] = np.max(edge_inst[edge_inst < np.inf])
+        # self.edge_inst = edge_inst
 
         if self.verbose:
             print("instance shape", self.instance.shape)
@@ -266,18 +272,14 @@ class ImplicitLG():
         ang_costs = ConstraintUtils.compute_angle_costs(
             path, self.angle_norm_factor
         )
-        if self.edge_weight != 0:
-            edge_costs = CostUtils.compute_edge_costs(
-                path, self.edge_weight, self.edge_inst
-            )
-        else:
-            edge_costs = 0
+        edge_costs = CostUtils.compute_edge_costs(path, self.edge_inst)
+        # print("unweighted edge costs", np.sum(edge_costs))
         path_costs = np.concatenate(
             (np.swapaxes(np.array([ang_costs]), 1, 0), path_costs), axis=1
         )
         cost_sum = np.dot(
             self.cost_weights, np.sum(np.array(path_costs), axis=0)
-        ) + np.sum(edge_costs)
+        ) + np.sum(edge_costs) * self.edge_weight
         # cost_sum = np.dot(
         #     self.layer_weights, np.sum(np.array(path_costs), axis=0)
         # )  # scalar: weighted sum of the summed class costs
