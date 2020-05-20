@@ -2,9 +2,7 @@ import numpy as np
 import time
 from numba import jit
 from power_planner.graphs.implicit_lg import topological_sort_jit, ImplicitLG
-from power_planner.utils.utils_ksp import (
-    KspUtils, get_sp_start_shift, get_sp_dest_shift
-)
+from power_planner.utils.utils_ksp import KspUtils
 
 
 @jit(nopython=True)
@@ -125,7 +123,7 @@ class ImplicitKSP(ImplicitLG):
         ), "start to dest != dest to start " + str(d_ab) + " " + str(d_ba)
         # compute best path
         self.best_path = np.array(
-            get_sp_dest_shift(
+            KspUtils.get_sp_dest_shift(
                 self.dists_ba,
                 self.preds_ba,
                 self.dest_inds,
@@ -135,17 +133,17 @@ class ImplicitKSP(ImplicitLG):
                 dest_edge=True
             )
         )
-        assert np.all(self.best_path == np.array(self.sp)), "paths differ"
+        # assert np.all(self.best_path == np.array(self.sp)), "paths differ"
 
     def _combined_paths(self, start, dest, best_shift, best_edge):
         # compute path from start to middle point - incoming edge
         best_edge = np.array(best_edge)
-        path_ac = get_sp_start_shift(
+        path_ac = KspUtils.get_sp_start_shift(
             self.dists, self.preds, start, best_edge, np.array(self.shifts),
             best_shift
         )
         # compute path from middle point to dest - outgoing edge
-        path_cb = get_sp_dest_shift(
+        path_cb = KspUtils.get_sp_dest_shift(
             self.dists_ba, self.preds_ba, dest, best_edge,
             np.array(self.shifts) * (-1), best_shift
         )
@@ -198,17 +196,13 @@ class ImplicitKSP(ImplicitLG):
                 # on the same path as the vertex before
                 continue
             (x2, x3) = v_shortest[j] // arr_len, v_shortest[j] % arr_len
-            if (x2, x3) in sp_set:
-                # vertex already belongs to some other path
-                continue
             x1 = min_shift_dists[x2, x3]
 
             # get shortest path through this node
-            if self.dists_ba[x1, x2, x3] != 0:
+            if self.dists_ba[x1, x2, x3] == 0:
                 # = 0 for inc edges of dest_inds (init of dists_ba)
-                vertices_path = self._combined_paths(
-                    source, dest, x1, [x2, x3]
-                )
+                continue
+            vertices_path = self._combined_paths(source, dest, x1, [x2, x3])
             # compute similarity with previous paths
             # TODO: similarities
             already = np.array([tuple(u) in sp_set for u in vertices_path])

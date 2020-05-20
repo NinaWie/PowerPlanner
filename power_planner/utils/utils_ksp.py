@@ -1,6 +1,6 @@
 import numpy as np
 from numba import jit
-from numba.typed import List
+# from numba.typed import List
 
 
 @jit(nopython=True)
@@ -15,49 +15,6 @@ def compute_eucl(path1, path2, mode="mean"):
         return np.mean(min_dists_out)
     elif mode == "max":
         return np.max(min_dists_out)
-
-
-@jit(nopython=True)
-def get_sp_start_shift(dists, preds, start_inds, dest_inds, shifts, min_shift):
-    if not np.any(dists[:, dest_inds[0], dest_inds[1]] < np.inf):
-        raise RuntimeWarning("empty path")
-    curr_point = np.asarray(dest_inds)
-    my_path = List()
-    tmp_list_inner = List()
-    tmp_list_inner.append(dest_inds[0])
-    tmp_list_inner.append(dest_inds[1])
-    my_path.append(tmp_list_inner)
-    # min_shift = np.argmin(dists[:, dest_inds[0], dest_inds[1]])
-    while np.any(curr_point - start_inds):
-        new_point = curr_point - shifts[int(min_shift)]
-        min_shift = preds[int(min_shift), curr_point[0], curr_point[1]]
-        my_path.append(List(new_point))
-        curr_point = new_point
-    return my_path
-
-
-@jit(nopython=True)
-def get_sp_dest_shift(
-    dists, preds, start_inds, dest_inds, shifts, min_shift, dest_edge=False
-):
-    """
-    dest_edge: If it's the edge at destination, we cannot take the current one
-    """
-    if not dest_edge:
-        min_shift = preds[int(min_shift), dest_inds[0], dest_inds[1]]
-    curr_point = np.asarray(dest_inds)
-    my_path = List()
-    tmp_list_inner = List()
-    tmp_list_inner.append(dest_inds[0])
-    tmp_list_inner.append(dest_inds[1])
-    my_path.append(tmp_list_inner)
-    # min_shift = np.argmin(dists[:, dest_inds[0], dest_inds[1]])
-    while np.any(curr_point - start_inds):
-        new_point = curr_point - shifts[int(min_shift)]
-        min_shift = preds[int(min_shift), new_point[0], new_point[1]]
-        my_path.append(List(new_point))
-        curr_point = new_point
-    return my_path
 
 
 class KspUtils():
@@ -165,3 +122,42 @@ class KspUtils():
         x2 = (flat_ind % (len2 * len3)) // len3
         x3 = (flat_ind % (len2 * len3)) % len3
         return (x1, x2, x3)
+
+    @staticmethod
+    def get_sp_dest_shift(
+        dists,
+        preds,
+        start_inds,
+        dest_inds,
+        shifts,
+        min_shift,
+        dest_edge=False
+    ):
+        """
+        dest_edge: If it's the edge at destination, we cannot take the current one
+        """
+        if not dest_edge:
+            min_shift = preds[int(min_shift), dest_inds[0], dest_inds[1]]
+        curr_point = np.asarray(dest_inds)
+        my_path = [dest_inds]
+        while np.any(curr_point - start_inds):
+            new_point = curr_point - shifts[int(min_shift)]
+            min_shift = preds[int(min_shift), new_point[0], new_point[1]]
+            my_path.append(new_point)
+            curr_point = new_point
+        return my_path
+
+    @staticmethod
+    def get_sp_start_shift(
+        dists, preds, start_inds, dest_inds, shifts, min_shift
+    ):
+        if not np.any(dists[:, dest_inds[0], dest_inds[1]] < np.inf):
+            raise RuntimeWarning("empty path")
+        curr_point = np.asarray(dest_inds)
+        my_path = [dest_inds]
+        while np.any(curr_point - start_inds):
+            new_point = curr_point - shifts[int(min_shift)]
+            min_shift = preds[int(min_shift), curr_point[0], curr_point[1]]
+            my_path.append(new_point)
+            curr_point = new_point
+        return my_path
