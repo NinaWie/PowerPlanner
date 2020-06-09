@@ -184,7 +184,9 @@ class ImplicitLG():
         self.start_inds = start_inds
         self.dest_inds = dest_inds
 
-    def set_edge_costs(self, layer_classes, layer_weights, angle_weight=0.5):
+    def set_edge_costs(
+        self, layer_classes, layer_weights, angle_weight=0.5, cab_forb=False
+    ):
         """
         angle_weight: how to consider angles in contrast to all other costs!
         """
@@ -206,11 +208,15 @@ class ImplicitLG():
         self.instance = np.sum(
             np.moveaxis(self.cost_rest, 0, -1) * self.cost_weights[1:], axis=2
         )
-        # edge inst: without inf values
-        self.edge_inst = np.sum(
-            np.moveaxis(self.cost_instance, 0, -1) * self.cost_weights[1:],
-            axis=2
-        )
+        if cab_forb:
+            # ueberspannen is forbidden as well
+            self.edge_inst = self.instance.copy()
+        else:
+            # edge inst: without inf values
+            self.edge_inst = np.sum(
+                np.moveaxis(self.cost_instance, 0, -1) * self.cost_weights[1:],
+                axis=2
+            )
         # # other method: fill with max - problematic for evaluation
         # edge_inst = self.instance.copy()
         # edge_inst[edge_inst == np.inf] = np.max(edge_inst[edge_inst < np.inf])
@@ -235,6 +241,7 @@ class ImplicitLG():
             # stack = del_after_dest(stack, self.dest_inds[0], self.dest_inds[1])
             if self.verbose:
                 print("time topo sort:", round(time.time() - tic, 3))
+                print("stack length", len(stack))
             tic = time.time()
             # RUN - add edges
             self.dists, self.preds = add_in_edges(
@@ -272,7 +279,10 @@ class ImplicitLG():
         ang_costs = ConstraintUtils.compute_angle_costs(
             path, self.angle_norm_factor
         )
-        edge_costs = CostUtils.compute_edge_costs(path, self.edge_inst)
+        # prevent that inf * 0 if zero edge weight
+        edge_costs = 0
+        if self.edge_weight != 0:
+            edge_costs = CostUtils.compute_edge_costs(path, self.edge_inst)
         # print("unweighted edge costs", np.sum(edge_costs))
         path_costs = np.concatenate(
             (np.swapaxes(np.array([ang_costs]), 1, 0), path_costs), axis=1

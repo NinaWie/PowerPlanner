@@ -114,9 +114,11 @@ class DataReader():
 
         with rasterio.open(os.path.join(base_path, instance_path)) as dataset:
             # binary mask
-            self.corridor = dataset.dataset_mask() / 255.
+            layer = dataset.read()[0]
+            self.corridor = (layer == np.max(layer)).astype(int)
             # size of array
-            self.raster_size = (dataset.width, dataset.height)
+            self.raster_size = self.corridor.shape
+            # (dataset.width, dataset.height)
             # geometric bounds and transformation
             self.geo_bounds = dataset.bounds
             self.transform_matrix = dataset.transform
@@ -180,6 +182,9 @@ class DataReader():
                 constraint.astype(int) > 0.5 * np.max(constraint)
             )
         print("hard constraints shape", np.asarray(hard_constraints).shape)
+        # no forbidden areas - return all ones
+        if len(hard_constraints) == 0:
+            return np.ones(self.raster_size)
         # intersection of all of the hard constraints
         hard_constraints = np.all(
             np.asarray(hard_constraints).astype(int), axis=0
@@ -193,28 +198,39 @@ class DataReader():
             self.class_csv["weight_" + str(self.scenario)] != "Forbidden"]
         if oneclass:
             self.layer_classes = ["resistance"]
+            self.class_weights = [1]
         cost_sum_arr = np.zeros(
-            (
-                len(self.layer_classes), self.raster_size[1],
-                self.raster_size[0]
-            )
+            tuple([len(self.layer_classes)]) + self.raster_size
         )
         for i, classname in enumerate(self.layer_classes):
             if oneclass:
                 class_r = layers
             else:
                 class_r = layers[layers["class"] == classname]
-            all_weights = class_r["weight_" + str(self.scenario)].values
-            for fname, weight in zip(class_r["Layer Name"], all_weights):
+            # Get corresponding weights and class weights
+            r_weights = class_r["weight_" + str(self.scenario)].values
+            c_weights = class_r["category_weight_" + str(self.scenario)].values
+            for fname, weight, cat_w in zip(
+                class_r["Layer Name"], r_weights, c_weights
+            ):
                 file_path = os.path.join(
                     self.path, "tif_layers", fname + ".tif"
                 )
                 if os.path.exists(file_path):
-                    costs = self.read_tif(file_path)
+                    costs_raw = self.read_tif(file_path)
                     # binarize single tif layer so it can be weighted
                     # -1  because in tifs the costly areas are black
-                    costs = np.absolute(normalize(costs) - 1)
-                    cost_sum_arr[i] = cost_sum_arr[i] + costs * int(weight)
+                    # costs = np.absolute(normalize(costs) - 1)
+                    costs = (costs_raw == 1).astype(int)
+                    if not np.any(costs):
+                        print("all zero layer", fname, np.unique(costs_raw))
+                    # two options: sum up per class costs,normalize and weight
+                    # classes, or directly multiply by class weight
+                    if oneclass:
+                        cost_sum_arr[
+                            i] = cost_sum_arr[i] + costs * int(weight) * cat_w
+                    else:
+                        cost_sum_arr[i] = cost_sum_arr[i] + costs * int(weight)
                 else:
                     print("file not found:", fname)
             # normalize cost surface with all tifs together
@@ -235,11 +251,13 @@ class DataReader():
         """
         input: Pillow Image!
         """
-        if list(reversed(raster.shape)) != list(self.raster_size):
-            raster = Image.fromarray(raster)
-            print("resize: from", raster.size, "to", self.raster_size)
-            raster = raster.resize(self.raster_size, resample=Image.BILINEAR)
-            raster = np.array(raster)  # swapaxes(raster, 1, 0)
+        # if list(reversed(raster.shape)) != list(self.raster_size):
+        #     raster = Image.fromarray(raster)
+        #     print("resize: from", raster.size, "to", self.raster_size)
+        #     raster = raster.resize(self.raster_size, resample=Image.BILINEAR)
+        #     raster = np.array(raster)  # swapaxes(raster, 1, 0)
+        if list(raster.shape) != list(self.raster_size):
+            return np.swapaxes(raster, 1, 0)
         return raster
 
     @staticmethod
@@ -318,7 +336,12 @@ class DataReader():
 
     @strip
     def get_data(
-        self, start_path, dest_path, percent_padding=0.25, emergency_dist=None
+        self,
+        start_path,
+        dest_path,
+        percent_padding=0.25,
+        emergency_dist=None,
+        oneclass=False
     ):
         """
         Get all data at once: intersection of hard constraints and return
@@ -330,11 +353,11 @@ class DataReader():
         # padding: not necessary right now
         # data.set_padding(PYLON_DIST_MAX * SCALE_PARAM)
 
-        # corridor = self.get_mask_corridor()
-        hard_constraints = self.get_hard_constraints()
-        # instance_corr = corridor * hard_constraints
+        hard_constraints = self.get_mask_corridor()
+        hard_cons = self.get_hard_constraints()
+        hard_constraints = hard_constraints * hard_cons
 
-        instance = self.get_costs_per_class()
+        instance = self.get_costs_per_class(oneclass=oneclass)
         # in normalize(np.sum(costs_classes, axis=0))
         # instance = normalize(self.get_weighted_costs())
 
@@ -372,8 +395,6 @@ class DataReader():
             df: pandas dataframe with metainfo about each layer (by index)
         """
         layer_list = pd.read_csv(csv_path).dropna()
-        # layer_list = layer_csv[layer_csv["weight_" + str(scenario)] != "Forbidden"]
-        cost_classes = np.unique(layer_list["class"])
         layer_arr = []
         layer_weights, layer_names, layer_classes = [], [], []
         forb_arr = []
@@ -467,7 +488,7 @@ class DataReader():
             json.dump(out_dict, outfile)
 
     def save_original_path(
-        self, save_path, paths
+        self, save_path, paths, output_coords=False
     ):  # , orig_start, scale_factor=1):
         """
         save coordinates in original instance (tifs) without padding etc
@@ -484,9 +505,9 @@ class DataReader():
         with open(save_path + "_orig.json", "w") as outfile:
             json.dump(out_path_list, outfile)
 
+        if output_coords:
+            for i, power_path in enumerate(out_path_list):
+                coordinates = [self.transform_matrix * p for p in power_path]
 
-# FUNCTION to resize image and save as tif
-# from PIL import Image
-# img = Image.open(os.path.join(layer_path, "Buildingftp_taken_before.tif"))
-# img = img.resize((1511, 1313), resample=Image.BILINEAR)
-# img.save(os.path.join(layer_path, "Buildingftp_new.tif"))
+                df = pd.DataFrame(np.asarray(coordinates), columns=["X", "Y"])
+                df.to_csv(save_path + str(i) + "_coords.csv", index=False)

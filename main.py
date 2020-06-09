@@ -6,7 +6,7 @@ import time
 import numpy as np
 import json
 from types import SimpleNamespace
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 # utils imports
 from power_planner.data_reader import DataReader
@@ -25,7 +25,7 @@ parser.add_argument('-cluster', action='store_true')
 args = parser.parse_args()
 
 # define out save name
-ID = "edge_cost_2"  # str(round(time.time() / 60))[-5:]
+ID = "de_inst_2_forb_uberspannen"  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
@@ -34,13 +34,13 @@ SCALE_PARAM = 2  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 30), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
-PIPELINE = [(2, 50), (1, 0)]
+PIPELINE = [(1, 0)]
 # PIPELINE = [(4, 200), (2, 50), (1, 0)]  # (2, 200),
 # PIPELINE = [(0.8, 100), (0.5, 50), (0, 0)]  # nonauto random
 # PIPELINE = [(5000000, 100), (5000000, 0)]  # auto pipeline
 USE_KSP = 0
 
-GRAPH_TYPE = graphs.ImplicitLG
+GRAPH_TYPE = graphs.ImplicitKSP
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, ImplicitLG
 # ImplicitLgKSP, WeightedKSP
 print("graph type:", GRAPH_TYPE)
@@ -50,15 +50,15 @@ NOTES = "None"  # "mean-all-simple"
 LOAD = 1
 if args.cluster:
     LOAD = 1
-SAVE_PICKLE = 0
+SAVE_PICKLE = 1
 
 # define IO paths
 if LOAD:
     PATH_FILES = os.path.join("data")
 else:
-    PATH_FILES = "/Volumes/Nina Backup/data_master_thesis/large_instance"
-    # belgium_instance1"
-IOPATH = os.path.join(PATH_FILES, "data_dump_" + str(SCALE_PARAM) + ".dat")
+    # PATH_FILES = "/Volumes/Nina Backup/data_master_thesis/large_instance"
+    PATH_FILES = "../data/instance_DE.nosync"  #  "../data/Instance_CH.nosync" "../data/belgium.nosync"
+IOPATH = os.path.join(PATH_FILES, "de_dump_" + str(SCALE_PARAM) + ".dat")
 
 # LOAD CONFIG
 with open("config.json", "r") as infile:
@@ -80,7 +80,11 @@ else:
         PATH_FILES, cfg.CORR_PATH, cfg.WEIGHT_CSV, cfg.SCENARIO, SCALE_PARAM
     )
     instance, instance_corr, start_inds, dest_inds = data.get_data(
-        cfg.START_PATH, cfg.DEST_PATH, emergency_dist=cfg.PYLON_DIST_MAX
+        cfg.START_PATH,
+        cfg.DEST_PATH,
+        percent_padding=None,  # cfg.PERC_PAD,
+        emergency_dist=None,  # cfg.PYLON_DIST_MAX
+        oneclass=True
     )
 
     if SAVE_PICKLE:
@@ -115,12 +119,15 @@ for (factor, dist) in PIPELINE:
     )
     print("1) set shift and corridor")
     graph.set_edge_costs(
-        data.layer_classes, data.class_weights, angle_weight=cfg.ANGLE_WEIGHT
+        data.layer_classes,
+        data.class_weights,
+        angle_weight=cfg.ANGLE_WEIGHT,
+        cab_forb=cfg.CABLE_FORBIDDEN
     )
     # add vertices
     graph.add_nodes()
     print("1.2) set shift, edge costs and added nodes")
-    graph.add_edges()
+    graph.add_edges(edge_weight=cfg.EDGE_WEIGHT)
     print("2) added edges", graph.n_edges)
     print("number of vertices:", graph.n_nodes)
 
@@ -130,10 +137,10 @@ for (factor, dist) in PIPELINE:
     print("3) summed cost, get source and dest")
     # get actual best path
     path, path_costs, cost_sum = graph.get_shortest_path(source_v, target_v)
-    print("4) shortest path")
+    print("4) shortest path", cost_sum)
     # save for inspection
     output_paths.append((path, path_costs))
-    plot_surfaces.append(graph.cost_rest[2].copy())
+    plot_surfaces.append(graph.instance.copy())
     # get several paths --> possible to replace by pareto_out[0]
     # paths = [path]
     time_infos.append(graph.time_logs.copy())
@@ -184,9 +191,9 @@ for (factor, dist) in PIPELINE:
 # print("cost actually", cost_sum, "cost_new", cost_sum_window)
 
 # COMPUTE KSP
-# graph.get_shortest_path_tree(source_v, target_v)
-# ksp = graph.k_shortest_paths(source_v, target_v, cfg.KSP)
-# print(sum([k[2] for k in ksp]))
+graph.get_shortest_path_tree(source_v, target_v)
+ksp = graph.laplace(source_v, target_v, cfg.KSP, radius=20, cost_add=0.01)
+plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
 # ksp = graph.k_diverse_paths(
 #     source_v,
 #     target_v,
@@ -216,7 +223,8 @@ time_test_csv(
     path_costs, cost_sum, dist, time_pipeline, NOTES
 )
 
-# PLOTTING:
+# -------------  PLOTTING: ----------------------
+
 # FOR PIPELINE
 plot_pipeline_paths(
     plot_surfaces, output_paths, buffer=2, out_path=OUT_PATH + "_pipeline.png"
@@ -239,9 +247,11 @@ plot_path_costs(
     path,
     path_costs,
     data.layer_classes,
-    buffer=0,
+    buffer=2,
     out_path=OUT_PATH + "_costs.png"
 )
+
+# -------------  SAVE INFOS: ----------------------
 
 # SAVE graph
 # graph.save_graph(OUT_PATH + "_graph")
@@ -251,6 +261,10 @@ plot_path_costs(
 # DataReader.save_pipeline_infos(
 #     OUT_PATH, output_paths, time_infos, PIPELINE, SCALE_PARAM
 # )
+
+# save just coordinates of path
+# data.save_original_path(OUT_PATH, [path])
+data.save_original_path(OUT_PATH, [k[0] for k in ksp], output_coords=True)
 
 # LINE GRAPH FROM FILE:
 # elif GRAPH_TYPE == "LINE_FILE":
