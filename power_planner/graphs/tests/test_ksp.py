@@ -83,7 +83,7 @@ class TestKsp(unittest.TestCase):
             impl_lg, max_angle_lg=max_angle_lg, ang_weight=0
         )
         impl_lg.get_shortest_path_tree(self.start_inds, self.dest_inds)
-        ksp_lg = impl_lg.k_shortest_paths(self.start_inds, self.dest_inds, 10)
+        ksp_lg = impl_lg.find_ksp(self.start_inds, self.dest_inds, 10)
         # get weighted ksp
         wg_graph = WeightedKSP(
             np.array([self.example3]), self.hard_cons, verbose=0

@@ -22,7 +22,7 @@ class KspUtils():
     @staticmethod
     def get_sp_from_preds(pred_map, curr_vertex, start_vertex):
         """
-        Compute path from start_vertex to curr_vertex form the predecessor map 
+        Compute path from start_vertex to curr_vertex form the predecessor map
         Arguments:
             pred_map: map / dictionary with predecessor for each vertex
             curr_vertex: integer denoting any vertex
@@ -134,7 +134,7 @@ class KspUtils():
         dest_edge=False
     ):
         """
-        dest_edge: If it's the edge at destination, we cannot take the current one
+        dest_edge: If it's the edge at destination, we cannot take the current
         """
         if not dest_edge:
             min_shift = preds[int(min_shift), dest_inds[0], dest_inds[1]]
@@ -161,3 +161,78 @@ class KspUtils():
             my_path.append(new_point)
             curr_point = new_point
         return my_path
+
+    @staticmethod
+    def evaluate_sim(ksp, metric):
+        """
+        evaluate ksp diversity according to several metric
+        """
+        ksp_paths = [k[0] for k in ksp]
+        # out_diversity = []  # np.zeros((3,2))
+        # for k, metric in enumerate(["eucl_mean", "eucl_max", "jaccard"]):
+        divs = []
+        for i in range(len(ksp_paths)):
+            for j in range(i + 1, len(ksp_paths)):
+                divs.append(
+                    KspUtils.path_distance(
+                        ksp_paths[i], ksp_paths[j], mode=metric
+                    )
+                )
+            # out_diversity.append(np.mean(divs))
+            # out_diversity[k,1] = np.sum(divs)
+        # return out_diversity
+        return np.mean(divs)
+
+    @staticmethod
+    def evaluate_cost(ksp):
+        """
+        Evaluate ksp with respect to the overall and maximal costs
+        """
+        # ksp_path_costs = [k[1] for k in ksp]
+        # for p_cost in ksp_path_costs:
+        #     p = np.asarray(p_cost)
+        #     c_m = np.mean(np.sum(p,axis=1))
+        ksp_all_costs = [k[2] for k in ksp]
+        return [np.sum(ksp_all_costs), np.max(ksp_all_costs)]
+
+    # @staticmethod
+    # def compare_ksp():
+    #     """
+    #     METHOD UNUSABLE HERE; JUST BACKUP FROM NOTEBOOK
+    #     """
+    #     res_dict = defaultdict(list)
+    #     metrics = ["eucl_mean", "eucl_max", "jaccard"]
+
+    #     func_eval = [
+    #         eucl_max, eucl_max, eucl_max, eucl_max, currently_implemented,
+    #         currently_implemented, currently_implemented,
+    #         currently_implemented, most_diverse_jaccard, most_diverse_jaccard,
+    #         most_diverse_eucl_max, most_diverse_eucl_max, laplace, laplace,
+    #         laplace, laplace
+    #     ]
+    #     names = [
+    #         "vertex eucl max", "vertex eucl max", "vertex eucl max",
+    #         "vertex eucl max", "greedy max set", "greedy max set",
+    #         "greedy max set", "greedy max set", "diverse jaccard",
+    #         "diverse jaccard", "diverse eucl max", "diverse eucl max",
+    #         "corridor", "corridor", "corridor", "corridor"
+    #     ]
+    #     thresh_eval = [
+    #         6, 8, 12, 14, 0.4, 0.6, 0.8, 1.0, 1.01, 1.05, 1.01, 1.05, 7, 10,
+    #         15, 20
+    #     ]
+    #     assert len(func_eval) == len(names)
+    #     assert len(names) == len(thresh_eval)
+
+    #     all_ksps = []
+    #     for name, func, param in zip(names, func_eval, thresh_eval):
+    #         ksp, tic = func(graph, start_inds, dest_inds, 5, param)
+    #         all_ksps.append(ksp)
+    #         res_dict["name"].append(name)
+    #         res_dict["threshold"].append(param)
+    #         res_dict["times"].append(tic)
+    #         for m in metrics:
+    #             res_dict[m + "_distance"].append(evaluate_sim(ksp, m))
+    #         cost_sum, cost_max = evaluate_cost(ksp)
+    #         res_dict["cost_sum"].append(cost_sum)
+    #         res_dict["cost_max"].append(cost_max)
