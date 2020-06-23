@@ -296,9 +296,7 @@ class ImplicitLG():
             [self.cost_instance[:, p[0], p[1]] for p in path]
         )
         # include angle costs
-        ang_costs = ConstraintUtils.compute_angle_costs(
-            path, self.angle_norm_factor
-        )
+        ang_costs = CostUtils.compute_angle_costs(path, self.angle_norm_factor)
         # prevent that inf * 0 if zero edge weight
         edge_costs = 0
         if self.edge_weight != 0:
@@ -330,14 +328,21 @@ class ImplicitLG():
         ang_costs = CostUtils.compute_raw_angles(path)
         # raw edge costs
         edge_costs = CostUtils.compute_edge_costs(path, self.edge_inst)
+        # pylon heights
+        try:
+            heights = np.expand_dims(self.heights, 1)
+        except AttributeError:
+            heights = np.zeros((len(edge_costs), 1))
         # concatenate
         all_costs = np.concatenate(
             (
-                path_costs, np.expand_dims(ang_costs,
-                                           1), np.expand_dims(edge_costs, 1)
+                np.expand_dims(ang_costs, 1), path_costs,
+                np.expand_dims(edge_costs, 1), heights
             ), 1
         )
-        return all_costs
+        names = self.cost_classes + ["edge_costs", "heigths"]
+        assert all_costs.shape[1] == len(names)
+        return all_costs, names
 
     def get_shortest_path(self, start_inds, dest_inds, ret_only_path=False):
         if not np.any(self.dists[:, dest_inds[0], dest_inds[1]] < np.inf):

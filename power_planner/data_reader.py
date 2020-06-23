@@ -1,5 +1,4 @@
 import os
-from PIL import Image
 import rasterio
 import shapefile
 import numpy as np
@@ -174,13 +173,17 @@ class DataReader():
         # read in corresponding tifs
         hard_constraints = []
         for fname in hard_cons_rows["Layer Name"]:
-            constraint = self.read_tif(
-                os.path.join(self.path, "tif_layers", fname + ".tif")
-            )
-            constraint = self._resize_raster(constraint)
-            hard_constraints.append(
-                constraint.astype(int) > 0.5 * np.max(constraint)
-            )
+            file_path = os.path.join(self.path, "tif_layers", fname + ".tif")
+            if os.path.exists(file_path):
+                constraint = self.read_tif(file_path)
+                constraint = self._resize_raster(constraint)
+                if "Scenario" in fname:
+                    hard_constraints.append((constraint == 1).astype(int))
+                else:
+                    hard_constraints.append((constraint != 1).astype(int))
+                # constraint.astype(int) > 0.5 * np.max(constraint)
+            else:
+                print("forbidden layer does not exist", fname)
         print("hard constraints shape", np.asarray(hard_constraints).shape)
         # no forbidden areas - return all ones
         if len(hard_constraints) == 0:
@@ -488,26 +491,36 @@ class DataReader():
             json.dump(out_dict, outfile)
 
     def save_original_path(
-        self, save_path, paths, output_coords=False
+        self, save_path, paths, raw_cost_list, names
     ):  # , orig_start, scale_factor=1):
         """
         save coordinates in original instance (tifs) without padding etc
         """
-        out_path_list = []
-        for path in paths:
+        # out_path_list = []
+        for i, path in enumerate(paths):
+            # round raw costs of this particular path
+            raw_costs = np.around(raw_cost_list[i], 2)
+            # scale and shift
             scaled_path = np.asarray(path) * self.scale_factor
             shift_to_orig = self.orig_start - scaled_path[0]
-            # print(self.orig_start, shift_to_orig)
-            shifted_path = scaled_path + shift_to_orig
-            out_path_list.append(shifted_path.tolist())
+            power_path = scaled_path + shift_to_orig
+            # out_path_list.append(shifted_path.tolist())
 
-        # save as json
-        with open(save_path + "_orig.json", "w") as outfile:
-            json.dump(out_path_list, outfile)
+            # save as json
+            # with open(save_path + "_orig.json", "w") as outfile:
+            #     json.dump(out_path_list, outfile)
+            # for i, power_path in enumerate(out_path_list):
+            coordinates = [self.transform_matrix * p for p in power_path]
 
-        if output_coords:
-            for i, power_path in enumerate(out_path_list):
-                coordinates = [self.transform_matrix * p for p in power_path]
-
-                df = pd.DataFrame(np.asarray(coordinates), columns=["X", "Y"])
-                df.to_csv(save_path + str(i) + "_coords.csv", index=False)
+            # # add pylon heights if applicable
+            # if heights is not None:
+            #     heights = np.expand_dims(heights, 1)
+            # else:
+            #     heights = np.expand_dims(np.zeros(len(coordinates)), 1)
+            all_coords = np.concatenate(
+                (coordinates, power_path, raw_costs), axis=1
+            )
+            df = pd.DataFrame(
+                all_coords, columns=["X", "Y", "X_raw", "Y_raw"] + names
+            )
+            df.to_csv(save_path + "_" + str(i) + ".csv", index=False)
