@@ -190,7 +190,7 @@ class LineGraph(GeneralGraph):
             out_path.append(list(np.array(start_pos) + self.shifts[shift_ind]))
 
         # compute costs: angle costs
-        ang_costs = ConstraintUtils.compute_angle_costs(
+        ang_costs = ConstUtils.compute_angle_costs(
             out_path, self.max_angle_lg
         )
         out_costs = list()

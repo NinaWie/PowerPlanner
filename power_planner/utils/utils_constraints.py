@@ -1,7 +1,5 @@
 import numpy as np
-from power_planner.utils.utils import (
-    bresenham_line, angle, discrete_angle_costs
-)
+from power_planner.utils.utils import bresenham_line
 
 
 class ConstraintUtils():
@@ -135,17 +133,3 @@ class ConstraintUtils():
                 patch = padded[i:i + k_size, j:j + k_size]
                 convolved[i, j] = np.sum(patch * kernel)
         return convolved
-
-    @staticmethod
-    def compute_angle_costs(path, angle_norm_factor=np.pi / 2):
-        path = np.asarray(path)
-        ang_out = [0]
-        for p in range(len(path) - 2):
-            vec1 = path[p + 1] - path[p]
-            vec2 = path[p + 2] - path[p + 1]
-            ang_out.append(
-                discrete_angle_costs(angle(vec1, vec2), angle_norm_factor)
-            )
-        ang_out.append(0)
-
-        return ang_out

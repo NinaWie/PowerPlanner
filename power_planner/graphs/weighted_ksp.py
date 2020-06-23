@@ -94,7 +94,7 @@ class WeightedKSP(WeightedGraph):
         vertices_path = path_ac + path_cb[1:]
         return vertices_path
 
-    def k_shortest_paths(self, source, dest, k, overlap=0.5, mode="myset"):
+    def find_ksp(self, source, dest, k, overlap=0.5, mode="myset"):
         tic = time.time()
         # initialize list of paths
         sp_set = set(self.best_path)
@@ -190,7 +190,7 @@ class WeightedKSP(WeightedGraph):
             [(ind // self.y_len, ind % self.y_len) for ind in path]
         )
 
-    def k_diverse_paths(
+    def dispersion_ksp(
         self,
         source,
         dest,
@@ -225,8 +225,6 @@ class WeightedKSP(WeightedGraph):
             sorted_dists, vertices, v_shortest, source, dest, max_costs,
             count_thresh
         )
-        path_costs = [self.transform_path(c) for c in collected_paths]
-        path_costs = [p[2] for p in path_costs]
 
         # transform into coordinates
         collected_coords = [self.simple_transform(p) for p in collected_paths]

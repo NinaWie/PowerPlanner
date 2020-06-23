@@ -1,7 +1,9 @@
 import numpy as np
 from skimage.segmentation import watershed
 from skimage import filters
-from power_planner.utils.utils import bresenham_line
+from power_planner.utils.utils import (
+    bresenham_line, discrete_angle_costs, angle
+)
 
 
 class CostUtils():
@@ -126,17 +128,43 @@ class CostUtils():
         return new_img
 
     @staticmethod
-    def compute_edge_costs(path, edge_weight, instance):
+    def compute_edge_costs(path, instance):
         e_costs = []
         for p in range(len(path) - 1):
             point_list = bresenham_line(
                 path[p][0], path[p][1], path[p + 1][0], path[p + 1][1]
             )
-            costs = np.mean([instance[i, j] for (i, j) in point_list[1:-1]])
-            e_costs.append(edge_weight * costs)
+            e_costs.append(
+                np.mean([instance[i, j] for (i, j) in point_list[1:-1]])
+            )
         # to make it the same size as other costs
         e_costs.append(0)
         return e_costs
+
+    @staticmethod
+    def compute_angle_costs(path, angle_norm_factor=np.pi / 2):
+        path = np.asarray(path)
+        ang_out = [0]
+        for p in range(len(path) - 2):
+            vec1 = path[p + 1] - path[p]
+            vec2 = path[p + 2] - path[p + 1]
+            ang_out.append(
+                discrete_angle_costs(angle(vec1, vec2), angle_norm_factor)
+            )
+        ang_out.append(0)
+
+        return ang_out
+
+    @staticmethod
+    def compute_raw_angles(path):
+        path = np.asarray(path)
+        ang_out = [0]
+        for p in range(len(path) - 2):
+            vec1 = path[p + 1] - path[p]
+            vec2 = path[p + 2] - path[p + 1]
+            ang_out.append(angle(vec1, vec2))
+        ang_out.append(0)
+        return ang_out
 
     @staticmethod
     def emergency_points(hard_cons, costs, max_dist, start_inds, dest_inds):

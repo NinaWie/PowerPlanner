@@ -78,7 +78,7 @@ class WeightedGraph(GeneralGraph):
         # set all which are not in the corridor to -1
         self.pos2node[inverted_corridor] = -1
         # self.pos2node[dest_inds[0], dest_inds[1]] = np.max(self.pos2node) + 1
-        # self.pos2node[start_inds[0], start_inds[1]] = np.max(self.pos2node) + 1
+        # self.pos2node[start_inds[0], start_inds[1]] = np.max(self.pos2node)+1
         self.time_logs["set_cost_rest"] = round(time.time() - tic, 3)
 
     def set_shift(self, lower, upper, vec, max_angle, max_angle_lg=0):

@@ -168,8 +168,10 @@ class ImplicitKSP(ImplicitLG):
         """
         Eppstein's algorithm: Sum up the two SP treest and iterate
         """
-        # sum both dists_ab and dists_ba, subtract inst because counted twice
-        summed_dists = (self.dists + self.dists_ba - self.instance)
+        # sum both dists_ab and dists_ba, inst and edges are counted twice!
+        summed_dists = (
+            self.dists + self.dists_ba - self.instance - self.edge_cost
+        )
         # mins along outgoing edges
         min_node_dists = np.min(summed_dists, axis=0)
         min_shift_dists = np.argmin(summed_dists, axis=0)

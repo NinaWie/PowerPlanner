@@ -6,3 +6,4 @@ from .implicit_lg import ImplicitLG
 from .weighted_ksp import WeightedKSP
 # from .implicit_lg_ksp import ImplicitLgKSP
 from .impl_ksp import ImplicitKSP
+from .height_graph import HeightGraph

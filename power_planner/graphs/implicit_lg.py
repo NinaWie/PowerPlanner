@@ -1,7 +1,6 @@
 from power_planner.utils.utils import (
     get_half_donut, angle, discrete_angle_costs, bresenham_line
 )
-from power_planner.utils.utils_constraints import ConstraintUtils
 from power_planner.utils.utils_costs import CostUtils
 import numpy as np
 import time
@@ -47,10 +46,34 @@ def del_after_dest(stack, d_x, d_y):
 
 
 @jit(nopython=True)
-def add_in_edges(
-    stack, shifts, angles_all, dists, preds, instance, edge_inst, shift_lines,
-    edge_weight
-):
+def edge_costs(stack, shifts, edge_cost, edge_inst, shift_lines, edge_weight):
+    """
+    Pre-compute all edge costs
+    """
+    # print(len(stack))
+    for i in range(len(stack)):
+        v_x = stack[-i - 1][0]
+        v_y = stack[-i - 1][1]
+        for s in range(len(shifts)):
+            neigh_x = v_x + shifts[s][0]
+            neigh_y = v_y + shifts[s][1]
+            if (
+                0 <= neigh_x < edge_cost.shape[1]
+                and 0 <= neigh_y < edge_cost.shape[2]
+                and edge_inst[neigh_x, neigh_y] < np.inf
+            ):
+                bres_line = shift_lines[s] + np.array([v_x, v_y])
+                edge_cost_list = np.zeros(len(bres_line))
+                for k in range(len(bres_line)):
+                    edge_cost_list[k] = edge_inst[bres_line[k, 0],
+                                                  bres_line[k, 1]]
+                edge_cost[s, neigh_x, neigh_y
+                          ] = edge_weight * np.mean(edge_cost_list)
+    return edge_cost
+
+
+@jit(nopython=True)
+def add_in_edges(stack, shifts, angles_all, dists, preds, instance, edge_cost):
     """
     Fast C++ (numba) method to compute the cumulative distances from start
     """
@@ -65,19 +88,10 @@ def add_in_edges(
                 0 <= neigh_x < dists.shape[1] and 0 <= neigh_y < dists.shape[2]
                 and instance[neigh_x, neigh_y] < np.inf
             ):
-                # compute edge costs
-                if edge_weight > 0:
-                    bres_line = shift_lines[s] + np.array([v_x, v_y])
-                    edge_cost_list = np.zeros(len(bres_line))
-                    for k in range(len(bres_line)):
-                        edge_cost_list[k] = edge_inst[bres_line[k, 0],
-                                                      bres_line[k, 1]]
-                    edge_cost = edge_weight * np.mean(edge_cost_list)
-                else:
-                    edge_cost = 0
-                # add up costs with angle
+                # add up pylon cost + angle cost + edge cost
                 cost_per_angle = dists[:, v_x, v_y] + angles_all[s] + instance[
-                    neigh_x, neigh_y] + edge_cost
+                    neigh_x, neigh_y] + edge_cost[s, neigh_x, neigh_y]
+                # update distances and predecessors
                 dists[s, neigh_x, neigh_y] = np.min(cost_per_angle)
                 preds[s, neigh_x, neigh_y] = np.argmin(cost_per_angle)
     return dists, preds
@@ -243,11 +257,17 @@ class ImplicitLG():
                 print("time topo sort:", round(time.time() - tic, 3))
                 print("stack length", len(stack))
             tic = time.time()
+            # precompute edge costs
+            self.edge_cost = np.zeros(self.preds.shape)
+            if self.edge_weight > 0:
+                self.edge_cost = edge_costs(
+                    stack, np.array(self.shifts), self.edge_cost,
+                    self.edge_inst, self.shift_lines, self.edge_weight
+                )
             # RUN - add edges
             self.dists, self.preds = add_in_edges(
                 stack, np.array(self.shifts), self.angle_cost_array,
-                self.dists, self.preds, self.instance, self.edge_inst,
-                self.shift_lines, self.edge_weight
+                self.dists, self.preds, self.instance, self.edge_cost
             )
             self.time_logs["add_all_edges"] = round(time.time() - tic, 3)
             if self.verbose:
@@ -296,6 +316,29 @@ class ImplicitLG():
         return np.asarray(path
                           ).tolist(), path_costs.tolist(), cost_sum.tolist()
 
+    def raw_path_costs(self, path):
+        """
+        Compute raw angles, edge costs, pylon heights and normal costs
+        (without weighting)
+        Arguments:
+            List or array of path coordinates
+        """
+        path_costs = np.array(
+            [self.cost_instance[:, p[0], p[1]] for p in path]
+        )
+        # raw angle costs
+        ang_costs = CostUtils.compute_raw_angles(path)
+        # raw edge costs
+        edge_costs = CostUtils.compute_edge_costs(path, self.edge_inst)
+        # concatenate
+        all_costs = np.concatenate(
+            (
+                path_costs, np.expand_dims(ang_costs,
+                                           1), np.expand_dims(edge_costs, 1)
+            ), 1
+        )
+        return all_costs
+
     def get_shortest_path(self, start_inds, dest_inds, ret_only_path=False):
         if not np.any(self.dists[:, dest_inds[0], dest_inds[1]] < np.inf):
             raise RuntimeWarning("empty path")
@@ -334,7 +377,7 @@ class ImplicitLG():
                 # todo: avoid swaping dimenions each time
                 cost_switched = np.moveaxis(self.dists, 0, -1)
                 # shift by shift
-                costs_shifted = ConstraintUtils.shift_surface(
+                costs_shifted = CostUtils.shift_surface(
                     cost_switched, self.shifts[i], fill_val=self.fill_val
                 )
 
