@@ -37,7 +37,7 @@ else:
     height_resistance_path = "../data/Instance_CH.nosync/dtm_10m.tif"
 PIPELINE = [(1, 0)]
 USE_KSP = 0
-MIN_H = 40
+MIN_H = 50
 
 GRAPH_TYPE = graphs.HeightGraph
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, ImplicitLG
@@ -64,22 +64,21 @@ with open(IOPATH, "rb") as infile:
 COMPARISONS = []
 for a_w in [0.1, 0.2, 0.4]:
     for e_w in [0, 0.3, 0.5]:
-        for h_w in [0, 0.2, 1]:
-            for b_w in [0, 1 / 3, 2 / 3]:
-                for p_w in [0, 1 / 3, 2 / 3]:
-                    if p_w + b_w > 1 or p_w + b_w == 0:
-                        continue
-                    COMPARISONS.append([a_w, e_w, h_w, b_w, p_w])
+        for h_w in [0, 0.2, 0.9]:
+            for (b_w, p_w, u_w) in [
+                (1, 1, 1), (2, 1, 1), (1, 2, 1), (1, 1, 2)
+            ]:
+                COMPARISONS.append([a_w, e_w, h_w, b_w, p_w, u_w])
 print("Number comparisons", len(COMPARISONS))
-shortcut = ["a", "e", "h", "b", "p"]
+shortcut = ["a", "e", "h", "b", "p", "u"]
 # for angle_weight in
 for COMP in COMPARISONS:
-    (a_w, e_w, h_w, b_w, p_w) = COMP
-    u_w = 1 - p_w - b_w
+    (a_w, e_w, h_w, b_w, p_w, u_w) = COMP
+    # u_w = 1 - p_w - b_w
     ID_list = [
         shortcut[i] + str(round(COMP[i] * 10)) for i in range(len(COMP))
     ]
-    ID_list.append("u" + str(round(u_w * 10)))
+    # ID_list.append("u" + str(round(u_w * 10)))
     ID = "ch_" + ("_").join(ID_list)
     # f"{ID}_a{angle_weight}_e{edge_weight}_h{height_weight}_b{round(
     # bau_weight*10, 0)}_p{round(planung_weight, 1)}_u
