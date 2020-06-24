@@ -1,6 +1,9 @@
 import numpy as np
-from skimage.segmentation import watershed
-from skimage import filters
+try:
+    from skimage.segmentation import watershed
+    from skimage import filters
+except ModuleNotFoundError:
+    pass
 from power_planner.utils.utils import (
     bresenham_line, discrete_angle_costs, angle
 )
