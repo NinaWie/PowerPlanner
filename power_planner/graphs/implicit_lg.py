@@ -144,11 +144,10 @@ class ImplicitLG():
         """
         self.angle_norm_factor = max_angle_lg
         self.shifts = get_half_donut(lower, upper, vec, angle_max=max_angle)
-        shift_lines = []
+        shift_lines = List()
         for shift in self.shifts:
             line = bresenham_line(0, 0, shift[0], shift[1])
             shift_lines.append(np.array(line[1:-1]))
-        shift_lines = List(shift_lines)
         self.shift_lines = shift_lines
 
     def add_nodes(self):
