@@ -179,7 +179,7 @@ def select_best_height(heights_in, height_combinations, MIN_H, MAX_H):
 
 
 @jit(nopython=True)
-def check_heigths(bres_line, S, height_resistance, yA, yB, h_diff):
+def check_heights(bres_line, S, height_resistance, yA, yB, h_diff):
     # get minimum heights of v_x,v_y dependent on incoming edge
 
     # compute lowest point of sag
@@ -191,7 +191,9 @@ def check_heigths(bres_line, S, height_resistance, yA, yB, h_diff):
     # iterate over points on bres_line
     stepsize = S / (len(bres_line) + 1)
     heights_above = np.zeros(len(bres_line))
-    for k, (i, j) in enumerate(bres_line):
+    for k in range(len(bres_line)):
+        i = bres_line[k, 0]
+        j = bres_line[k, 1]
         x = x0 - stepsize * (k + 1)
         cat = (CAT_W * x**2) / (2 * CAT_H)
         heights_above[k] = yA - A_height - height_resistance[i, j] + cat
@@ -243,7 +245,7 @@ def height_optimal_sp(
                 yA = height_resistance[v_x, v_y] + MIN_H
                 yB = height_resistance[neigh_x, neigh_y] + MIN_H
                 # check heights
-                height_OK = check_heigths(
+                height_OK = check_heights(
                     bres_line, S, height_resistance, yA, yB, MAX_H - MIN_H
                 )
 
@@ -362,7 +364,8 @@ class HeightGraph(ImplicitLG):
         )
         if self.verbose:
             print("time topo sort:", round(time.time() - tic, 3))
-            # print("stack length", len(stack))
+
+            print("stack length", len(stack))
         tic = time.time()
 
         # RUN - add edges
