@@ -6,6 +6,9 @@ test_file.py
 backup/
 notebooks/config.py
 data/
+notebooks/*.dat
+notebooks/*.pdf
+notebooks/*json
 
 notebooks/Function*
 *.csv

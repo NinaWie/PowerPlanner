@@ -25,12 +25,20 @@ parser.add_argument('-cluster', action='store_true')
 args = parser.parse_args()
 
 # define out save name
-ID = "de_inst_2_forb_uberspannen"  # str(round(time.time() / 60))[-5:]
+ID = "chinst_test"  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
+SCALE_PARAM = 5  # args.scale
+SCENARIO = 1
+INST = "ch"
+height_resistance_path = "../data/Instance_CH.nosync/dtm_10m.tif"
+# for SCALE_PARAM in [1, 2, 5]:
+#     for SCENARIO in [1, 2, 3]:
+# print()
+# print("-------------- new scnario", SCALE_PARAM, SCENARIO, "-------")
+
 # DEFINE CONFIGURATION
-SCALE_PARAM = 2  # args.scale
 # normal graph pipeline
 # PIPELINE = [(2, 30), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
 # random graph pipeline
@@ -40,7 +48,7 @@ PIPELINE = [(1, 0)]
 # PIPELINE = [(5000000, 100), (5000000, 0)]  # auto pipeline
 USE_KSP = 0
 
-GRAPH_TYPE = graphs.ImplicitKSP
+GRAPH_TYPE = graphs.HeightGraph
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, ImplicitLG
 # ImplicitLgKSP, WeightedKSP
 print("graph type:", GRAPH_TYPE)
@@ -57,11 +65,11 @@ if LOAD:
     PATH_FILES = os.path.join("data")
 else:
     # PATH_FILES = "/Volumes/Nina Backup/data_master_thesis/large_instance"
-    PATH_FILES = "../data/instance_DE.nosync"  #  "../data/Instance_CH.nosync" "../data/belgium.nosync"
-IOPATH = os.path.join(PATH_FILES, "de_dump_" + str(SCALE_PARAM) + ".dat")
+    PATH_FILES = "../data/instance_CH.nosync"  #  "../data/Instance_CH.nosync" "../data/belgium.nosync"
+IOPATH = os.path.join(PATH_FILES, f"{INST}_dump_w{SCENARIO}_{SCALE_PARAM}.dat")
 
 # LOAD CONFIG
-with open("config.json", "r") as infile:
+with open(os.path.join(PATH_FILES, f"{INST}_config.json"), "r") as infile:
     cfg_dict = json.load(infile)  # Config(SCALE_PARAM)
     cfg = SimpleNamespace(**cfg_dict)
     cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX = compute_pylon_dists(
@@ -77,14 +85,14 @@ if LOAD:
 else:
     # read in files
     data = DataReader(
-        PATH_FILES, cfg.CORR_PATH, cfg.WEIGHT_CSV, cfg.SCENARIO, SCALE_PARAM
+        PATH_FILES, cfg.CORR_PATH, cfg.WEIGHT_CSV, SCENARIO, SCALE_PARAM
     )
     instance, instance_corr, start_inds, dest_inds = data.get_data(
         cfg.START_PATH,
         cfg.DEST_PATH,
         percent_padding=None,  # cfg.PERC_PAD,
         emergency_dist=None,  # cfg.PYLON_DIST_MAX
-        oneclass=True
+        oneclass=False  # cfg.ONE_CLASS
     )
 
     if SAVE_PICKLE:
@@ -92,6 +100,13 @@ else:
         with open(IOPATH, "wb") as outfile:
             pickle.dump(data, outfile)
         print("successfully saved data")
+
+    # visualize_corr = 1 - instance_corr
+    # visualize_corr[visualize_corr == 1] = np.inf
+    # plt.figure(figsize=(8, 5))
+    # plt.imshow(np.sum(instance, axis=0) + visualize_corr)
+    # plt.colorbar()
+    # plt.savefig(f"surface_s{SCENARIO}_{SCALE_PARAM}.png")
 
 # DEFINE GRAPH AND ALGORITHM
 graph = GRAPH_TYPE(
@@ -126,8 +141,10 @@ for (factor, dist) in PIPELINE:
     )
     # add vertices
     graph.add_nodes()
+    if height_resistance_path is not None:
+        graph.init_heights(height_resistance_path, 40, 80, SCALE_PARAM)
     print("1.2) set shift, edge costs and added nodes")
-    graph.add_edges(edge_weight=cfg.EDGE_WEIGHT)
+    graph.add_edges(edge_weight=0, height_weight=0.2)  # cfg.EDGE_WEIGHT)
     print("2) added edges", graph.n_edges)
     print("number of vertices:", graph.n_nodes)
 
@@ -159,7 +176,7 @@ for (factor, dist) in PIPELINE:
         # Define paths around which to place corridor
         if USE_KSP:
             graph.get_shortest_path_tree(source_v, target_v)
-            ksp = graph.k_shortest_paths(source_v, target_v, 3, overlap=0.2)
+            ksp = graph.find_ksp(source_v, target_v, 3, overlap=0.2)
             paths = [k[0] for k in ksp]
             flat_list = [item for sublist in paths for item in sublist]
             del output_paths[-1]
@@ -191,9 +208,9 @@ for (factor, dist) in PIPELINE:
 # print("cost actually", cost_sum, "cost_new", cost_sum_window)
 
 # COMPUTE KSP
-graph.get_shortest_path_tree(source_v, target_v)
-ksp = graph.laplace(source_v, target_v, cfg.KSP, radius=20, cost_add=0.01)
-plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
+# graph.get_shortest_path_tree(source_v, target_v)
+# ksp = graph.laplace(source_v, target_v, cfg.KSP, radius=50, cost_add=0.05)
+# plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
 # ksp = graph.k_diverse_paths(
 #     source_v,
 #     target_v,
@@ -226,9 +243,9 @@ time_test_csv(
 # -------------  PLOTTING: ----------------------
 
 # FOR PIPELINE
-plot_pipeline_paths(
-    plot_surfaces, output_paths, buffer=2, out_path=OUT_PATH + "_pipeline.png"
-)
+# plot_pipeline_paths(
+#     plot_surfaces, output_paths, buffer=2, out_path=OUT_PATH + "_pipeline.png"
+# )
 # FOR KSP:
 # with open(OUT_PATH + "_ksp.json", "w") as outfile:
 #     json.dump(ksp, outfile)
@@ -263,8 +280,9 @@ plot_path_costs(
 # )
 
 # save just coordinates of path
-# data.save_original_path(OUT_PATH, [path])
-data.save_original_path(OUT_PATH, [k[0] for k in ksp], output_coords=True)
+raw_costs, names = graph.raw_path_costs(path)
+data.save_original_path(OUT_PATH, [path], [raw_costs], names)
+# data.save_original_path(OUT_PATH, [k[0] for k in ksp], output_coords=True)
 
 # LINE GRAPH FROM FILE:
 # elif GRAPH_TYPE == "LINE_FILE":

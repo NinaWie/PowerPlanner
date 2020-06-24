@@ -401,10 +401,11 @@ class HeightGraph(ImplicitLG):
             path.append(new_point)
             curr_point = new_point
 
-        heights = np.flip(np.asarray(heights), axis=0)
+        self.heights = np.flip(np.asarray(heights), axis=0)
         path = np.flip(np.asarray(path), axis=0)
         if ret_only_path:
             return path
         self.sp = path
         self.time_logs["shortest_path"] = round(time.time() - tic, 3)
-        return list(self.transform_path(path)) + [heights]
+        # print(self.heights, np.sum(self.heights))
+        return self.transform_path(path)
