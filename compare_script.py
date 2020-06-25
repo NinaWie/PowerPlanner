@@ -84,6 +84,10 @@ for COMP in COMPARISONS:
     # bau_weight*10, 0)}_p{round(planung_weight, 1)}_u
     # {round(umwelt_weight,1)}"
     OUT_PATH = os.path.join(OUT_DIR, ID)
+    if os.path.exists(OUT_PATH + "_costs.png"):
+        print("id already exists", ID)
+        continue
+
     print("-------------- ", ID, "-------------")
     CLASS_WEIGHTS = [b_w, p_w, u_w]
 
