@@ -1,7 +1,9 @@
 import numpy as np
 import time
 from numba import jit
-from power_planner.graphs.implicit_lg import topological_sort_jit, ImplicitLG
+from power_planner.graphs.implicit_lg import (
+    topological_sort_jit, ImplicitLG, del_after_dest
+)
 from power_planner.utils.utils_ksp import KspUtils
 from power_planner.utils.utils import get_distance_surface
 
@@ -14,12 +16,12 @@ def add_out_edges(
     """
     Compute cumulative distances with each point of dists containing OUT edges
     """
-    preds = np.zeros(dists.shape)
+    preds = np.zeros(dists.shape) - 1
     # preds = preds - 1
     # print(len(stack))
     for i in range(len(stack)):
-        v_x = stack[-i - 1][0]
-        v_y = stack[-i - 1][1]
+        v_x = stack[i][0]
+        v_y = stack[i][1]
         for s in range(len(shifts)):
             neigh_x = v_x + shifts[s][0]
             neigh_y = v_y + shifts[s][1]
@@ -93,9 +95,10 @@ class ImplicitKSP(ImplicitLG):
         tmp_list = self._helper_list()
         visit_points = (self.instance < np.inf).astype(int)
         stack = topological_sort_jit(
-            self.dest_inds[0], self.dest_inds[1],
-            np.asarray(self.shifts) * (-1), visit_points, tmp_list
+            self.start_inds[0], self.start_inds[1], np.asarray(self.shifts),
+            visit_points, tmp_list
         )
+        stack = del_after_dest(stack, self.dest_inds[0], self.dest_inds[1])
         # compute distances: new method because out edges instead of in
         self.dists_ba, self.preds_ba = add_out_edges(
             stack,
@@ -178,6 +181,24 @@ class ImplicitKSP(ImplicitLG):
         # argsort
         v_shortest = np.argsort(min_node_dists.flatten())
         return min_node_dists, v_shortest, min_shift_dists
+
+    def path_through_window(self, w_xmin, w_xmax, w_ymin, w_ymax):
+        (min_node_dists, _, min_shift_dists) = self.compute_min_node_dists()
+        # select window
+        window = min_node_dists[w_xmin:w_xmax + 1, w_ymin:w_ymax + 1]
+        _, arr_len = window.shape
+        # get min vertex in this window
+        current_best = np.nanargmin(window.flatten())
+        # get coordinates
+        (x2_wd, x3_wd) = current_best // arr_len, current_best % arr_len
+        (x2, x3) = (x2_wd + w_xmin, x3_wd + w_ymin)
+        # get shift for this optimum (which edge is used)
+        x1 = min_shift_dists[x2, x3]
+        # compute corresponding path
+        vertices_path = self._combined_paths(
+            self.start_inds, self.dest_inds, x1, [x2, x3]
+        )
+        return self.transform_path(vertices_path)
 
     def laplace(self, source, dest, k, radius=20, cost_add=0.01):
         """

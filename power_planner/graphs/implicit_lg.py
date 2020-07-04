@@ -79,8 +79,8 @@ def add_in_edges(stack, shifts, angles_all, dists, preds, instance, edge_cost):
     """
     # print(len(stack))
     for i in range(len(stack)):
-        v_x = stack[-i - 1][0]
-        v_y = stack[-i - 1][1]
+        v_x = stack[i][0]
+        v_y = stack[i][1]
         for s in range(len(shifts)):
             neigh_x = v_x + shifts[s][0]
             neigh_y = v_y + shifts[s][1]
@@ -157,7 +157,7 @@ class ImplicitLG():
         self.dists += self.fill_val
         i, j = self.start_inds
         self.dists[:, i, j] = self.instance[i, j]
-        self.preds = np.zeros(self.dists.shape)
+        self.preds = np.zeros(self.dists.shape) - 1
         self.time_logs["add_nodes"] = round(time.time() - tic, 3)
         self.n_nodes = self.x_len * self.y_len
         self.n_edges = len(self.shifts) * self.x_len * self.y_len
@@ -221,6 +221,9 @@ class ImplicitLG():
         self.instance = np.sum(
             np.moveaxis(self.cost_rest, 0, -1) * self.cost_weights[1:], axis=2
         )
+        # if one weight is zero, have to correct 0*inf errors
+        if np.any(np.isnan(self.instance)):
+            self.instance[np.isnan(self.instance)] = np.inf
         if cab_forb:
             # ueberspannen is forbidden as well
             self.edge_inst = self.instance.copy()
@@ -238,7 +241,7 @@ class ImplicitLG():
         if self.verbose:
             print("instance shape", self.instance.shape)
 
-    def add_edges(self, mode="DAG", edge_weight=0):
+    def add_edges(self, mode="DAG", edge_weight=0, height_weight=0):
         self.edge_weight = edge_weight
         if mode == "BF":
             self.add_edges_BF()
@@ -248,10 +251,12 @@ class ImplicitLG():
             tmp_list = self._helper_list()
             visit_points = (self.instance < np.inf).astype(int)
             stack = topological_sort_jit(
-                self.start_inds[0], self.start_inds[1],
-                np.asarray(self.shifts), visit_points, tmp_list
+                self.dest_inds[0], self.dest_inds[1],
+                np.asarray(self.shifts) * (-1), visit_points, tmp_list
             )
-            # stack = del_after_dest(stack, self.dest_inds[0], self.dest_inds[1])
+            stack = del_after_dest(
+                stack, self.start_inds[0], self.start_inds[1]
+            )
             if self.verbose:
                 print("time topo sort:", round(time.time() - tic, 3))
                 print("stack length", len(stack))
@@ -357,6 +362,9 @@ class ImplicitLG():
             # get new shift from argmins
             min_shift = self.preds[int(min_shift), curr_point[0], curr_point[1]
                                    ]
+            if min_shift == -1:
+                print(path)
+                raise RuntimeError("Problem! predecessor -1!")
             path.append(new_point)
             curr_point = new_point
 
