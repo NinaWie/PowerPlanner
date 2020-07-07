@@ -25,21 +25,21 @@ class TestUtils(unittest.TestCase):
                     ) < max_angle:
                         self.assertIn((i, j), shifts)
 
-    def test_linegraph_donut(self) -> None:
-        for max_angle in [np.pi / 2, np.pi / 4]:
-            vec = [1, 1]
-            linegraph_tuples = get_lg_donut(
-                3, 5, vec, np.pi / 2, max_angle_lg=max_angle
-            )
-            for l in linegraph_tuples:
-                self.assertTrue(np.dot(l[1], vec) >= 0)
-                self.assertTrue(np.dot(l[0], vec) <= 0)
-                transformed = np.array(l[0]) * (-1)
-                self.assertTrue(angle(transformed, l[1]) <= max_angle)
-                if angle(transformed, l[1]) > np.pi / 6:
-                    self.assertGreaterEqual(l[2], 0.6)
-                    if max_angle == np.pi / 4:
-                        self.assertEqual(l[2], 0.6)
+    # def test_linegraph_donut(self) -> None:
+    #     for max_angle in [np.pi / 2, np.pi / 4]:
+    #         vec = [1, 1]
+    #         linegraph_tuples = get_lg_donut(
+    #             3, 5, vec, np.pi / 2, max_angle_lg=max_angle
+    #         )
+    #         for l in linegraph_tuples:
+    #             self.assertTrue(np.dot(l[1], vec) >= 0)
+    #             self.assertTrue(np.dot(l[0], vec) <= 0)
+    #             transformed = np.array(l[0]) * (-1)
+    #             self.assertTrue(angle(transformed, l[1]) <= max_angle)
+    #             if angle(transformed, l[1]) > np.pi / 6:
+    #                 self.assertGreaterEqual(l[2], 0.6)
+    #                 if max_angle == np.pi / 4:
+    #                     self.assertEqual(l[2], 0.6)
 
     def test_rescale(self) -> None:
         arr = np.random.rand(20, 20)

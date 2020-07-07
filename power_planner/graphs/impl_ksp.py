@@ -2,7 +2,7 @@ import numpy as np
 import time
 from numba import jit
 from power_planner.graphs.implicit_lg import (
-    topological_sort_jit, ImplicitLG, del_after_dest
+    topological_sort_jit, ImplicitLG, del_after_dest, edge_cost, average_lcp
 )
 from power_planner.utils.utils_ksp import KspUtils
 from power_planner.utils.utils import get_distance_surface
@@ -60,21 +60,9 @@ def add_out_edges(
 
 class ImplicitKSP(ImplicitLG):
 
-    def __init__(
-        self,
-        cost_instance,
-        hard_constraints,
-        directed=True,
-        graphtool=1,
-        verbose=1
-    ):
-        super(ImplicitKSP, self).__init__(
-            cost_instance,
-            hard_constraints,
-            directed=directed,
-            graphtool=graphtool,
-            verbose=verbose
-        )
+    def __init__(self, cost_instance, hard_constraints, **kwargs):
+        super(ImplicitKSP,
+              self).__init__(cost_instance, hard_constraints, kwargs)
 
     def get_shortest_path_tree(self, source, target):
         """

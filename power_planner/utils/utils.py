@@ -1,5 +1,7 @@
 import numpy as np
 from csv import writer
+from types import SimpleNamespace
+import json
 
 try:
     from scipy.ndimage.morphology import binary_dilation
@@ -58,6 +60,21 @@ def compute_pylon_dists(PYLON_DIST_MIN, PYLON_DIST_MAX, RASTER, SCALE_PARAM):
         PYLON_DIST_MAX /= SCALE_PARAM
     print("defined pylon distances in raster:", PYLON_DIST_MIN, PYLON_DIST_MAX)
     return PYLON_DIST_MIN, PYLON_DIST_MAX
+
+
+def load_config(config_filepath, scale_factor=1):
+    # load file
+    with open(config_filepath, "r") as infile:
+        cfg_dict = json.load(infile)
+        cfg = SimpleNamespace()
+        cfg.data = SimpleNamespace(**cfg_dict["data"])
+        cfg.graph = SimpleNamespace(**cfg_dict["graph"])
+        (cfg.graph.PYLON_DIST_MIN,
+         cfg.graph.PYLON_DIST_MAX) = compute_pylon_dists(
+             cfg.data.PYLON_DIST_MIN, cfg.data.PYLON_DIST_MAX, cfg.data.RASTER,
+             scale_factor
+         )
+    return cfg
 
 
 def normalize(instance):

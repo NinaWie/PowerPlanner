@@ -3,6 +3,7 @@ import time
 
 from power_planner.utils.utils import get_lg_donut
 from power_planner.utils.utils_constraints import ConstraintUtils
+from power_planner.utils.utils_costs import CostUtils
 
 from .general_graph import GeneralGraph
 
@@ -190,9 +191,7 @@ class LineGraph(GeneralGraph):
             out_path.append(list(np.array(start_pos) + self.shifts[shift_ind]))
 
         # compute costs: angle costs
-        ang_costs = ConstUtils.compute_angle_costs(
-            out_path, self.max_angle_lg
-        )
+        ang_costs = CostUtils.compute_angle_costs(out_path, self.max_angle_lg)
         out_costs = list()
         for k, (i, j) in enumerate(out_path):
             out_costs.append(

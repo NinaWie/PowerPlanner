@@ -22,7 +22,8 @@ from power_planner.utils.utils import (
     get_distance_surface, time_test_csv, compute_pylon_dists
 )
 from power_planner.graphs.implicit_lg import ImplicitLG
-from power_planner.graphs.impl_ksp import ImplicitKSP
+from power_planner.alternative_paths import AlternativePaths
+from power_planner.ksp import KSP
 
 
 class ImageFromArray(Widget):
@@ -84,10 +85,10 @@ class DemoApp(App):
             orientation='horizontal', size_hint=(1, None), height=30
         )
         self.filepath = TextInput(
-            hint_text="data/ch_dump_w1_5.dat",
+            hint_text="data/ch_data_1_5.dat",
             size_hint=(1 - right_bar_size, 1)
         )
-        self.filepath.text = "data/ch_dump_w1_5.dat"  # set default
+        self.filepath.text = "data/ch_data_1_5.dat"  # set default
         self.load_data = Button(
             text='Load data',
             on_press=self.loadData,
@@ -145,14 +146,14 @@ class DemoApp(App):
         # button_box.add_widget(self.angle_slider)
 
         # Define right side buttons
-        self.init_button = Button(
-            text="Initialize",
-            on_press=self.initialize,
+        self.single_button = Button(
+            text="Single shortest path",
+            on_press=self.single_sp,
             size=(Window.width * right_bar_size, 30)
         )
-        self.build_button = Button(
-            text="Build graph & Compute SP",
-            on_press=self.build_graph,
+        self.sp_tree_button = Button(
+            text="Shortest path trees",
+            on_press=self.sp_tree,
             size=(Window.width * right_bar_size, 30)
         )
         # self.sp_button = Button(
@@ -166,7 +167,9 @@ class DemoApp(App):
             size=(Window.width * right_bar_size, 30)
         )
         # Add to widget
-        for button in [self.init_button, self.build_button, self.ksp_button]:
+        for button in [
+            self.single_button, self.sp_tree_button, self.ksp_button
+        ]:
             button.disabled = True
             button_box.add_widget(button)
 
@@ -193,19 +196,20 @@ class DemoApp(App):
             with open(self.filepath.text, "rb") as infile:
                 data = pickle.load(infile)
                 (
-                    self.instance, self.instance_corr, self.start_inds,
-                    self.dest_inds
-                ) = data.data
+                    self.instance, self.edge_inst, self.instance_corr,
+                    self.config
+                ) = data
             print(self.instance.shape)
             self.disp_inst = np.moveaxis(self.instance, 0, -1)[:, :, :3] * 255
             print(self.disp_inst.shape)
             self.img_widget.set_array(self.disp_inst)
-            self.graph = ImplicitKSP(self.instance, self.instance_corr)
-            self.layer_classes = data.layer_classes
-            self.class_weights = data.class_weights
+            self.graph = ImplicitLG(self.instance, self.instance_corr)
+            self.cfg = self.config.graph
             self.SCALE_PARAM = int(self.filepath.text.split(".")[0][-1])
             # enable button
             self.load_json_but.disabled = False
+            self.sp_tree_button.disabled = False
+            self.single_button.disabled = False
 
     def init_slider_box(self, instance):
         # Sliders for angle and edges
@@ -220,10 +224,10 @@ class DemoApp(App):
         self.angle_slider.value = self.cfg.ANGLE_WEIGHT
         self.edge_slider.value = self.cfg.EDGE_WEIGHT
         # make one slider for each one
-        normed_weights = np.asarray(self.class_weights
-                                    ) / np.sum(self.class_weights)
+        normed_weights = np.asarray(self.cfg.class_weights
+                                    ) / np.sum(self.cfg.class_weights)
         self.weight_sliders = []
-        for (name, weight) in zip(self.layer_classes, normed_weights):
+        for (name, weight) in zip(self.cfg.layer_classes, normed_weights):
             label = Label(text=name)
             slider = Slider(min=0, max=1)
             slider.value = float(weight)
@@ -232,79 +236,63 @@ class DemoApp(App):
             self.slider_box.add_widget(slider)
 
     def load_json(self, instance):
-        with open(self.json_fp.text, "r") as infile:
-            self.cfg_dict = json.load(infile)
-            self.cfg = SimpleNamespace(**self.cfg_dict)
-            (self.cfg.PYLON_DIST_MIN,
-             self.cfg.PYLON_DIST_MAX) = compute_pylon_dists(
-                 self.cfg.PYLON_DIST_MIN, self.cfg.PYLON_DIST_MAX,
-                 self.cfg.RASTER, self.SCALE_PARAM
-             )
+        # with open(self.json_fp.text, "r") as infile:
+        #     self.cfg_dict = json.load(infile)
+        #     self.cfg = SimpleNamespace(**self.cfg_dict)
+        #     (self.cfg.PYLON_DIST_MIN,
+        #      self.cfg.PYLON_DIST_MAX) = compute_pylon_dists(
+        #          self.cfg.PYLON_DIST_MIN, self.cfg.PYLON_DIST_MAX,
+        #          self.cfg.RASTER, self.SCALE_PARAM
+        #      )
         self.init_slider_box(instance)
-        self.init_button.disabled = False
 
-    def initialize(self, instance):
+    def single_sp(self, instance, buffer=1):
+        new_class_weights = [slider.value for slider in self.weight_sliders]
+        self.cfg.class_weights = new_class_weights
         # new_img = (np.random.rand(1000, 400, 3) * 150)
         # self.img_widget.set_array(new_img)
-        self.graph.set_shift(
-            self.cfg.PYLON_DIST_MIN,
-            self.cfg.PYLON_DIST_MAX,
-            self.dest_inds - self.start_inds,
-            self.cfg.MAX_ANGLE,
-            max_angle_lg=self.cfg.MAX_ANGLE_LG
+        path, _, _ = self.graph.single_sp(self.edge_inst, **vars(self.cfg))
+        plotted_inst = self.path_plotter(
+            self.disp_inst.copy(), path, 255, buffer=buffer
         )
-        self.graph.set_corridor(
-            np.ones(self.instance_corr.shape) * 0.5,
-            self.start_inds,
-            self.dest_inds,
-            factor_or_n_edges=1
-        )
-        print("1) set shift and corridor")
-        self.build_button.disabled = False
-        print("initialize done")
+        self.img_widget.set_array(plotted_inst)
+        print("Done single shortest path")
 
-    def build_graph(self, instance, buffer=1):
+    def sp_tree(self, instance, buffer=1):
         new_class_weights = [slider.value for slider in self.weight_sliders]
+        self.cfg.class_weights = new_class_weights
+        self.cfg.ANGLE_WEIGHT = self.angle_slider.value
+        self.cfg.EDGE_WEIGHT = self.edge_slider.value
         # set edge cost (must be repeated because of angle weight)
-        self.graph.set_edge_costs(
-            self.layer_classes,
-            new_class_weights,
-            angle_weight=self.angle_slider.value
-        )
-        # add vertices
-        self.graph.add_nodes()
-        # add edges
-        self.graph.add_edges(edge_weight=self.edge_slider.value)
-
-        # get SP
-        path, _, _ = self.graph.get_shortest_path(
-            self.start_inds, self.dest_inds
-        )
+        path, _, _ = self.graph.sp_trees(self.edge_inst, **vars(self.cfg))
         # plot the path
-        plotted_inst = self.disp_inst.copy()
-        for (x, y) in path:
-            plotted_inst[x - buffer:x + buffer + 1, y - buffer:y + buffer +
-                         1] = [255, 255, 255]
+        plotted_inst = self.path_plotter(
+            self.disp_inst.copy(), path, 255, buffer=buffer
+        )
         self.img_widget.set_array(plotted_inst)
         # enable KSP
         self.ksp_button.disabled = False
-        print("shortest_path done")
+        print("Done shortest path trees")
 
     def ksp(self, instance, buffer=2):
-        self.graph.get_shortest_path_tree(self.start_inds, self.dest_inds)
-        ksp = self.graph.max_vertex_ksp(
-            self.start_inds, self.dest_inds, 5, min_dist=15
-        )
-        paths = [k[0] for k in ksp]
+        ksp = KSP(self.graph)
+        ksp_output = ksp.max_vertex_ksp(5, min_dist=15)
+        paths = [k[0] for k in ksp_output]
         plotted_inst = self.disp_inst.copy()
         for i in range(len(paths) - 1, -1, -1):
             path = paths[i]
             val = 255 - i * 50
-            for (x, y) in path:
-                plotted_inst[x - buffer:x + buffer + 1, y - buffer:y + buffer +
-                             1] = [val, val, val]
+            plotted_inst = self.path_plotter(
+                plotted_inst, path, val, buffer=buffer
+            )
         self.img_widget.set_array(plotted_inst)
         print("ksp done")
+
+    def path_plotter(self, plotted_inst, path, val, buffer=1):
+        for (x, y) in path:
+            plotted_inst[x - buffer:x + buffer + 1, y - buffer:y + buffer +
+                         1] = [val, val, val]
+        return plotted_inst
 
 
 #

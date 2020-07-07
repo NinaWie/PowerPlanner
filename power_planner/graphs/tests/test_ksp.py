@@ -54,7 +54,7 @@ class TestKsp(unittest.TestCase):
             self.assertListEqual(list(best2[b]), list(bestpath[b]))
         self.assertEqual(best_cost_sum, best_cost_sum2)
         # TEST DIVERSE
-        ksp = wg.k_diverse_paths(
+        ksp = wg.dispersion_ksp(
             source_v,
             target_v,
             9,

@@ -6,6 +6,7 @@ import json
 import pandas as pd
 import functools
 import time
+import matplotlib.pyplot as plt
 # import matplotlib.pyplot as plt
 
 from power_planner.utils.utils import normalize, rescale
@@ -39,7 +40,9 @@ def reduce_instance(func):
 def strip(func):
 
     def call_and_strip(*args, **kwargs):
-        instance, instance_corr, start_inds, dest_inds = func(*args, **kwargs)
+        instance, edge_inst, instance_corr, config = func(*args, **kwargs)
+        start_inds = config.graph.start_inds
+        dest_inds = config.graph.dest_inds
 
         # find x and y width to strip
         x_coords, y_coords = np.where(instance_corr)
@@ -64,11 +67,12 @@ def strip(func):
         right = np.max(y_coords) + padding
         # strip
         instance = instance[:, up:down, left:right]
+        edge_inst = edge_inst[:, up:down, left:right]
         instance_corr = instance_corr[up:down, left:right]
-        start_inds -= np.array([up, left])
-        dest_inds -= np.array([up, left])
+        config.graph.start_inds = start_inds - np.array([up, left])
+        config.graph.dest_inds = dest_inds - np.array([up, left])
 
-        return instance, instance_corr, start_inds, dest_inds
+        return instance, edge_inst, instance_corr, config
 
     return call_and_strip
 
@@ -97,12 +101,15 @@ def padding(func):
 
 class DataReader():
 
-    def __init__(
-        self, base_path, instance_path, weight_csv, scenario, scale_factor
-    ):
+    def __init__(self, base_path, scenario, scale_factor, config):
         self.path = base_path
         self.scale_factor = scale_factor
-        weights = pd.read_csv(os.path.join(base_path, weight_csv))
+        # config file: here, only the data configurations are relevant
+        # the other ones are still passed to be returned
+        self.general_config = config
+        self.config = config.data
+        # read csv file with resistances
+        weights = pd.read_csv(os.path.join(base_path, self.config.WEIGHT_CSV))
         self.class_csv = weights.dropna()
         if len(weights) < 1:
             raise ValueError("layer weights csv file empty")
@@ -111,7 +118,10 @@ class DataReader():
         # get classes and corresponding weights from csv
         self.compute_class_weights()
 
-        with rasterio.open(os.path.join(base_path, instance_path)) as dataset:
+        # load project region as the main dataset
+        with rasterio.open(
+            os.path.join(base_path, self.config.CORR_PATH)
+        ) as dataset:
             # binary mask
             layer = dataset.read()[0]
             self.corridor = (layer == np.max(layer)).astype(int)
@@ -121,6 +131,8 @@ class DataReader():
             # geometric bounds and transformation
             self.geo_bounds = dataset.bounds
             self.transform_matrix = dataset.transform
+        self.general_config.graph.transform_matrix = dataset.transform
+        self.general_config.graph.scale = scale_factor
 
     def compute_class_weights(self):
         """
@@ -196,9 +208,14 @@ class DataReader():
 
     @padding
     @reduce_instance
-    def get_costs_per_class(self, oneclass=False):
-        layers = self.class_csv[
-            self.class_csv["weight_" + str(self.scenario)] != "Forbidden"]
+    def get_costs_per_class(self, oneclass=False, is_edge=False):
+        # edge instance
+        if is_edge:
+            weight_column = "weight_" + str(self.scenario) + "_edge"
+        # normal (pylon) instance
+        else:
+            weight_column = "weight_" + str(self.scenario)
+        layers = self.class_csv[self.class_csv[weight_column] != "Forbidden"]
         if oneclass:
             self.layer_classes = ["resistance"]
             self.class_weights = [1]
@@ -211,7 +228,7 @@ class DataReader():
             else:
                 class_r = layers[layers["class"] == classname]
             # Get corresponding weights and class weights
-            r_weights = class_r["weight_" + str(self.scenario)].values
+            r_weights = class_r[weight_column].values
             c_weights = class_r["category_weight_" + str(self.scenario)].values
             for fname, weight, cat_w in zip(
                 class_r["Layer Name"], r_weights, c_weights
@@ -269,8 +286,8 @@ class DataReader():
         hard_constraints,
         start_inds,
         dest_inds,
-        emergency_dist=None,
-        percent_padding=0.25
+        emergency_dist=-1,
+        percent_padding=-1
     ):
         """
         construct a rectengular corridor that is relevant for path computation
@@ -286,8 +303,8 @@ class DataReader():
         start_dest_inds = np.array([start_inds, dest_inds])
         inter_line = start_dest_inds[0] - start_dest_inds[1]
         longer = np.argmin(np.abs(inter_line))
-        # define padding size
-        if percent_padding is not None:
+        # define padding size - if -1, then no padding
+        if percent_padding != -1:
             padding = [0, 0]
             padding[longer] = abs(int(percent_padding * inter_line[longer]))
             # get four bounds of corridor
@@ -312,7 +329,7 @@ class DataReader():
         hard_constraints = np.asarray(corr * hard_constraints)
 
         # add emergency points in regular grid
-        if emergency_dist is not None:
+        if emergency_dist > 0:
             max_cost = np.max(instance)
             d = int(emergency_dist // 2)
             tic = time.time()
@@ -338,14 +355,7 @@ class DataReader():
         return instance, hard_constraints
 
     @strip
-    def get_data(
-        self,
-        start_path,
-        dest_path,
-        percent_padding=0.25,
-        emergency_dist=None,
-        oneclass=False
-    ):
+    def get_data(self):
         """
         Get all data at once: intersection of hard constraints and return
         weighted sum of all layers as cost
@@ -356,20 +366,51 @@ class DataReader():
         # padding: not necessary right now
         # data.set_padding(PYLON_DIST_MAX * SCALE_PARAM)
 
+        # Construct hard constraints (infinity cost regions)
         hard_constraints = self.get_mask_corridor()
         hard_cons = self.get_hard_constraints()
         hard_constraints = hard_constraints * hard_cons
 
-        instance = self.get_costs_per_class(oneclass=oneclass)
-        # in normalize(np.sum(costs_classes, axis=0))
-        # instance = normalize(self.get_weighted_costs())
+        plt.imshow(hard_constraints)
+        plt.savefig("hard_cons.png")
 
-        # Get start and end point
-        start_inds, self.orig_start = self.get_shape_point(start_path)
-        dest_inds, self.orig_dest = self.get_shape_point(dest_path)
+        # Construct instance and edge instance
+        instance = self.get_costs_per_class(oneclass=self.config.ONE_CLASS)
+        if "weight_" + str(self.scenario) + "_edge" in self.class_csv.columns:
+            print("EDGE COL EXISTS --> constructing edge instance")
+            edge_inst = self.get_costs_per_class(
+                oneclass=self.config.ONE_CLASS, is_edge=True
+            )
+        elif self.config.CABLE_FORBIDDEN:
+            print("Ueberspannen forbidden!")
+            # don't take separate weights for edge instance,
+            # but forbid ueberspannen of hard constraint regions
+            inf_corr = (hard_constraints == 0).astype(float)
+            # set the forbidden regions to infinity cost
+            inf_corr[inf_corr > 0] = np.inf
+            edge_inst = instance.copy() + inf_corr
+        else:
+            print("ueberspannen okay and edge inst is normal instance")
+            # allow ueberspannen of hard constraint regions
+            edge_inst = instance.copy()
         print("shape of inst and corr", instance.shape, hard_constraints.shape)
-        # assert instance.shape == hard_constraints.shape
+
+        plt.imshow(np.mean(instance, axis=0))
+        plt.savefig("inst.png")
+
+        # Get start and end point and save in config
+        start_inds, self.orig_start = self.get_shape_point(
+            self.config.START_PATH
+        )
+        dest_inds, self.orig_dest = self.get_shape_point(self.config.DEST_PATH)
+        self.general_config.graph.orig_start = self.orig_start
+        self.general_config.graph.orig_dest = self.orig_dest
+        self.general_config.graph.dest_inds = dest_inds
+        self.general_config.graph.start_inds = start_inds
         print("start cells:", start_inds, "dest cells:", dest_inds)
+        # add classes and weights to config:
+        self.general_config.graph.layer_classes = self.layer_classes
+        self.general_config.graph.class_weights = self.class_weights
 
         # construct corridor for final data
         instance, hard_constraints = self.construct_corridor(
@@ -377,12 +418,12 @@ class DataReader():
             hard_constraints,
             start_inds,
             dest_inds,
-            emergency_dist=emergency_dist,
-            percent_padding=percent_padding
+            emergency_dist=self.config.EMERGENCY_DIST /
+            (self.config.RASTER * self.scale_factor),
+            percent_padding=self.config.PERC_PAD
         )
         # percent_padding: 5 for large instance, 0.25 small
-
-        return instance, hard_constraints, start_inds, dest_inds
+        return instance, edge_inst, hard_constraints, self.general_config
 
     @staticmethod
     def get_raw_data(layer_path, csv_path, scenario=1):

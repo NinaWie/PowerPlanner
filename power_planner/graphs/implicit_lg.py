@@ -2,99 +2,16 @@ from power_planner.utils.utils import (
     get_half_donut, angle, discrete_angle_costs, bresenham_line
 )
 from power_planner.utils.utils_costs import CostUtils
+from power_planner.utils.utils_ksp import KspUtils
+from power_planner.graphs.fast_shortest_path import (
+    add_in_edges, add_out_edges, topological_sort_jit, del_after_dest,
+    edge_costs, average_lcp
+)
 import numpy as np
 import time
 import pickle
-from numba import jit
 from numba.typed import List
 # import matplotlib.pyplot as plt
-
-
-@jit(nopython=True)
-def topological_sort_jit(v_x, v_y, shifts, to_visit, stack):
-    """
-    Fast C++ (numba) recursive method for topological sorting
-    Arguments:
-        v_x, v_y: current vertex
-        shifts: array of length n_neighborsx2 to iterate over neighbors
-        to_visit: 2D array of size of instance to remember visited nodes
-        stack: list of topologically sorted vertices
-    Returns:
-        stack
-    """
-    # Mark the current node as visited.
-    to_visit[v_x, v_y] = 0
-    # Recur for all the vertices adjacent to this vertex
-    for s in range(len(shifts)):
-        neigh_x = v_x + shifts[s, 0]
-        neigh_y = v_y + shifts[s, 1]
-        if to_visit[neigh_x, neigh_y] == 1:
-            topological_sort_jit(neigh_x, neigh_y, shifts, to_visit, stack)
-    # Push current vertex to stack which stores result
-    l_tmp = List()
-    l_tmp.append(v_x)
-    l_tmp.append(v_y)
-    stack.append(l_tmp)
-    return stack
-
-
-@jit(nopython=True)
-def del_after_dest(stack, d_x, d_y):
-    for i in range(len(stack)):
-        if stack[i][0] == d_x and stack[i][1] == d_y:
-            return stack[i:]
-
-
-@jit(nopython=True)
-def edge_costs(stack, shifts, edge_cost, edge_inst, shift_lines, edge_weight):
-    """
-    Pre-compute all edge costs
-    """
-    # print(len(stack))
-    for i in range(len(stack)):
-        v_x = stack[-i - 1][0]
-        v_y = stack[-i - 1][1]
-        for s in range(len(shifts)):
-            neigh_x = v_x + shifts[s][0]
-            neigh_y = v_y + shifts[s][1]
-            if (
-                0 <= neigh_x < edge_cost.shape[1]
-                and 0 <= neigh_y < edge_cost.shape[2]
-                and edge_inst[neigh_x, neigh_y] < np.inf
-            ):
-                bres_line = shift_lines[s] + np.array([v_x, v_y])
-                edge_cost_list = np.zeros(len(bres_line))
-                for k in range(len(bres_line)):
-                    edge_cost_list[k] = edge_inst[bres_line[k, 0],
-                                                  bres_line[k, 1]]
-                edge_cost[s, neigh_x, neigh_y
-                          ] = edge_weight * np.mean(edge_cost_list)
-    return edge_cost
-
-
-@jit(nopython=True)
-def add_in_edges(stack, shifts, angles_all, dists, preds, instance, edge_cost):
-    """
-    Fast C++ (numba) method to compute the cumulative distances from start
-    """
-    # print(len(stack))
-    for i in range(len(stack)):
-        v_x = stack[i][0]
-        v_y = stack[i][1]
-        for s in range(len(shifts)):
-            neigh_x = v_x + shifts[s][0]
-            neigh_y = v_y + shifts[s][1]
-            if (
-                0 <= neigh_x < dists.shape[1] and 0 <= neigh_y < dists.shape[2]
-                and instance[neigh_x, neigh_y] < np.inf
-            ):
-                # add up pylon cost + angle cost + edge cost
-                cost_per_angle = dists[:, v_x, v_y] + angles_all[s] + instance[
-                    neigh_x, neigh_y] + edge_cost[s, neigh_x, neigh_y]
-                # update distances and predecessors
-                dists[s, neigh_x, neigh_y] = np.min(cost_per_angle)
-                preds[s, neigh_x, neigh_y] = np.argmin(cost_per_angle)
-    return dists, preds
 
 
 class ImplicitLG():
@@ -198,7 +115,7 @@ class ImplicitLG():
         self.dest_inds = dest_inds
 
     def set_edge_costs(
-        self, layer_classes, layer_weights, angle_weight=0.5, cab_forb=False
+        self, edge_cost, layer_classes, layer_weights, angle_weight=0.5
     ):
         """
         angle_weight: how to consider angles in contrast to all other costs!
@@ -224,22 +141,16 @@ class ImplicitLG():
         # if one weight is zero, have to correct 0*inf errors
         if np.any(np.isnan(self.instance)):
             self.instance[np.isnan(self.instance)] = np.inf
-        if cab_forb:
-            # ueberspannen is forbidden as well
-            self.edge_inst = self.instance.copy()
-        else:
-            # edge inst: without inf values
-            self.edge_inst = np.sum(
-                np.moveaxis(self.cost_instance, 0, -1) * self.cost_weights[1:],
-                axis=2
-            )
-        # # other method: fill with max - problematic for evaluation
-        # edge_inst = self.instance.copy()
-        # edge_inst[edge_inst == np.inf] = np.max(edge_inst[edge_inst < np.inf])
-        # self.edge_inst = edge_inst
+
+        self.edge_inst = np.sum(
+            np.moveaxis(edge_cost, 0, -1) * self.cost_weights[1:], axis=2
+        )
 
         if self.verbose:
             print("instance shape", self.instance.shape)
+
+    # --------------------------------------------------------------------
+    # SHORTEST PATH COMPUTATION
 
     def add_edges(self, mode="DAG", edge_weight=0, height_weight=0):
         self.edge_weight = edge_weight
@@ -268,32 +179,114 @@ class ImplicitLG():
                     stack, np.array(self.shifts), self.edge_cost,
                     self.edge_inst, self.shift_lines, self.edge_weight
                 )
-            # RUN - add edges
+                if self.verbose:
+                    print("Computed edge instance")
+            # RUN - add edges # average_lcp
             self.dists, self.preds = add_in_edges(
                 stack, np.array(self.shifts), self.angle_cost_array,
                 self.dists, self.preds, self.instance, self.edge_cost
             )
+            print(np.min(self.dists[:, self.dest_inds[0], self.dest_inds[1]]))
             self.time_logs["add_all_edges"] = round(time.time() - tic, 3)
             if self.verbose:
                 print("time edges:", round(time.time() - tic, 3))
 
-    def _helper_list(self):
-        tmp_list = List()
-        tmp_list_inner = List()
-        tmp_list_inner.append(0)
-        tmp_list_inner.append(0)
-        tmp_list.append(tmp_list_inner)
-        return tmp_list
+    # ----------------------------------------------------------------------
+    # SHORTEST PATH TREE
 
-    def add_start_and_dest(self, source, dest):
-        # here simply return the indices for start and destination
-        return source, dest
+    def get_shortest_path_tree(self, source, target):
+        """
+        Compute costs from dest to all edges
+        """
+        tic = time.time()
 
-    def sum_costs(self):
-        pass
+        # initialize dists array
+        self.dists_ba = np.zeros((len(self.shifts), self.x_len, self.y_len))
+        self.dists_ba += self.fill_val
+        i, j = self.dest_inds
+        # this time need to set all incoming edges of dest to zero
+        d0, d1 = self.dest_inds
+        for s, (i, j) in enumerate(self.shifts):
+            self.dists_ba[s, d0 + i, d1 + j] = 0
 
-    def remove_vertices(self, dist_surface, delete_padding=0):
-        pass
+        # get stack
+        tmp_list = self._helper_list()
+        visit_points = (self.instance < np.inf).astype(int)
+        stack = topological_sort_jit(
+            self.start_inds[0], self.start_inds[1], np.asarray(self.shifts),
+            visit_points, tmp_list
+        )
+        stack = del_after_dest(stack, self.dest_inds[0], self.dest_inds[1])
+        # compute distances: new method because out edges instead of in
+        self.dists_ba, self.preds_ba = add_out_edges(
+            stack,
+            np.array(self.shifts) * (-1), self.angle_cost_array, self.dists_ba,
+            self.instance, self.edge_inst, self.shift_lines, self.edge_weight
+        )
+        self.time_logs["shortest_path_tree"] = round(time.time() - tic, 3)
+        if self.verbose:
+            print("time shortest_path_tree:", round(time.time() - tic, 3))
+
+        # distance in ba: take IN edges to source, by computing in neighbors
+        # take their first dim value (out edge to source) + source val
+        (s0, s1) = self.start_inds
+        d_ba_arg = np.argmin(
+            [
+                self.dists_ba[s, s0 + i, s1 + j]
+                for s, (i, j) in enumerate(self.shifts)
+            ]
+        )
+        (i, j) = self.shifts[d_ba_arg]
+        d_ba = self.dists_ba[d_ba_arg, s0 + i, s1 + j] + self.instance[s0, s1]
+
+        d_ab = np.min(self.dists[:, self.dest_inds[0], self.dest_inds[1]])
+        assert np.isclose(
+            d_ba, d_ab
+        ), "start to dest != dest to start " + str(d_ab) + " " + str(d_ba)
+        # compute best path
+        self.best_path = np.array(
+            KspUtils.get_sp_dest_shift(
+                self.dists_ba,
+                self.preds_ba,
+                self.dest_inds,
+                self.start_inds,
+                np.array(self.shifts) * (-1),
+                d_ba_arg,
+                dest_edge=True
+            )
+        )
+        # assert np.all(self.best_path == np.array(self.sp)), "paths differ"
+
+    def _combined_paths(self, start, dest, best_shift, best_edge):
+        """
+        Compute path through one specific edge (with bi-directed predecessors)
+
+        Arguments:
+            start: overall source vertex
+            dest: overall target vertex
+            best_shift: the neighbor index of the edge
+            best_edge: the vertex of the edge
+        """
+        # compute path from start to middle point - incoming edge
+        best_edge = np.array(best_edge)
+        path_ac = KspUtils.get_sp_start_shift(
+            self.dists, self.preds, start, best_edge, np.array(self.shifts),
+            best_shift
+        )
+        # compute path from middle point to dest - outgoing edge
+        path_cb = KspUtils.get_sp_dest_shift(
+            self.dists_ba, self.preds_ba, dest, best_edge,
+            np.array(self.shifts) * (-1), best_shift
+        )
+        # concatenate
+        together = np.concatenate(
+            (np.flip(np.array(path_ac), axis=0), np.array(path_cb)[1:]),
+            axis=0
+        )
+        return together
+
+    # ---------------------------------------------------------------------
+    # Functions to output path (backtrack) and corresponding costs
 
     def transform_path(self, path):
         path_costs = np.array(
@@ -375,79 +368,76 @@ class ImplicitLG():
         self.time_logs["shortest_path"] = round(time.time() - tic, 3)
         return self.transform_path(path)
 
+    # ----------------------------------------------------------------------
+    # Other auxiliary functions
     def save_graph(self, out_path):
         with open(out_path + ".dat", "wb") as outfile:
             pickle.dump((self.dists, self.preds), outfile)
 
-    def add_edges_BF(self):
-        tic = time.time()
+    def _helper_list(self):
+        tmp_list = List()
+        tmp_list_inner = List()
+        tmp_list_inner.append(0)
+        tmp_list_inner.append(0)
+        tmp_list.append(tmp_list_inner)
+        return tmp_list
 
-        for _ in range(self.n_iters):
-            # iterate over edges
-            for i in range(len(self.shifts)):
-                # shift dists by this shift
-                # todo: avoid swaping dimenions each time
-                cost_switched = np.moveaxis(self.dists, 0, -1)
-                # shift by shift
-                costs_shifted = CostUtils.shift_surface(
-                    cost_switched, self.shifts[i], fill_val=self.fill_val
-                )
+    def add_start_and_dest(self, source, dest):
+        # here simply return the indices for start and destination
+        return source, dest
 
-                # add new costs for current edge
-                angle_cost = self.angle_cost_array[i]
-                together = np.moveaxis(
-                    costs_shifted + angle_cost, -1, 0
-                ) + self.instance
-                # 28 x 10 x 10 + 28 angles + 10 x 10
+    def sum_costs(self):
+        pass
 
-                # get argmin for each edge
-                # --> remember where the value on this edge came from
-                argmin_together = np.argmin(together, axis=0)
-                # get minimum path cost for each edge
-                # weighted_costs_shifted = np.min(together, axis=0)
-                weighted_costs_shifted = np.take_along_axis(
-                    together, argmin_together[None, :, :], axis=0
-                )[0, :, :]
+    def remove_vertices(self, dist_surface, delete_padding=0):
+        pass
 
-                concat = np.array([self.dists[i], weighted_costs_shifted])
-                # get spots that are actually updated
-                changed_ones = np.argmin(concat, axis=0)
-                # update predecessors
-                self.preds[i, changed_ones > 0] = argmin_together[
-                    changed_ones > 0]
+    # -----------------------------------------------------------------------
+    # INTERFACE
 
-                # update accumulated path costs
-                self.dists[i] = np.min(concat, axis=0)
+    def single_sp(self, edge_inst, **kwargs):
+        """
+        Function for full processing until shortest path
+        """
+        start_inds = kwargs["start_inds"]
+        dest_inds = kwargs["dest_inds"]
+        self.set_shift(
+            kwargs["PYLON_DIST_MIN"],
+            kwargs["PYLON_DIST_MAX"],
+            dest_inds - start_inds,
+            kwargs["MAX_ANGLE"],
+            max_angle_lg=kwargs["MAX_ANGLE_LG"]
+        )
+        self.set_corridor(
+            np.ones(self.hard_constraints.shape) * 0.5,
+            start_inds,
+            dest_inds,
+            factor_or_n_edges=1
+        )
+        print("1) Initialize shifts and instance (corridor)")
+        self.set_edge_costs(
+            edge_inst,
+            kwargs["layer_classes"],
+            kwargs["class_weights"],
+            angle_weight=kwargs["ANGLE_WEIGHT"]
+        )
+        # add vertices
+        self.add_nodes()
+        print("2) Initialize distances to inf and predecessors")
+        self.add_edges(edge_weight=kwargs["EDGE_WEIGHT"])
+        print("3) Compute source shortest path tree")
+        print("number of vertices and edges:", self.n_nodes, self.n_edges)
 
-        self.time_logs["add_all_edges"] = round(time.time() - tic, 3)
-        time_per_iter = (time.time() - tic) / self.n_iters
-        time_per_shift = (time.time() -
-                          tic) / (self.n_iters * len(self.shifts))
-        self.time_logs["add_edge"] = round(time_per_iter, 3)
-        self.time_logs["edge_list"] = round(time_per_shift, 3)
+        # get actual best path
+        path, path_costs, cost_sum = self.get_shortest_path(
+            start_inds, dest_inds
+        )
+        print("4) shortest path", cost_sum)
+        return path, path_costs, cost_sum
 
-
-# def add_edges_DAG(self, stack):
-#     # TODO: build stack and graph at the same time?
-#     shifts = np.asarray(self.shifts)
-#     for i in range(len(stack)):
-#         v_x, v_y = tuple(stack[-i - 1])
-#         update_neighbors(
-#             v_x, v_y, shifts, self.angle_cost_array, self.dists,
-#             self.preds, self.instance
-#         )
-
-# @jit(nopython=True)
-# def update_neighbors(
-#     v_x, v_y, shifts, angles_all, dists, preds, instance
-# ):
-#     i = 0
-#     for s in shifts:
-#         neigh_x = v_x + s[0]
-#         neigh_y = v_y + s[1]
-#         if 0 <= neigh_x < dists.shape[1] and 0 <= neigh_y < dists.shape[2]:
-#             cost_per_angle = dists[:, v_x, v_y] + angles_all[i] + instance[
-#                 neigh_x, neigh_y]
-#             dists[i, neigh_x, neigh_y] = np.min(cost_per_angle)
-#             preds[i, neigh_x, neigh_y] = np.argmin(cost_per_angle)
-#         i += 1
+    def sp_trees(self, edge_inst, **kwargs):
+        start_inds = kwargs["start_inds"]
+        dest_inds = kwargs["dest_inds"]
+        path, path_costs, cost_sum = self.single_sp(edge_inst, **kwargs)
+        self.get_shortest_path_tree(start_inds, dest_inds)
+        return path, path_costs, cost_sum
