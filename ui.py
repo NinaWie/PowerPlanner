@@ -16,6 +16,7 @@ from kivy.uix.textinput import TextInput
 from kivy.core.window import Window
 from kivy.lang import Builder
 from kivy.uix.scatter import Scatter
+from kivy.uix.popup import Popup
 from PIL import Image as im
 
 from power_planner.utils.utils import (
@@ -37,6 +38,7 @@ class ImageFromArray(Widget):
         self.set_array(img)
 
     def set_array(self, img_in):
+        self.current_in_img = img_in
         img_in = np.flip(np.swapaxes(img_in, 1, 0), axis=0).astype(np.uint8)
         h, w, _ = img_in.shape
         # compute how much we have to resize it to make it fit bounds
@@ -46,12 +48,37 @@ class ImageFromArray(Widget):
         new_img_size = (int(w / ratio_resize), int(h / ratio_resize))
         # resize
         img = np.array(img_in.resize(new_img_size, resample=im.BILINEAR))
+        self.current_img = img
         # make texture
         texture = Texture.create(size=new_img_size)
         texture.blit_buffer(img.flatten(), colorfmt='rgb', bufferfmt='ubyte')
 
-        w_img = Image(size=new_img_size, texture=texture)
+        self.take_size = new_img_size
+        w_img = PressableImage(size=new_img_size, texture=texture)
         self.add_widget(w_img)
+
+
+class PressableImage(Image):
+
+    def on_touch_down(self, touch):
+        if self.collide_point(*touch.pos):
+            print("pressed", touch.pos)
+            # touch_str = str(round(touch.pos[0])
+            #  ) + "_" + str(round(touch.pos[1]))
+            touch_str = str(
+                np.around(
+                    self.parent.current_img[int(touch.pos[0]),
+                                            int(touch.pos[1])], 1
+                )
+            )
+            popupWindow = Popup(
+                title="Resistance",
+                content=Label(text=touch_str),
+                size_hint=(None, None),
+                size=(150, 100)
+            )
+            popupWindow.open()
+        # return super(PressableImage, self).on_touch_down(touch)
 
 
 class ResizableDraggablePicture(Scatter):
@@ -85,10 +112,10 @@ class DemoApp(App):
             orientation='horizontal', size_hint=(1, None), height=30
         )
         self.filepath = TextInput(
-            hint_text="data/ch_data_1_5.dat",
+            hint_text="data/test_data_1_2.dat",
             size_hint=(1 - right_bar_size, 1)
         )
-        self.filepath.text = "data/ch_data_1_5.dat"  # set default
+        self.filepath.text = "data/test_data_1_2.dat"  # set default
         self.load_data = Button(
             text='Load data',
             on_press=self.loadData,
@@ -133,17 +160,6 @@ class DemoApp(App):
             size_hint=(None, 1),
             width=Window.width * right_bar_size
         )
-        # # Sliders for weights
-        # angle_label = Label(text="Angle weighting")
-        # self.angle_slider = Slider(min=0, max=1)
-        # self.angle_slider.value = 0.5
-        # edge_label = Label(text="Edge weighting")
-        # self.edge_slider = Slider(min=0, max=1)
-        # self.edge_slider.value = 0.5
-        # button_box.add_widget(edge_label)
-        # button_box.add_widget(self.edge_slider)
-        # button_box.add_widget(angle_label)
-        # button_box.add_widget(self.angle_slider)
 
         # Define right side buttons
         self.single_button = Button(
@@ -166,9 +182,15 @@ class DemoApp(App):
             on_press=self.ksp,
             size=(Window.width * right_bar_size, 30)
         )
+        self.alternative_button = Button(
+            text="Replacement path",
+            on_press=self.alternative,
+            size=(Window.width * right_bar_size, 30)
+        )
         # Add to widget
         for button in [
-            self.single_button, self.sp_tree_button, self.ksp_button
+            self.single_button, self.sp_tree_button, self.ksp_button,
+            self.alternative_button
         ]:
             button.disabled = True
             button_box.add_widget(button)
@@ -210,6 +232,8 @@ class DemoApp(App):
             self.load_json_but.disabled = False
             self.sp_tree_button.disabled = False
             self.single_button.disabled = False
+            # init sliders
+            self.init_slider_box(instance)
 
     def init_slider_box(self, instance):
         # Sliders for angle and edges
@@ -244,7 +268,8 @@ class DemoApp(App):
         #          self.cfg.PYLON_DIST_MIN, self.cfg.PYLON_DIST_MAX,
         #          self.cfg.RASTER, self.SCALE_PARAM
         #      )
-        self.init_slider_box(instance)
+        # self.init_slider_box(instance)
+        pass
 
     def single_sp(self, instance, buffer=1):
         new_class_weights = [slider.value for slider in self.weight_sliders]
@@ -253,7 +278,7 @@ class DemoApp(App):
         # self.img_widget.set_array(new_img)
         path, _, _ = self.graph.single_sp(self.edge_inst, **vars(self.cfg))
         plotted_inst = self.path_plotter(
-            self.disp_inst.copy(), path, 255, buffer=buffer
+            self.disp_inst.copy(), path, [255, 255, 255], buffer=buffer
         )
         self.img_widget.set_array(plotted_inst)
         print("Done single shortest path")
@@ -267,11 +292,12 @@ class DemoApp(App):
         path, _, _ = self.graph.sp_trees(self.edge_inst, **vars(self.cfg))
         # plot the path
         plotted_inst = self.path_plotter(
-            self.disp_inst.copy(), path, 255, buffer=buffer
+            self.disp_inst.copy(), path, [255, 255, 255], buffer=buffer
         )
         self.img_widget.set_array(plotted_inst)
         # enable KSP
         self.ksp_button.disabled = False
+        self.alternative_button.disabled = False
         print("Done shortest path trees")
 
     def ksp(self, instance, buffer=2):
@@ -283,75 +309,27 @@ class DemoApp(App):
             path = paths[i]
             val = 255 - i * 50
             plotted_inst = self.path_plotter(
-                plotted_inst, path, val, buffer=buffer
+                plotted_inst, path, [val, val, val], buffer=buffer
             )
         self.img_widget.set_array(plotted_inst)
         print("ksp done")
 
-    def path_plotter(self, plotted_inst, path, val, buffer=1):
+    def alternative(self, instance, buffer=2):
+        alt = AlternativePaths(self.graph)
+        replacement_path, _, _ = alt.replace_window(150, 200, 250, 300)
+        plot_inst = self.img_widget.current_in_img.copy()
+        plotted_inst = self.path_plotter(
+            plot_inst, replacement_path, [255, 0, 0], buffer=buffer
+        )
+        self.img_widget.set_array(plotted_inst)
+        print("replacement done")
+
+    def path_plotter(self, plotted_inst, path, col, buffer=1):
         for (x, y) in path:
             plotted_inst[x - buffer:x + buffer + 1, y - buffer:y + buffer +
-                         1] = [val, val, val]
+                         1] = col
         return plotted_inst
 
-
-#
-
-# Builder.load_string(
-#     """
-
-# <KivyButton>:
-
-#     Button:
-
-#         text: "Hello Button!"
-
-#         size_hint: .12, .12
-
-#         Image:
-
-#             source: 'images.jpg'
-
-#             center_x: self.parent.center_x
-
-#             center_y: self.parent.center_y
-
-# """
-# )
-
-# # code to disable button
-# def disable(self, instance, *args):
-
-#     instance.disabled = True
-
-# def update(self, instance, *args):
-
-#     instance.text = "I am Disabled!"
-
-# def build(self):
-
-#     mybtn = Button(
-#         text="Click me to disable", pos=(300, 350), size_hint=(.25, .18)
-#     )
-
-#     mybtn.bind(on_press=partial(self.disable, mybtn))
-
-#     mybtn.bind(on_press=partial(self.update, mybtn))
-
-#     return mybtn
-
-## RUN MATPLOTLIB:
-# plt.plot([10, 30, 20, 45])
-
-# class MyApp(App):
-
-#     def build(self):
-#     box = BoxLayout()
-#     box.add_widget(FigureCanvasKivyAgg(plt.gcf()))
-#     return box
-# https://github.com/kivy-garden/garden.matplotlib/blob/master/examples/test_plt.py
-# import matplotlib
-# matplotlib.use('module://kivy.garden.matplotlib.backend_kivy')
 
 if __name__ == '__main__':
     DemoApp().run()
