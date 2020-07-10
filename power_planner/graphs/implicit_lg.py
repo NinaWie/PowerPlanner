@@ -395,7 +395,7 @@ class ImplicitLG():
     # -----------------------------------------------------------------------
     # INTERFACE
 
-    def single_sp(self, edge_inst, **kwargs):
+    def single_sp(self, edge_inst, power=1, **kwargs):
         """
         Function for full processing until shortest path
         """
@@ -421,6 +421,7 @@ class ImplicitLG():
             kwargs["class_weights"],
             angle_weight=kwargs["ANGLE_WEIGHT"]
         )
+        self.instance = self.instance**power
         # add vertices
         self.add_nodes()
         print("2) Initialize distances to inf and predecessors")

@@ -11,12 +11,16 @@ def plot_path(instance, path, out_path=None, buffer=2):
     """
     Simplest version: Colour points on path red on the instance image
     Arguments:
-        instance: cost surface (numpy array)
+        instance: cost surface (numpy array)  
         path: list of indices to colour red
         out_path: file path where to save the figure (if None, then show)
     Return:
         Saving or showing the path image
     """
+    # normalize instance for better display
+    non_inf = instance[instance < np.inf] 
+    instance = (instance -
+                np.min(non_inf)) / (np.max(non_inf) - np.min(non_inf))
     # expand from greyscale to colour channels
     expanded = np.expand_dims(instance, axis=2)
     expanded = np.tile(expanded, (1, 1, 3))  # overwrite instance by tiled one
@@ -26,7 +30,7 @@ def plot_path(instance, path, out_path=None, buffer=2):
                  1] = [0.9, 0.2, 0.2]  # colour red
     # plot and save
     plt.figure(figsize=(25, 15))
-    plt.imshow(expanded, origin="lower")
+    plt.imshow(np.swapaxes(expanded, 1, 0))
     if out_path is not None:
         plt.savefig(out_path, bbox_inches='tight')
     else:

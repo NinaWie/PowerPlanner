@@ -4,9 +4,7 @@ import pickle
 import time
 # import warnings
 import numpy as np
-import json
-from types import SimpleNamespace
-import matplotlib.pyplot as plt
+import warnings
 
 # utils imports
 from power_planner.data_reader import DataReader
@@ -16,7 +14,7 @@ from power_planner.plotting import (
     plot_pareto_paths
 )
 from power_planner.utils.utils import (
-    get_distance_surface, time_test_csv, compute_pylon_dists
+    get_distance_surface, time_test_csv, load_config
 )
 
 parser = argparse.ArgumentParser()
@@ -25,155 +23,151 @@ parser.add_argument('-cluster', action='store_true')
 args = parser.parse_args()
 
 # define out save name
-ID = "ch_"  # str(round(time.time() / 60))[-5:]
+ID = "test_be"  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
+OUT_PATH = os.path.join(OUT_DIR, ID)
 
 SCALE_PARAM = 2  # args.scale
 SCENARIO = 1
-INST = "ch"
-if args.cluster:
-    height_resistance_path = "data/dtm_10m.tif"
-else:
-    height_resistance_path = "../data/Instance_CH.nosync/dtm_10m.tif"
-PIPELINE = [(1, 0)]
-USE_KSP = 0
-MIN_H = 50
+INST = "belgium"
+height_resistance_path = None  # "../data/Instance_CH.nosync/dtm_10m.tif"
+# for SCALE_PARAM in [1, 2, 5]:
+#     for SCENARIO in [1, 2, 3]:
+# print()
+# print("-------------- new scnario", SCALE_PARAM, SCENARIO, "-------")
 
-GRAPH_TYPE = graphs.HeightGraph
+# DEFINE CONFIGURATION
+# normal graph pipeline
+# PIPELINE = [(2, 30), (1, 0)]  # [(1, 0)]  # [(4, 80), (2, 50), (1, 0)]  #
+# random graph pipeline
+PIPELINE = [(1, 0)]
+# PIPELINE = [(4, 200), (2, 50), (1, 0)]  # (2, 200),
+# PIPELINE = [(0.8, 100), (0.5, 50), (0, 0)]  # nonauto random
+# PIPELINE = [(5000000, 100), (5000000, 0)]  # auto pipeline
+USE_KSP = 0
+
+GRAPH_TYPE = graphs.ImplicitLG
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, ImplicitLG
 # ImplicitLgKSP, WeightedKSP
 print("graph type:", GRAPH_TYPE)
 # summarize: mean/max/min, remove: all/surrounding, sample: simple/watershed
 NOTES = "None"  # "mean-all-simple"
-PATH_FILES = os.path.join("data")
-IOPATH = os.path.join(PATH_FILES, f"{INST}_dump_w{SCENARIO}_{SCALE_PARAM}.dat")
 
-# LOAD CONFIG
-with open(os.path.join(PATH_FILES, f"{INST}_config.json"), "r") as infile:
-    cfg_dict = json.load(infile)  # Config(SCALE_PARAM)
-    cfg = SimpleNamespace(**cfg_dict)
-    cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX = compute_pylon_dists(
-        cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX, cfg.RASTER, SCALE_PARAM
-    )
+LOAD = 1
+if args.cluster:
+    LOAD = 1
+SAVE_PICKLE = 1
+
+# define IO paths
+if LOAD:
+    PATH_FILES = os.path.join("data")
+else:
+    # PATH_FILES = "/Volumes/Nina Backup/data_master_thesis/large_instance"
+    PATH_FILES = "../data/instance_CH.nosync"
+IOPATH = os.path.join(PATH_FILES, f"{INST}_data_{SCENARIO}_{SCALE_PARAM}.dat")
+
+# LOAD CONFIGURATION
+cfg = load_config(
+    os.path.join(PATH_FILES, f"{INST}_config.json"), scale_factor=SCALE_PARAM
+)
 
 # READ DATA
-with open(IOPATH, "rb") as infile:
-    data = pickle.load(infile)
-    (instance, instance_corr, start_inds, dest_inds) = data.data
+if LOAD:
+    # load from pickle
+    with open(IOPATH, "rb") as infile:
+        data = pickle.load(infile)
+        try:
+            (instance, edge_cost, instance_corr, config) = data
+            cfg = config.graph
+            start_inds = config.graph.start_inds
+            dest_inds = config.graph.dest_inds
+        except ValueError:
+            warnings.warn("Edge weights not available - taking normal costs")
+            (instance, instance_corr, start_inds, dest_inds) = data.data
+            edge_cost = instance.copy()
+else:
+    # read in files
+    data = DataReader(PATH_FILES, SCENARIO, SCALE_PARAM, cfg)
+    instance, edge_cost, instance_corr, config = data.get_data()
+    # get graph processing specific cfg
+    cfg = config.graph
+    start_inds = cfg.start_inds
+    dest_inds = cfg.dest_inds
+    # save
+    if SAVE_PICKLE:
+        data_out = (instance, edge_cost, instance_corr, config)
+        with open(IOPATH, "wb") as outfile:
+            pickle.dump(data_out, outfile)
+        print("successfully saved data")
 
-COMPARISONS = []
-for a_w in [0.1, 0.2, 0.4]:
-    for e_w in [0, 0.3, 0.5]:
-        for h_w in [0, 0.2, 0.9]:
-            for (b_w, p_w, u_w) in [
-                (1, 1, 1), (2, 1, 1), (1, 2, 1), (1, 1, 2)
-            ]:
-                COMPARISONS.append([a_w, e_w, h_w, b_w, p_w, u_w])
-print("Number comparisons", len(COMPARISONS))
-shortcut = ["a", "e", "h", "b", "p", "u"]
-# for angle_weight in
-for COMP in COMPARISONS:
-    (a_w, e_w, h_w, b_w, p_w, u_w) = COMP
-    # u_w = 1 - p_w - b_w
-    ID_list = [
-        shortcut[i] + str(round(COMP[i] * 10)) for i in range(len(COMP))
-    ]
-    # ID_list.append("u" + str(round(u_w * 10)))
-    ID = "ch_" + ("_").join(ID_list)
-    # f"{ID}_a{angle_weight}_e{edge_weight}_h{height_weight}_b{round(
-    # bau_weight*10, 0)}_p{round(planung_weight, 1)}_u
-    # {round(umwelt_weight,1)}"
-    OUT_PATH = os.path.join(OUT_DIR, ID)
-    if os.path.exists(OUT_PATH + "_costs.png"):
-        print("id already exists", ID)
-        continue
+cfg.ANGLE_WEIGHT = 0.1
+cfg.EDGE_WEIGHT = 0
+instance = instance * 100
+print("INSTACE", np.mean(instance), np.min(instance), np.max(instance))
+save_path_costs = []
 
-    print("-------------- ", ID, "-------------")
-    CLASS_WEIGHTS = [b_w, p_w, u_w]
+for power in [1] + [round(c, 1) for c in np.logspace(0.1, 0.6, 6)]:
+    # [1, 1.2, 1.5, 2, 3]:
+
+    # power_instance = instance.copy()**power
+    # power_instance = (power_instance - np.min(power_instance)
+    #                   ) / (np.max(power_instance) - np.min(power_instance))
 
     # DEFINE GRAPH AND ALGORITHM
     graph = GRAPH_TYPE(
         instance, instance_corr, graphtool=cfg.GTNX, verbose=cfg.VERBOSE
     )
-
-    # START PIPELINE
     tic = time.time()
-    corridor = np.ones(instance_corr.shape) * 0.5  # start with all
-    output_paths = []
-    plot_surfaces = []
-    time_infos = []
 
-    for (factor, dist) in PIPELINE:
-        graph.set_shift(
-            cfg.PYLON_DIST_MIN,
-            cfg.PYLON_DIST_MAX,
-            dest_inds - start_inds,
-            cfg.MAX_ANGLE,
-            max_angle_lg=cfg.MAX_ANGLE_LG
-        )
-        graph.set_corridor(
-            corridor, start_inds, dest_inds, factor_or_n_edges=factor
-        )
-        print("1) set shift and corridor")
-        graph.set_edge_costs(
-            data.layer_classes,
-            CLASS_WEIGHTS,
-            angle_weight=a_w,
-            cab_forb=cfg.CABLE_FORBIDDEN
-        )
-        # add vertices
-        graph.add_nodes()
-        if height_resistance_path is not None:
-            graph.init_heights(height_resistance_path, MIN_H, 80, SCALE_PARAM)
-        print("1.2) set shift, edge costs and added nodes")
-        graph.add_edges(edge_weight=e_w, height_weight=h_w)
-        print("2) added edges", graph.n_edges)
-        print("number of vertices:", graph.n_nodes)
+    # PROCESS
+    path, path_costs, cost_sum = graph.single_sp(
+        edge_cost, power=power, **vars(cfg)
+    )
 
-        # weighted sum of all costs
-        graph.sum_costs()
-        source_v, target_v = graph.add_start_and_dest(start_inds, dest_inds)
-        print("3) summed cost, get source and dest")
-        # get actual best path
-        path, path_costs, cost_sum = graph.get_shortest_path(
-            source_v, target_v
-        )
-        print("4) shortest path", cost_sum)
-        # save for inspection
-        output_paths.append((path, path_costs))
-        plot_surfaces.append(graph.instance.copy())
-        # get several paths --> possible to replace by pareto_out[0]
-        # paths = [path]
-        time_infos.append(graph.time_logs.copy())
+    # initialize normal graph:
+    if power == 1:
+        first_path = path
+        graph_normal = graph
+    _, actual_costs, actual_cost_sum = graph_normal.transform_path(path)
+    # max_costs = np.max(actual_costs, axis=0)
+    # mean_costs = np.mean(actual_costs, axis=0) * 10
+    # print("maxima:", max_costs)
+    # print("sum:", actual_cost_sum)
+    # compute weighted costs: (1: because no angle costs considered)
+    weighted_cost = np.dot(
+        np.asarray(actual_costs)[:, 1:], graph.cost_weights[1:]
+    )
+    max_costs = round(np.max(weighted_cost), 3)
+    mean_costs = round(np.mean(weighted_cost), 3)
+    save_path_costs.append(weighted_cost)
 
-        if cfg.VERBOSE:
-            graph.time_logs.pop('edge_list_times', None)
-            graph.time_logs.pop('add_edges_times', None)
-            print(graph.time_logs)
+    # sanity check:
+    # _, check_costs, check_cost_sum = graph.transform_path(first_path)
+    # new_weighted_cost = np.dot(
+    #     np.asarray(check_costs)[:, 1:], graph.cost_weights[1:]
+    # )
+    # print("CHECK:")
+    # print(check_cost_sum, np.max(new_weighted_cost), np.sum(new_weighted_cost))
 
     time_pipeline = round(time.time() - tic, 3)
-    print("FINISHED PIPELINE:", time_pipeline)
-    print("path length", len(path))
+    print("FINISHED :", time_pipeline)
+    print("----------------------------")
+
     # SAVE timing test
     time_test_csv(
-        ID, cfg.CSV_TIMES, SCALE_PARAM * cfg.RASTER, cfg.GTNX, GRAPH_TYPE,
-        graph, path_costs, cost_sum, dist, time_pipeline, NOTES
+        ID, cfg.CSV_TIMES, SCALE_PARAM * 10, cfg.GTNX, "impl_lg_" + INST,
+        graph, max_costs, actual_cost_sum, power, time_pipeline, mean_costs
     )
 
     # -------------  PLOTTING: ----------------------
 
-    # FOR COST COMPARISON
-    plot_path_costs(
-        instance * instance_corr,
+    # SIMPLE
+    plot_path(
+        graph.instance,
         path,
-        path_costs,
-        data.layer_classes,
         buffer=2,
-        out_path=OUT_PATH + "_costs.png"
+        out_path=OUT_PATH + "_" + str(power) + ".png"
     )
 
-    # -------------  SAVE INFOS: ----------------------
-
-    # save just coordinates of path
-    raw_costs, names = graph.raw_path_costs(path)
-    data.save_original_path(OUT_PATH, [path], [raw_costs], names)
+with open(OUT_PATH + "_paths.dat", "wb") as outfile:
+    pickle.dump(save_path_costs, outfile)

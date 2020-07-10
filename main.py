@@ -4,19 +4,19 @@ import pickle
 import time
 # import warnings
 import numpy as np
-import json
-from types import SimpleNamespace
+import warnings
 import matplotlib.pyplot as plt
 
 # utils imports
 from power_planner.data_reader import DataReader
 from power_planner import graphs
+from power_planner.alternative_paths import AlternativePaths
 from power_planner.plotting import (
     plot_path_costs, plot_pipeline_paths, plot_path, plot_k_sp,
     plot_pareto_paths
 )
 from power_planner.utils.utils import (
-    get_distance_surface, time_test_csv, compute_pylon_dists
+    get_distance_surface, time_test_csv, load_config
 )
 
 parser = argparse.ArgumentParser()
@@ -25,14 +25,14 @@ parser.add_argument('-cluster', action='store_true')
 args = parser.parse_args()
 
 # define out save name
-ID = "chinst_test"  # str(round(time.time() / 60))[-5:]
+ID = "test_2"  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
 SCALE_PARAM = 5  # args.scale
 SCENARIO = 1
-INST = "ch"
-height_resistance_path = "../data/Instance_CH.nosync/dtm_10m.tif"
+INST = "belgium"
+height_resistance_path = None  # "../data/Instance_CH.nosync/dtm_10m.tif"
 # for SCALE_PARAM in [1, 2, 5]:
 #     for SCENARIO in [1, 2, 3]:
 # print()
@@ -48,7 +48,7 @@ PIPELINE = [(1, 0)]
 # PIPELINE = [(5000000, 100), (5000000, 0)]  # auto pipeline
 USE_KSP = 0
 
-GRAPH_TYPE = graphs.HeightGraph
+GRAPH_TYPE = graphs.ImplicitLG
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, ImplicitLG
 # ImplicitLgKSP, WeightedKSP
 print("graph type:", GRAPH_TYPE)
@@ -65,48 +65,49 @@ if LOAD:
     PATH_FILES = os.path.join("data")
 else:
     # PATH_FILES = "/Volumes/Nina Backup/data_master_thesis/large_instance"
-    PATH_FILES = "../data/instance_CH.nosync"  #  "../data/Instance_CH.nosync" "../data/belgium.nosync"
-IOPATH = os.path.join(PATH_FILES, f"{INST}_dump_w{SCENARIO}_{SCALE_PARAM}.dat")
+    PATH_FILES = "../data/belgium.nosync"  #  "../data/Instance_CH.nosync" "../data/belgium.nosync"
+IOPATH = os.path.join(PATH_FILES, f"{INST}_data_{SCENARIO}_{SCALE_PARAM}.dat")
 
-# LOAD CONFIG
-with open(os.path.join(PATH_FILES, f"{INST}_config.json"), "r") as infile:
-    cfg_dict = json.load(infile)  # Config(SCALE_PARAM)
-    cfg = SimpleNamespace(**cfg_dict)
-    cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX = compute_pylon_dists(
-        cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX, cfg.RASTER, SCALE_PARAM
-    )
+# LOAD CONFIGURATION
+cfg = load_config(
+    os.path.join(PATH_FILES, f"{INST}_config.json"), scale_factor=SCALE_PARAM
+)
 
 # READ DATA
 if LOAD:
     # load from pickle
     with open(IOPATH, "rb") as infile:
         data = pickle.load(infile)
-        (instance, instance_corr, start_inds, dest_inds) = data.data
+        try:
+            (instance, edge_cost, instance_corr, config) = data
+            cfg = config.graph
+            start_inds = cfg.start_inds
+            dest_inds = cfg.dest_inds
+        except ValueError:
+            warnings.warn("Edge weights not available - taking normal costs")
+            (instance, instance_corr, start_inds, dest_inds) = data.data
+            edge_cost = instance.copy()
 else:
     # read in files
-    data = DataReader(
-        PATH_FILES, cfg.CORR_PATH, cfg.WEIGHT_CSV, SCENARIO, SCALE_PARAM
-    )
-    instance, instance_corr, start_inds, dest_inds = data.get_data(
-        cfg.START_PATH,
-        cfg.DEST_PATH,
-        percent_padding=None,  # cfg.PERC_PAD,
-        emergency_dist=None,  # cfg.PYLON_DIST_MAX
-        oneclass=False  # cfg.ONE_CLASS
-    )
-
+    data = DataReader(PATH_FILES, SCENARIO, SCALE_PARAM, cfg)
+    instance, edge_cost, instance_corr, config = data.get_data()
+    # get graph processing specific cfg
+    cfg = config.graph
+    start_inds = cfg.start_inds
+    dest_inds = cfg.dest_inds
+    # save
     if SAVE_PICKLE:
-        data.data = (instance, instance_corr, start_inds, dest_inds)
+        data_out = (instance, edge_cost, instance_corr, config)
         with open(IOPATH, "wb") as outfile:
-            pickle.dump(data, outfile)
+            pickle.dump(data_out, outfile)
         print("successfully saved data")
 
-    # visualize_corr = 1 - instance_corr
-    # visualize_corr[visualize_corr == 1] = np.inf
-    # plt.figure(figsize=(8, 5))
-    # plt.imshow(np.sum(instance, axis=0) + visualize_corr)
-    # plt.colorbar()
-    # plt.savefig(f"surface_s{SCENARIO}_{SCALE_PARAM}.png")
+visualize_corr = 1 - instance_corr
+visualize_corr[visualize_corr == 1] = np.inf
+plt.figure(figsize=(8, 5))
+plt.imshow(np.sum(instance, axis=0) + visualize_corr)
+plt.colorbar()
+plt.savefig(f"surface_s{SCENARIO}_{SCALE_PARAM}.png")
 
 # DEFINE GRAPH AND ALGORITHM
 graph = GRAPH_TYPE(
@@ -134,17 +135,17 @@ for (factor, dist) in PIPELINE:
     )
     print("1) set shift and corridor")
     graph.set_edge_costs(
-        data.layer_classes,
-        data.class_weights,
-        angle_weight=cfg.ANGLE_WEIGHT,
-        cab_forb=cfg.CABLE_FORBIDDEN
+        edge_cost,
+        cfg.layer_classes,
+        cfg.class_weights,
+        angle_weight=cfg.ANGLE_WEIGHT
     )
     # add vertices
     graph.add_nodes()
     if height_resistance_path is not None:
-        graph.init_heights(height_resistance_path, 40, 80, SCALE_PARAM)
+        graph.init_heights(height_resistance_path, 60, 80, SCALE_PARAM)
     print("1.2) set shift, edge costs and added nodes")
-    graph.add_edges(edge_weight=0, height_weight=0.2)  # cfg.EDGE_WEIGHT)
+    graph.add_edges(edge_weight=0, height_weight=0)  # cfg.EDGE_WEIGHT)
     print("2) added edges", graph.n_edges)
     print("number of vertices:", graph.n_nodes)
 
@@ -201,14 +202,31 @@ for (factor, dist) in PIPELINE:
         graph.remove_vertices(corridor, delete_padding=cfg.PYLON_DIST_MAX)
         print("6) remove edges")
 
+# necessary for ALL further computations:
+# graph.get_shortest_path_tree(source_v, target_v)
+
 # BEST IN WINDOW
 # path_window, path_window_cost, cost_sum_window = graph.best_in_window(
 #     30, 35, 60, 70, source_v, target_v
 # )
-# print("cost actually", cost_sum, "cost_new", cost_sum_window)
+# path_window, path_window_cost, cost_sum_window = graph.path_through_window(
+#     50, 100, 200, 300
+# )
+# alt = AlternativePaths(graph)
+# path_window, path_window_cost, cost_sum_window = alt.replace_window(
+#     150, 200, 250, 300
+# )
+# print("cost actually", cost_sum, "cost window", cost_sum_window)
+# plot_path_costs(
+#     instance * instance_corr,
+#     path_window,
+#     path_window_cost,
+#     data.layer_classes,
+#     buffer=2,
+#     out_path=OUT_PATH + "_window.png"
+# )
 
 # COMPUTE KSP
-# graph.get_shortest_path_tree(source_v, target_v)
 # ksp = graph.laplace(source_v, target_v, cfg.KSP, radius=50, cost_add=0.05)
 # plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
 # ksp = graph.k_diverse_paths(
@@ -236,8 +254,9 @@ print("FINISHED PIPELINE:", time_pipeline)
 print("path length", len(path))
 # SAVE timing test
 time_test_csv(
-    ID, cfg.CSV_TIMES, SCALE_PARAM * cfg.RASTER, cfg.GTNX, GRAPH_TYPE, graph,
-    path_costs, cost_sum, dist, time_pipeline, NOTES
+    ID, cfg.CSV_TIMES, SCALE_PARAM, cfg.GTNX, GRAPH_TYPE, graph,
+    [round(s, 3) for s in np.sum(path_costs, axis=0)], cost_sum, dist,
+    time_pipeline, NOTES
 )
 
 # -------------  PLOTTING: ----------------------
@@ -256,14 +275,14 @@ time_test_csv(
 #     graph.instance, path_window, buffer=0, out_path=OUT_PATH + "_window.png"
 # )
 # SIMPLE
-# plot_path(graph.instance, path, buffer=0, out_path=OUT_PATH + ".png")
+plot_path(graph.instance, path, buffer=2, out_path=OUT_PATH + ".png")
 
 # FOR COST COMPARISON
 plot_path_costs(
     instance * instance_corr,
     path,
     path_costs,
-    data.layer_classes,
+    cfg.layer_classes,
     buffer=2,
     out_path=OUT_PATH + "_costs.png"
 )

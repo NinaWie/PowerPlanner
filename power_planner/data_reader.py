@@ -6,7 +6,6 @@ import json
 import pandas as pd
 import functools
 import time
-import matplotlib.pyplot as plt
 # import matplotlib.pyplot as plt
 
 from power_planner.utils.utils import normalize, rescale
@@ -371,9 +370,6 @@ class DataReader():
         hard_cons = self.get_hard_constraints()
         hard_constraints = hard_constraints * hard_cons
 
-        plt.imshow(hard_constraints)
-        plt.savefig("hard_cons.png")
-
         # Construct instance and edge instance
         instance = self.get_costs_per_class(oneclass=self.config.ONE_CLASS)
         if "weight_" + str(self.scenario) + "_edge" in self.class_csv.columns:
@@ -394,9 +390,6 @@ class DataReader():
             # allow ueberspannen of hard constraint regions
             edge_inst = instance.copy()
         print("shape of inst and corr", instance.shape, hard_constraints.shape)
-
-        plt.imshow(np.mean(instance, axis=0))
-        plt.savefig("inst.png")
 
         # Get start and end point and save in config
         start_inds, self.orig_start = self.get_shape_point(

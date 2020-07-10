@@ -34,9 +34,6 @@ def time_test_csv(
     :param CSV_TIMES: output file
     :params: all parameters to save in the csv
     """
-    # compute average costs:
-    costs = [round(s, 3) for s in np.sum(path_costs, axis=0)]
-    print("costs", costs)
     # get scale factor and number of nonzero pixels:
     factor = graph.factor
     n_pixels = np.sum(np.mean(graph.cost_rest, axis=0) > 0)
@@ -47,7 +44,7 @@ def time_test_csv(
         ID, SCALE_PARAM, GTNX, GRAPH_TYPE, factor, dist, n_pixels,
         graph.n_nodes, graph.n_edges, graph.time_logs["add_nodes"],
         graph.time_logs["add_all_edges"], graph.time_logs["shortest_path"],
-        costs, cost_sum, time_pipeline, notes
+        path_costs, cost_sum, time_pipeline, notes
     ]
     append_to_csv(CSV_TIMES, param_list)
 
