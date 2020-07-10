@@ -19,17 +19,18 @@ from power_planner.utils.utils import (
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-cluster', action='store_true')
-# parser.add_argument('scale', help="downsample", type=int, default=1)
+parser.add_argument('-i', '--instance', type=str, default="ch")
+parser.add_argument('-s', '--scale', help="resolution", type=int, default=1)
 args = parser.parse_args()
 
 # define out save name
-ID = "test_be"  # str(round(time.time() / 60))[-5:]
+ID = "power_analysis_" + args.instance  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
-SCALE_PARAM = 2  # args.scale
+SCALE_PARAM = args.scale
 SCENARIO = 1
-INST = "belgium"
+INST = args.instance
 height_resistance_path = None  # "../data/Instance_CH.nosync/dtm_10m.tif"
 # for SCALE_PARAM in [1, 2, 5]:
 #     for SCENARIO in [1, 2, 3]:
@@ -63,7 +64,7 @@ if LOAD:
     PATH_FILES = os.path.join("data")
 else:
     # PATH_FILES = "/Volumes/Nina Backup/data_master_thesis/large_instance"
-    PATH_FILES = "../data/instance_CH.nosync"
+    PATH_FILES = f"../data/instance_{INST}.nosync"
 IOPATH = os.path.join(PATH_FILES, f"{INST}_data_{SCENARIO}_{SCALE_PARAM}.dat")
 
 # LOAD CONFIGURATION
@@ -103,6 +104,9 @@ else:
 cfg.ANGLE_WEIGHT = 0.1
 cfg.EDGE_WEIGHT = 0
 instance = instance * 100
+# for emergency fail
+instance[instance == 100] = np.mean(instance)
+
 print("INSTACE", np.mean(instance), np.min(instance), np.max(instance))
 save_path_costs = []
 

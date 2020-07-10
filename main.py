@@ -21,22 +21,23 @@ from power_planner.utils.utils import (
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-cluster', action='store_true')
-# parser.add_argument('scale', help="downsample", type=int, default=1)
+parser.add_argument('-i', '--instance', type=str, default="ch")
+parser.add_argument('-s', '--scale', help="resolution", type=int, default=1)
 args = parser.parse_args()
 
 # define out save name
-ID = "test_2"  # str(round(time.time() / 60))[-5:]
+ID = "test_2_" + args.instance  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
-SCALE_PARAM = 5  # args.scale
+SCALE_PARAM = args.scale
 SCENARIO = 1
-INST = "belgium"
+INST = args.instance  # "belgium"
 height_resistance_path = None  # "../data/Instance_CH.nosync/dtm_10m.tif"
 # for SCALE_PARAM in [1, 2, 5]:
-#     for SCENARIO in [1, 2, 3]:
-# print()
-# print("-------------- new scnario", SCALE_PARAM, SCENARIO, "-------")
+#     for INST in ["belgium", "ch", "de"]:
+#         print()
+#         print("-------------- new scnario", SCALE_PARAM, INST, "-------")
 
 # DEFINE CONFIGURATION
 # normal graph pipeline
@@ -65,13 +66,15 @@ if LOAD:
     PATH_FILES = os.path.join("data")
 else:
     # PATH_FILES = "/Volumes/Nina Backup/data_master_thesis/large_instance"
-    PATH_FILES = "../data/belgium.nosync"  #  "../data/Instance_CH.nosync" "../data/belgium.nosync"
+    PATH_FILES = f"../data/instance_{INST}.nosync"
 IOPATH = os.path.join(PATH_FILES, f"{INST}_data_{SCENARIO}_{SCALE_PARAM}.dat")
 
 # LOAD CONFIGURATION
-cfg = load_config(
-    os.path.join(PATH_FILES, f"{INST}_config.json"), scale_factor=SCALE_PARAM
-)
+if not LOAD:
+    cfg = load_config(
+        os.path.join(PATH_FILES, f"{INST}_config.json"),
+        scale_factor=SCALE_PARAM
+    )
 
 # READ DATA
 if LOAD:
@@ -102,12 +105,12 @@ else:
             pickle.dump(data_out, outfile)
         print("successfully saved data")
 
-visualize_corr = 1 - instance_corr
-visualize_corr[visualize_corr == 1] = np.inf
-plt.figure(figsize=(8, 5))
-plt.imshow(np.sum(instance, axis=0) + visualize_corr)
-plt.colorbar()
-plt.savefig(f"surface_s{SCENARIO}_{SCALE_PARAM}.png")
+# visualize_corr = 1 - instance_corr
+# visualize_corr[visualize_corr == 1] = np.inf
+# plt.figure(figsize=(8, 5))
+# plt.imshow(np.sum(instance, axis=0) + visualize_corr)
+# plt.colorbar()
+# plt.savefig(f"surface_s{INST}_{SCALE_PARAM}.png")
 
 # DEFINE GRAPH AND ALGORITHM
 graph = GRAPH_TYPE(

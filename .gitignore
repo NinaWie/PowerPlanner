@@ -5,7 +5,13 @@ outputs/
 test_file.py
 backup/
 notebooks/config.py
-data/
+
+data/ch*
+data/belgium*
+data/de*
+data/surface*
+data/large*
+
 notebooks/*.dat
 notebooks/*.pdf
 notebooks/*json
