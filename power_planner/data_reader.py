@@ -145,7 +145,9 @@ class DataReader():
             class_weight = np.unique(
                 class_rows["category_weight_" + str(self.scenario)]
             )
-            assert len(class_weight) == 1, "multiple weights for single class"
+            assert self.config.ONE_CLASS or len(
+                class_weight
+            ) == 1, "multiple weights for single class"
             self.layer_classes.append(c)
             self.class_weights.append(class_weight[0])
 
@@ -524,37 +526,13 @@ class DataReader():
         with open(out_path + "_infos.json", "w") as outfile:
             json.dump(out_dict, outfile)
 
-    def save_original_path(
-        self, save_path, paths, raw_cost_list, names
-    ):  # , orig_start, scale_factor=1):
-        """
-        save coordinates in original instance (tifs) without padding etc
-        """
-        # out_path_list = []
-        for i, path in enumerate(paths):
-            # round raw costs of this particular path
-            raw_costs = np.around(raw_cost_list[i], 2)
-            # scale and shift
-            scaled_path = np.asarray(path) * self.scale_factor
-            shift_to_orig = self.orig_start - scaled_path[0]
-            power_path = scaled_path + shift_to_orig
-            # out_path_list.append(shifted_path.tolist())
-
-            # save as json
-            # with open(save_path + "_orig.json", "w") as outfile:
-            #     json.dump(out_path_list, outfile)
-            # for i, power_path in enumerate(out_path_list):
-            coordinates = [self.transform_matrix * p for p in power_path]
-
-            # # add pylon heights if applicable
-            # if heights is not None:
-            #     heights = np.expand_dims(heights, 1)
-            # else:
-            #     heights = np.expand_dims(np.zeros(len(coordinates)), 1)
-            all_coords = np.concatenate(
-                (coordinates, power_path, raw_costs), axis=1
+    @staticmethod
+    def save_paths_json(paths, scale_factor, save_path):
+        out_path_list = []
+        for _, power_path in enumerate(paths):
+            out_path_list.append(
+                (np.asarray(power_path) * scale_factor).tolist()
             )
-            df = pd.DataFrame(
-                all_coords, columns=["X", "Y", "X_raw", "Y_raw"] + names
-            )
-            df.to_csv(save_path + "_" + str(i) + ".csv", index=False)
+        # save as json
+        with open(save_path + "_coords.json", "w") as outfile:
+            json.dump(out_path_list, outfile)

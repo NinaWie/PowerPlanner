@@ -4,10 +4,11 @@ from power_planner.utils.utils import (
 from power_planner.utils.utils_costs import CostUtils
 from power_planner.utils.utils_ksp import KspUtils
 from power_planner.graphs.fast_shortest_path import (
-    add_in_edges, add_out_edges, topological_sort_jit, del_after_dest,
-    edge_costs, average_lcp
+    sp_dag, sp_dag_reversed, topological_sort_jit, del_after_dest, edge_costs,
+    average_lcp, sp_bf
 )
 import numpy as np
+import pandas as pd
 import time
 import pickle
 from numba.typed import List
@@ -152,44 +153,48 @@ class ImplicitLG():
     # --------------------------------------------------------------------
     # SHORTEST PATH COMPUTATION
 
-    def add_edges(self, mode="DAG", edge_weight=0, height_weight=0):
+    def add_edges(self, mode="DAG", iters=100, edge_weight=0, height_weight=0):
         self.edge_weight = edge_weight
-        if mode == "BF":
-            self.add_edges_BF()
-        elif mode == "DAG":
-            tic = time.time()
-            # SORT
-            tmp_list = self._helper_list()
-            visit_points = (self.instance < np.inf).astype(int)
-            stack = topological_sort_jit(
-                self.dest_inds[0], self.dest_inds[1],
-                np.asarray(self.shifts) * (-1), visit_points, tmp_list
-            )
-            stack = del_after_dest(
-                stack, self.start_inds[0], self.start_inds[1]
+        tic = time.time()
+        # SORT --> Make stack
+        tmp_list = self._helper_list()
+        visit_points = (self.instance < np.inf).astype(int)
+        stack = topological_sort_jit(
+            self.dest_inds[0], self.dest_inds[1],
+            np.asarray(self.shifts) * (-1), visit_points, tmp_list
+        )
+        stack = del_after_dest(stack, self.start_inds[0], self.start_inds[1])
+        if self.verbose:
+            print("time topo sort:", round(time.time() - tic, 3))
+            print("stack length", len(stack))
+        tic = time.time()
+        # precompute edge costs
+        self.edge_cost = np.zeros(self.preds.shape)
+        if self.edge_weight > 0:
+            self.edge_cost = edge_costs(
+                stack, np.array(self.shifts), self.edge_cost, self.edge_inst,
+                self.shift_lines, self.edge_weight
             )
             if self.verbose:
-                print("time topo sort:", round(time.time() - tic, 3))
-                print("stack length", len(stack))
-            tic = time.time()
-            # precompute edge costs
-            self.edge_cost = np.zeros(self.preds.shape)
-            if self.edge_weight > 0:
-                self.edge_cost = edge_costs(
-                    stack, np.array(self.shifts), self.edge_cost,
-                    self.edge_inst, self.shift_lines, self.edge_weight
-                )
-                if self.verbose:
-                    print("Computed edge instance")
-            # RUN - add edges # average_lcp
-            self.dists, self.preds = add_in_edges(
+                print("Computed edge instance")
+        # RUN - either directed acyclic or BF algorithm
+        if mode == "BF":
+            # TODO: nr iterations argument
+            self.dists, self.preds = sp_bf(
+                iters, stack, np.array(self.shifts), self.angle_cost_array,
+                self.dists, self.preds, self.instance, self.edge_cost
+            )
+        elif mode == "DAG":
+            self.dists, self.preds = sp_dag(
                 stack, np.array(self.shifts), self.angle_cost_array,
                 self.dists, self.preds, self.instance, self.edge_cost
             )
-            print(np.min(self.dists[:, self.dest_inds[0], self.dest_inds[1]]))
-            self.time_logs["add_all_edges"] = round(time.time() - tic, 3)
-            if self.verbose:
-                print("time edges:", round(time.time() - tic, 3))
+        else:
+            raise ValueError("wrong mode input: " + mode)
+        print(np.min(self.dists[:, self.dest_inds[0], self.dest_inds[1]]))
+        self.time_logs["add_all_edges"] = round(time.time() - tic, 3)
+        if self.verbose:
+            print("time edges:", round(time.time() - tic, 3))
 
     # ----------------------------------------------------------------------
     # SHORTEST PATH TREE
@@ -218,7 +223,7 @@ class ImplicitLG():
         )
         stack = del_after_dest(stack, self.dest_inds[0], self.dest_inds[1])
         # compute distances: new method because out edges instead of in
-        self.dists_ba, self.preds_ba = add_out_edges(
+        self.dists_ba, self.preds_ba = sp_dag_reversed(
             stack,
             np.array(self.shifts) * (-1), self.angle_cost_array, self.dists_ba,
             self.instance, self.edge_inst, self.shift_lines, self.edge_weight
@@ -311,36 +316,6 @@ class ImplicitLG():
         return np.asarray(path
                           ).tolist(), path_costs.tolist(), cost_sum.tolist()
 
-    def raw_path_costs(self, path):
-        """
-        Compute raw angles, edge costs, pylon heights and normal costs
-        (without weighting)
-        Arguments:
-            List or array of path coordinates
-        """
-        path_costs = np.array(
-            [self.cost_instance[:, p[0], p[1]] for p in path]
-        )
-        # raw angle costs
-        ang_costs = CostUtils.compute_raw_angles(path)
-        # raw edge costs
-        edge_costs = CostUtils.compute_edge_costs(path, self.edge_inst)
-        # pylon heights
-        try:
-            heights = np.expand_dims(self.heights, 1)
-        except AttributeError:
-            heights = np.zeros((len(edge_costs), 1))
-        # concatenate
-        all_costs = np.concatenate(
-            (
-                np.expand_dims(ang_costs, 1), path_costs,
-                np.expand_dims(edge_costs, 1), heights
-            ), 1
-        )
-        names = self.cost_classes + ["edge_costs", "heigths"]
-        assert all_costs.shape[1] == len(names)
-        return all_costs, names
-
     def get_shortest_path(self, start_inds, dest_inds, ret_only_path=False):
         if not np.any(self.dists[:, dest_inds[0], dest_inds[1]] < np.inf):
             raise RuntimeWarning("empty path")
@@ -367,6 +342,70 @@ class ImplicitLG():
         self.sp = path
         self.time_logs["shortest_path"] = round(time.time() - tic, 3)
         return self.transform_path(path)
+
+    # ---------------------------------------------------------------------
+    # Compute raw (unnormalized) costs and output csv
+
+    def raw_path_costs(self, path):
+        """
+        Compute raw angles, edge costs, pylon heights and normal costs
+        (without weighting)
+        Arguments:
+            List or array of path coordinates
+        """
+        path_costs = np.array(
+            [self.cost_instance[:, p[0], p[1]] for p in path]
+        )
+        # raw angle costs
+        ang_costs = CostUtils.compute_raw_angles(path)
+        # raw edge costs
+        edge_costs = CostUtils.compute_edge_costs(path, self.edge_inst)
+        # pylon heights
+        try:
+            heights = np.expand_dims(self.heights, 1)
+        except AttributeError:
+            heights = np.zeros((len(edge_costs), 1))
+        # concatenate
+        print(
+            np.expand_dims(ang_costs, 1).shape,
+            np.expand_dims(edge_costs, 1).shape, path_costs.shape,
+            heights.shape
+        )
+        all_costs = np.concatenate(
+            (
+                np.expand_dims(ang_costs, 1), path_costs,
+                np.expand_dims(edge_costs, 1), heights
+            ), 1
+        )
+        names = self.cost_classes + ["edge_costs", "heigths"]
+        assert all_costs.shape[1] == len(names)
+        return all_costs, names
+
+    def save_path_cost_csv(self, save_path, paths, **kwargs):
+        """
+        save coordinates in original instance (tifs) without padding etc
+        """
+        # out_path_list = []
+        for i, path in enumerate(paths):
+            # compute raw costs and column names
+            raw_cost, names = self.raw_path_costs(path)
+            # round raw costs of this particular path
+            raw_costs = np.around(raw_cost, 2)
+            # scale and shift
+            scaled_path = np.asarray(path) * kwargs["scale"]
+            shift_to_orig = kwargs["orig_start"] - scaled_path[0]
+            power_path = scaled_path + shift_to_orig
+            # out_path_list.append(shifted_path.tolist())
+
+            coordinates = [kwargs["transform_matrix"] * p for p in power_path]
+
+            all_coords = np.concatenate(
+                (coordinates, power_path, raw_costs), axis=1
+            )
+            df = pd.DataFrame(
+                all_coords, columns=["X", "Y", "X_raw", "Y_raw"] + names
+            )
+            df.to_csv(save_path + "_" + str(i) + ".csv", index=False)
 
     # ----------------------------------------------------------------------
     # Other auxiliary functions

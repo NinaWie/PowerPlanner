@@ -302,8 +302,7 @@ plot_path_costs(
 # )
 
 # save just coordinates of path
-raw_costs, names = graph.raw_path_costs(path)
-data.save_original_path(OUT_PATH, [path], [raw_costs], names)
+graph.save_path_cost_csv(OUT_PATH + "_coords.csv", [path], **vars(cfg))
 # data.save_original_path(OUT_PATH, [k[0] for k in ksp], output_coords=True)
 
 # LINE GRAPH FROM FILE:

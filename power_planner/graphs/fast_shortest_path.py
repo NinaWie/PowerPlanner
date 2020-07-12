@@ -68,9 +68,24 @@ def edge_costs(stack, shifts, edge_cost, edge_inst, shift_lines, edge_weight):
 
 
 @jit(nopython=True)
-def add_in_edges(stack, shifts, angles_all, dists, preds, instance, edge_cost):
+def sp_dag(stack, shifts, angles_all, dists, preds, instance, edge_cost):
     """
-    Fast C++ (numba) method to compute the cumulative distances from start
+    Angle-weighted dynamic program for Directed Acyclic Graphs (O(n))
+    Implemented with numba for performance
+
+    Arguments:
+        n_iters: Int - At most the number of vertices in the graph, if known
+            then the maximum length of the shortest path
+        stack: List of tuples - order in which to consider the vertices
+            MUST BE TOPOLOGICALLY SORTED for this algorithm to work
+        shifts: np array of size (x,2) --> indicating the neighborhood for each
+            vertex
+        angles_all: np array, angle cost for each shift (precomputed)
+        dists: np array of size m --> indicates distance of each edge from the
+            source vertex
+        preds: np array of size m --> indicates predecessor for each edge
+        instance: 2D array, for each vertex the cost
+        edge_cost: np array of size m --> edge cost for each edge
     """
     # print(len(stack))
     for i in range(len(stack)):
@@ -95,7 +110,7 @@ def add_in_edges(stack, shifts, angles_all, dists, preds, instance, edge_cost):
 @jit(nopython=True)
 def average_lcp(stack, shifts, angles_all, dists, preds, instance, edge_cost):
     """
-    Fast C++ (numba) method to compute the cumulative distances from start
+    Compute the least cost AVERAGE path (with running average)
     """
     counter = np.ones(dists.shape)
     # print(len(stack))
@@ -125,12 +140,12 @@ def average_lcp(stack, shifts, angles_all, dists, preds, instance, edge_cost):
 
 
 @jit(nopython=True)
-def add_out_edges(
+def sp_dag_reversed(
     stack, shifts, angles_all, dists, instance, edge_inst, shift_lines,
     edge_weight
 ):
     """
-    Compute cumulative distances with each point of dists containing OUT edges
+    Compute cumulative distances from TARGET vertex
     """
     preds = np.zeros(dists.shape) - 1
     # preds = preds - 1
@@ -174,12 +189,58 @@ def add_out_edges(
     return dists, preds
 
 
-def add_edges_BF(n_iters, shifts, instance, angle_cost_array, dists, preds):
+@jit(nopython=True)
+def sp_bf(
+    n_iters, stack, shifts, angles_all, dists, preds, instance, edge_cost
+):
     """
-    TODO: implement numba version of bellman ford algorithm
+    Angle-weighted Bellman Ford algorithm (General graph)
+    Implemented with numba for performance - O(lm) where l is the
+    maximum length of the shortest path
+    
+    Arguments:
+        n_iters: Int - At most the number of vertices in the graph, if known
+            then the maximum length of the shortest path
+        stack: List of tuples - order in which to consider the vertices
+            Note: For this algorithm it does not matter, because done for
+            a sufficient number of iterations
+        shifts: np array of size (x,2) --> indicating the neighborhood for each
+            vertex
+        angles_all: np array, angle cost for each shift (precomputed)
+        dists: np array of size m --> indicates distance of each edge from the
+            source vertex
+        preds: np array of size m --> indicates predecessor for each edge
+        instance: 2D array, for each vertex the cost
+        edge_cost: np array of size m --> edge cost for each edge
     """
-    tic = time.time()
+    for _ in range(n_iters):
+        for i in range(len(stack)):
+            v_x = stack[i][0]
+            v_y = stack[i][1]
+            for s in range(len(shifts)):
+                neigh_x = v_x + shifts[s][0]
+                neigh_y = v_y + shifts[s][1]
+                if (
+                    0 <= neigh_x < dists.shape[1]
+                    and 0 <= neigh_y < dists.shape[2]
+                    and instance[neigh_x, neigh_y] < np.inf
+                ):
+                    # add up pylon cost + angle cost + edge cost
+                    cost_per_angle = dists[:, v_x, v_y] + angles_all[
+                        s] + instance[neigh_x, neigh_y] + edge_cost[s, neigh_x,
+                                                                    neigh_y]
+                    # update distances and predecessors if better
+                    if np.min(cost_per_angle) < dists[s, neigh_x, neigh_y]:
+                        dists[s, neigh_x, neigh_y] = np.min(cost_per_angle)
+                        preds[s, neigh_x, neigh_y] = np.argmin(cost_per_angle)
+    return dists, preds
 
+
+def old_BF_slow(n_iters, shifts, instance, angle_cost_array, dists, preds):
+    """
+    Implementation of angle BF without numba, uses numpy.roll to update
+    all vertices at the same time
+    """
     for _ in range(n_iters):
         # iterate over edges
         for i in range(len(shifts)):
