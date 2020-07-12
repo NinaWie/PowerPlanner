@@ -102,6 +102,7 @@ class DemoApp(App):
     def build(self):
         # Defaults
         self.SCALE_PARAM = 5
+        self.sliders_initialized = 0
 
         right_bar_size = .3
         slider_bar_size = .2
@@ -184,7 +185,7 @@ class DemoApp(App):
         )
         self.alternative_button = Button(
             text="Replacement path",
-            on_press=self.alternative,
+            on_press=self.rect_popup,
             size=(Window.width * right_bar_size, 30)
         )
         # Add to widget
@@ -212,6 +213,14 @@ class DemoApp(App):
 
         return superBox
 
+    def _mark_start_dest(self, buffer=5):
+        (x, y) = tuple(self.config.graph.start_inds)
+        self.disp_inst[x - buffer:x + buffer + 1, y - buffer:y + buffer +
+                       1] = [255, 255, 0]
+        (x, y) = tuple(self.config.graph.dest_inds)
+        self.disp_inst[x - buffer:x + buffer + 1, y - buffer:y + buffer +
+                       1] = [255, 255, 0]
+
     def loadData(self, instance):
         # self.filepath.text = str(os.path.exists(self.filepath.text))
         if os.path.exists(self.filepath.text):
@@ -223,6 +232,7 @@ class DemoApp(App):
                 ) = data
             print(self.instance.shape)
             self.disp_inst = np.moveaxis(self.instance, 0, -1)[:, :, :3] * 255
+            self._mark_start_dest()
             print(self.disp_inst.shape)
             self.img_widget.set_array(self.disp_inst)
             self.graph = ImplicitLG(self.instance, self.instance_corr)
@@ -236,28 +246,35 @@ class DemoApp(App):
             self.init_slider_box(instance)
 
     def init_slider_box(self, instance):
-        # Sliders for angle and edges
-        angle_label = Label(text="Angle weight")
-        self.angle_slider = Slider(min=0, max=1)
-        edge_label = Label(text="Edge weight")
-        self.edge_slider = Slider(min=0, max=1)
-        self.slider_box.add_widget(edge_label)
-        self.slider_box.add_widget(self.edge_slider)
-        self.slider_box.add_widget(angle_label)
-        self.slider_box.add_widget(self.angle_slider)
+        if not self.sliders_initialized:
+            # Sliders for angle and edges
+            angle_label = Label(text="Angle weight")
+            self.angle_slider = Slider(min=0, max=1)
+            edge_label = Label(text="Edge weight")
+            self.edge_slider = Slider(min=0, max=1)
+            self.slider_box.add_widget(edge_label)
+            self.slider_box.add_widget(self.edge_slider)
+            self.slider_box.add_widget(angle_label)
+            self.slider_box.add_widget(self.angle_slider)
+            # make one slider for each category
+            self.weight_sliders = []
+            for name in self.cfg.layer_classes:
+                label = Label(text=name)
+                slider = Slider(min=0, max=1)
+                self.weight_sliders.append(slider)
+                self.slider_box.add_widget(label)
+                self.slider_box.add_widget(slider)
+
+            # set it to initialized
+            self.sliders_initialized = 1
+
+        # UPDATE VALUES ACCORDING TO CONFIG
         self.angle_slider.value = self.cfg.ANGLE_WEIGHT
         self.edge_slider.value = self.cfg.EDGE_WEIGHT
-        # make one slider for each one
         normed_weights = np.asarray(self.cfg.class_weights
                                     ) / np.sum(self.cfg.class_weights)
-        self.weight_sliders = []
-        for (name, weight) in zip(self.cfg.layer_classes, normed_weights):
-            label = Label(text=name)
-            slider = Slider(min=0, max=1)
-            slider.value = float(weight)
-            self.weight_sliders.append(slider)
-            self.slider_box.add_widget(label)
-            self.slider_box.add_widget(slider)
+        for i in range(len(normed_weights)):
+            self.weight_sliders[i].value = float(normed_weights[i])
 
     def load_json(self, instance):
         # with open(self.json_fp.text, "r") as infile:
@@ -314,9 +331,58 @@ class DemoApp(App):
         self.img_widget.set_array(plotted_inst)
         print("ksp done")
 
+    def paint_rectangle(self, instance, buffer=2):
+        try:
+            ul_x = int(self.rect_text[0].text)
+            ul_y = int(self.rect_text[1].text)
+            br_x = int(self.rect_text[2].text)
+            br_y = int(self.rect_text[3].text)
+        except ValueError:
+            print("error: not all values given")
+            return
+        copied_inst = self.disp_inst.copy()
+        copied_inst[ul_x:br_x, ul_y - buffer:ul_y + buffer + 1] = [255, 0, 0]
+        copied_inst[ul_x:br_x, br_y - buffer:br_y + buffer + 1] = [255, 0, 0]
+        copied_inst[ul_x - buffer:ul_x + buffer + 1, ul_y:br_y] = [255, 0, 0]
+        copied_inst[br_x - buffer:br_x + buffer + 1, ul_y:br_y] = [255, 0, 0]
+        self.rect = (ul_x, br_x, ul_y, br_y)
+        self.img_widget.set_array(copied_inst)
+        self.but_dismiss.disabled = False
+
+    def rect_popup(self, instance):
+
+        box = BoxLayout(orientation='vertical', height=200)
+        text_labels = [
+            "Upper left X", "Upper left Y", "Lower right X", "lower right Y"
+        ]
+        text = text_labels  # [150, 250, 200, 300]
+        self.rect_text = []
+        for (l, t) in zip(text_labels, text):
+            t_in = TextInput(hint_text=l)
+            t_in.text = str(t)
+            self.rect_text.append(t_in)
+            box.add_widget(t_in)
+
+        # add buttons
+        but = Button(text='Paint rectangle', on_press=self.paint_rectangle)
+        self.but_dismiss = Button(text='Finish', on_press=self.alternative)
+        self.but_dismiss.disabled = True
+        box.add_widget(but)
+        box.add_widget(self.but_dismiss)
+        # define popup
+        self.popupWindow = Popup(
+            title="Set rectangle",
+            content=box,
+            size_hint=(None, None),
+            size=(300, 300)
+        )
+        self.popupWindow.open()
+
     def alternative(self, instance, buffer=2):
+        self.popupWindow.dismiss()
+        print("rect", self.rect)
         alt = AlternativePaths(self.graph)
-        replacement_path, _, _ = alt.replace_window(150, 200, 250, 300)
+        replacement_path, _, _ = alt.path_through_window(*self.rect)
         plot_inst = self.img_widget.current_in_img.copy()
         plotted_inst = self.path_plotter(
             plot_inst, replacement_path, [255, 0, 0], buffer=buffer
