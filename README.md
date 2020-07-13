@@ -65,9 +65,7 @@ Specify other hyperparameters in the config file of the instance (example will b
 
 ## Algorithms
 
-![Angle](assets/cost_anle_visualization.png "Visualization of LCP computation")
+![Angle](assets/cost_angle_visualization.png "Visualization of LCP computation")
 
 Different types of costs are considered and weighted: Angle costs, edge costs (cost for putting a cable above a particular position), and vertex costs (cost to place a pylon).
-
-
-
+An algorithm was developed to deal with angle costs, which is not possible with normal shortest path algorithms (e.g. Dijkstra). The code can be found as ```sp_dag``` or ```sp_bf``` dependent whether it is a directed acyclic graph or not, and is implemented in `numba` for efficiency.
