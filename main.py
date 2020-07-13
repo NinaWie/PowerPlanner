@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 # utils imports
 from power_planner.data_reader import DataReader
 from power_planner import graphs
+from power_planner.ksp import KSP
 from power_planner.alternative_paths import AlternativePaths
 from power_planner.plotting import (
     plot_path_costs, plot_pipeline_paths, plot_path, plot_k_sp,
@@ -26,7 +27,7 @@ parser.add_argument('-s', '--scale', help="resolution", type=int, default=1)
 args = parser.parse_args()
 
 # define out save name
-ID = "test_2_" + args.instance  # str(round(time.time() / 60))[-5:]
+ID = "test_5_" + args.instance  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
@@ -111,6 +112,8 @@ else:
 # plt.imshow(np.sum(instance, axis=0) + visualize_corr)
 # plt.colorbar()
 # plt.savefig(f"surface_s{INST}_{SCALE_PARAM}.png")
+config.graph.PYLON_DIST_MIN = 350 / 50  # RESOLUTION is 50
+config.graph.PYLON_DIST_MIN = 500 / 50
 
 # DEFINE GRAPH AND ALGORITHM
 graph = GRAPH_TYPE(
@@ -126,15 +129,13 @@ time_infos = []
 
 for (factor, dist) in PIPELINE:
     print("----------- PIPELINE", factor, dist, "---------------")
+    graph.set_corridor(corridor, start_inds, dest_inds, factor_or_n_edges=1)
     graph.set_shift(
         cfg.PYLON_DIST_MIN,
         cfg.PYLON_DIST_MAX,
         dest_inds - start_inds,
         cfg.MAX_ANGLE,
         max_angle_lg=cfg.MAX_ANGLE_LG
-    )
-    graph.set_corridor(
-        corridor, start_inds, dest_inds, factor_or_n_edges=factor
     )
     print("1) set shift and corridor")
     graph.set_edge_costs(
@@ -206,7 +207,7 @@ for (factor, dist) in PIPELINE:
         print("6) remove edges")
 
 # necessary for ALL further computations:
-# graph.get_shortest_path_tree(source_v, target_v)
+graph.get_shortest_path_tree(source_v, target_v)
 
 # BEST IN WINDOW
 # path_window, path_window_cost, cost_sum_window = graph.best_in_window(
@@ -230,8 +231,9 @@ for (factor, dist) in PIPELINE:
 # )
 
 # COMPUTE KSP
-# ksp = graph.laplace(source_v, target_v, cfg.KSP, radius=50, cost_add=0.05)
-# plot_k_sp(ksp, graph.instance * (corridor > 0).astype(int), out_path=OUT_PATH)
+ksp = KSP(graph)
+ksp_out = ksp.max_vertex_ksp(cfg.KSP, min_dist=50)
+plot_k_sp(ksp_out, graph.instance, out_path=OUT_PATH)
 # ksp = graph.k_diverse_paths(
 #     source_v,
 #     target_v,
@@ -302,7 +304,7 @@ plot_path_costs(
 # )
 
 # save just coordinates of path
-graph.save_path_cost_csv(OUT_PATH + "_coords.csv", [path], **vars(cfg))
+graph.save_path_cost_csv(OUT_PATH, [k[0] for k in ksp_out], **vars(cfg))
 # data.save_original_path(OUT_PATH, [k[0] for k in ksp], output_coords=True)
 
 # LINE GRAPH FROM FILE:

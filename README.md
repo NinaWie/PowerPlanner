@@ -24,7 +24,7 @@ Install the repository in editable mode:
 ```sh
 git clone https://github.com/NinaWie/PowerPlanner
 cd PowerPlanner
-pip install  -e
+pip install -e .
 ```
 
 ### Install manually:
@@ -35,18 +35,20 @@ NOTE: If you do not want to use the UI, you can
 pip install -r requirements.txt
 ```
 
-## UI
+## Optimal power infrastructure planning
+
+### UI
 
 A small python GUI serves as a demo app for the toolbox. Start the UI by running
 ```sh
 python ui.py
 ```
 
-## Demo notebook
+### Demo notebook
 
 In the [demo](demo.ipynb) notebook, the most important functions are explained and visualizations show the input data and outputs for each processing step.
 
-## Codebase
+### Codebase
 
 If you want to run one instance without UI, execute 
 ```sh
@@ -60,3 +62,12 @@ Optional arguments:
   -s SCALE: the resolution: 1 for 10m, 2 for 20m, 5 for 50m resolution
 
 Specify other hyperparameters in the config file of the instance (example will be added soon).
+
+## Algorithms
+
+![Angle](assets/cost_anle_visualization.png "Visualization of LCP computation")
+
+Different types of costs are considered and weighted: Angle costs, edge costs (cost for putting a cable above a particular position), and vertex costs (cost to place a pylon).
+
+
+

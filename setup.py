@@ -20,7 +20,9 @@ setup(
     author_email=('wnina@ethz.ch'),
     url='https://gitlab.ethz.ch/wnina/power-planner',
     license='MIT',
-    install_requires=['numpy'],
+    install_requires=[
+        'numpy', 'Kivy', 'numba', 'Pillow', 'rasterio', 'pandas'
+    ],
     classifiers=[
         'Intended Audience :: Developers',
         'Intended Audience :: Science/Research',
