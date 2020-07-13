@@ -1,5 +1,4 @@
 powerenv/
-*.png
 power_planner.code-workspace
 outputs/
 test_file.py
