@@ -1,47 +1,62 @@
 [![Build Status]]
 
-# Optimizing infrastructure layout for power lines
+# Optimizing power infrastructure layout
+
+![GUI](assets/GUI.png "UI for optimal power line layout")
 
 Given resistance costs for a raster of geo locations, the goal is to compute the optimal power line layout from a given start point to a given end point. The approach is to represent raster cells as vertices in a graph, place edges between them based on the minimal and maximal distance of the power towers, and define edge costs based on the underlying cost surface.
 
 ## Installation
 
 The library itself has few major dependencies (see [setup.py](setup.py)). 
-* One of `graph-tool` or `networkx` is required
+* `kivy` is required for the GUI
 * `numpy` and `matplotlib`
 
-### Install the required packaged by defining an virtual environment:
-
-Create a virtual environment:
+If wanted, create a virtual environment and activate it:
 
 ```sh
 python3 -m venv env
-```
-
-Activate the environment:
-
-```sh
 source env/bin/activate
 ```
 
-Install in editable mode for development:
+Install the repository in editable mode:
 
 ```sh
-pip install  -r requirements.txt
+git clone https://github.com/NinaWie/PowerPlanner
+cd PowerPlanner
+pip install  -e
 ```
 
-### Install with pip in editable mode for development:
+### Install manually:
 
-```console
-pip install -e .
+NOTE: If you do not want to use the UI, you can 
+
+```sh
+pip install -r requirements.txt
 ```
 
-## Usage
+## UI
 
-Run 
+A small python GUI serves as a demo app for the toolbox. Start the UI by running
+```sh
+python ui.py
 ```
-python main.py
-```
-to execute the algorithm. Specify input paths and hyperparameters in the beginning of the file
 
-The class `WeightedGraph` provides an interface to build a graph and compute edge costs based on a cost array with either networkx or graph-tool.
+## Demo notebook
+
+In the [demo](demo.ipynb) notebook, the most important functions are explained and visualizations show the input data and outputs for each processing step.
+
+## Codebase
+
+If you want to run one instance without UI, execute 
+```sh
+python main.py [-h] [-cluster] [-i INSTANCE] [-s SCALE]
+```
+
+Optional arguments:
+  -h, --help:
+  -cluster:
+  -i INSTANCE: the id of the instance to use (here one of ch, de, belgium)
+  -s SCALE: the resolution: 1 for 10m, 2 for 20m, 5 for 50m resolution
+
+Specify other hyperparameters in the config file of the instance (example will be added soon).

@@ -13,17 +13,14 @@ scripts = []
 setup(
     name='power_planner',
     version='0.0.1',
-    description='Optimizing infrastructure layout for power lines',
+    description='Optimizing power infrastructure layout',
     long_description=LONG_DESCRIPTION,
     long_description_content_type="text/markdown",
     author='Nina Wiedemann',
     author_email=('wnina@ethz.ch'),
     url='https://gitlab.ethz.ch/wnina/power-planner',
     license='MIT',
-    install_requires=[
-        'numpy',
-        'networkx',
-    ],
+    install_requires=['numpy'],
     classifiers=[
         'Intended Audience :: Developers',
         'Intended Audience :: Science/Research',

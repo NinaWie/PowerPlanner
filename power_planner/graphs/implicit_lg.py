@@ -24,17 +24,20 @@ class ImplicitLG():
         graphtool=1,
         directed=True,
         verbose=1,
-        n_iters=50,
-        fill_val=np.inf
+        n_iters=50
     ):
         self.cost_instance = instance
         self.hard_constraints = instance_corr
         self.x_len, self.y_len = instance_corr.shape
-        self.fill_val = fill_val
         self.n_iters = n_iters
         self.time_logs = {}
         self.verbose = verbose
         self.directed = directed
+
+        # construct cost rest
+        inf_corr = np.absolute(1 - self.hard_constraints).astype(float)
+        inf_corr[inf_corr > 0] = np.inf
+        self.cost_rest = self.cost_instance + inf_corr
 
     def _precompute_angles(self):
         tic = time.time()
@@ -72,7 +75,7 @@ class ImplicitLG():
         tic = time.time()
 
         self.dists = np.zeros((len(self.shifts), self.x_len, self.y_len))
-        self.dists += self.fill_val
+        self.dists += np.inf
         i, j = self.start_inds
         self.dists[:, i, j] = self.instance[i, j]
         self.preds = np.zeros(self.dists.shape) - 1
@@ -90,7 +93,7 @@ class ImplicitLG():
         corridor = (corridor > 0).astype(int) * (self.hard_constraints >
                                                  0).astype(int)
         inf_corr = np.absolute(1 - corridor).astype(float)
-        inf_corr[inf_corr > 0] = self.fill_val
+        inf_corr[inf_corr > 0] = np.inf
 
         self.factor = factor_or_n_edges
         self.cost_rest = self.cost_instance + inf_corr
@@ -207,7 +210,7 @@ class ImplicitLG():
 
         # initialize dists array
         self.dists_ba = np.zeros((len(self.shifts), self.x_len, self.y_len))
-        self.dists_ba += self.fill_val
+        self.dists_ba += np.inf
         i, j = self.dest_inds
         # this time need to set all incoming edges of dest to zero
         d0, d1 = self.dest_inds
@@ -438,21 +441,21 @@ class ImplicitLG():
         """
         Function for full processing until shortest path
         """
-        start_inds = kwargs["start_inds"]
-        dest_inds = kwargs["dest_inds"]
+        self.start_inds = kwargs["start_inds"]
+        self.dest_inds = kwargs["dest_inds"]
         self.set_shift(
             kwargs["PYLON_DIST_MIN"],
             kwargs["PYLON_DIST_MAX"],
-            dest_inds - start_inds,
+            self.dest_inds - self.start_inds,
             kwargs["MAX_ANGLE"],
             max_angle_lg=kwargs["MAX_ANGLE_LG"]
         )
-        self.set_corridor(
-            np.ones(self.hard_constraints.shape) * 0.5,
-            start_inds,
-            dest_inds,
-            factor_or_n_edges=1
-        )
+        # self.set_corridor(
+        #     np.ones(self.hard_constraints.shape) * 0.5,
+        #     self.start_inds,
+        #     self.dest_inds,
+        #     factor_or_n_edges=1
+        # )
         print("1) Initialize shifts and instance (corridor)")
         self.set_edge_costs(
             edge_inst,
@@ -470,7 +473,7 @@ class ImplicitLG():
 
         # get actual best path
         path, path_costs, cost_sum = self.get_shortest_path(
-            start_inds, dest_inds
+            self.start_inds, self.dest_inds
         )
         print("4) shortest path", cost_sum)
         return path, path_costs, cost_sum
