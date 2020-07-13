@@ -29,11 +29,12 @@ pip install -e .
 
 ### Install manually:
 
-NOTE: If you do not want to use the UI, you can 
-
 ```sh
 pip install -r requirements.txt
 ```
+
+NOTE: If you do not want to use the UI, you can edit requirements.txt and delete ```Kivy``` modules from that.
+
 
 ## Optimal power infrastructure planning
 
