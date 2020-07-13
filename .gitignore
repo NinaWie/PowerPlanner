@@ -15,7 +15,7 @@ data/large*
 notebooks/*.dat
 notebooks/*.pdf
 notebooks/*json
-
+notebooks/gorilla*
 notebooks/Function*
 *.csv
 # Byte-compiled / optimized / DLL files
