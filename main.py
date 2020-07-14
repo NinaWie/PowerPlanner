@@ -8,7 +8,10 @@ import warnings
 import matplotlib.pyplot as plt
 
 # utils imports
-from power_planner.data_reader import DataReader
+try:
+    from power_planner.data_reader import DataReader
+except ImportError:
+    warnings.warn("DATA READER CANNOT BE USED - IMPORTS")
 from power_planner import graphs
 from power_planner.ksp import KSP
 from power_planner.alternative_paths import AlternativePaths

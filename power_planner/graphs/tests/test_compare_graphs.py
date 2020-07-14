@@ -1,5 +1,6 @@
 import numpy as np
 import unittest
+from types import SimpleNamespace
 from power_planner import graphs
 from power_planner.utils.utils import get_distance_surface
 
@@ -9,6 +10,19 @@ class TestCompGraphs(unittest.TestCase):
     expl_shape = (100, 100)
     start_inds = np.array([6, 6])
     dest_inds = np.array([90, 85])
+
+    # create configuration
+    cfg = SimpleNamespace()
+    cfg.PYLON_DIST_MIN = 3
+    cfg.PYLON_DIST_MAX = 5
+    cfg.start_inds = start_inds
+    cfg.dest_inds = dest_inds
+    cfg.ANGLE_WEIGHT = 0.25
+    cfg.EDGE_WEIGHT = 0
+    cfg.MAX_ANGLE = np.pi / 2
+    cfg.MAX_ANGLE_LG = np.pi / 4
+    cfg.layer_classes = ["dummy_class"]
+    cfg.class_weights = [1]
 
     # define corridor
     corridor = np.ones(expl_shape) * 0.5
@@ -35,48 +49,38 @@ class TestCompGraphs(unittest.TestCase):
         graph.set_corridor(
             corridor, self.start_inds, self.dest_inds, factor_or_n_edges=1
         )
-        graph.set_edge_costs(["dummy_class"], [1], angle_weight=ang_weight)
+        graph.set_edge_costs(
+            graph.cost_instance.copy(), ["dummy_class"], [1],
+            angle_weight=ang_weight
+        )
         graph.add_nodes()
         graph.add_edges()
         return graph
 
     def test_lg_equal_weighted(self) -> None:
         # compare whether angle costs are decreasing
-        max_angle_lg = np.pi
+        self.cfg.MAX_ANGLE_LG = np.pi
         impl_lg = graphs.ImplicitLG(
             np.array([self.example3]), self.hard_cons, n_iters=15, verbose=0
         )
-        impl_lg = self.build_graph(
-            impl_lg, max_angle_lg=max_angle_lg, ang_weight=0
-        )
-        path, path_costs, cost_sum = impl_lg.get_shortest_path(
-            self.start_inds, self.dest_inds
-        )
+        impl_lg.set_corridor(self.corridor, self.start_inds, self.dest_inds)
+        self.cfg.ANGLE_WEIGHT = 0
+        path, path_costs, cost_sum = impl_lg.single_sp(**vars(self.cfg))
         # get lg path
         lg_graph = graphs.LineGraph(
             np.array([self.example3]), self.hard_cons, verbose=0
         )
-        lg_graph = self.build_graph(
-            lg_graph, max_angle_lg=max_angle_lg, ang_weight=0
-        )
-        lg_graph.sum_costs()
-        source_v, target_v = lg_graph.add_start_and_dest(
-            self.start_inds, self.dest_inds
-        )
-        path_lg, path_costs_lg, cost_sum_lg = lg_graph.get_shortest_path(
-            source_v, target_v
+        lg_graph.set_corridor(self.corridor, self.start_inds, self.dest_inds)
+        path_lg, path_costs_lg, cost_sum_lg = lg_graph.single_sp(
+            **vars(self.cfg)
         )
         # get weighted path
         wg_graph = graphs.WeightedGraph(
             np.array([self.example3]), self.hard_cons, verbose=0
         )
-        wg_graph = self.build_graph(wg_graph, max_angle_lg=max_angle_lg)
-        wg_graph.sum_costs()
-        source_v, target_v = wg_graph.add_start_and_dest(
-            self.start_inds, self.dest_inds
-        )
-        path_wg, path_costs_wg, cost_sum_wg = wg_graph.get_shortest_path(
-            source_v, target_v
+        wg_graph.set_corridor(self.corridor, self.start_inds, self.dest_inds)
+        path_wg, path_costs_wg, cost_sum_wg = wg_graph.single_sp(
+            **vars(self.cfg)
         )
         # assert equal:
         self.assertListEqual(list(path_lg), list(path_wg))
@@ -102,25 +106,15 @@ class TestCompGraphs(unittest.TestCase):
                 n_iters=10,
                 verbose=0
             )
-            impl_lg = self.build_graph(
-                impl_lg, max_angle_lg=max_angle, ang_weight=ang_weight
-            )
-            path, path_costs, cost_sum = impl_lg.get_shortest_path(
-                self.start_inds, self.dest_inds
-            )
+            self.cfg.ANGLE_WEIGHT = ang_weight
+            self.cfg.MAX_ANGLE_LG = max_angle
+            path, path_costs, cost_sum = impl_lg.single_sp(**vars(self.cfg))
             # get lg path
             lg_graph = graphs.LineGraph(
                 np.array([self.example3]), self.hard_cons, verbose=0
             )
-            lg_graph = self.build_graph(
-                lg_graph, max_angle_lg=max_angle, ang_weight=ang_weight
-            )
-            lg_graph.sum_costs()
-            source_v, target_v = lg_graph.add_start_and_dest(
-                self.start_inds, self.dest_inds
-            )
-            path_lg, path_costs_lg, cost_sum_lg = lg_graph.get_shortest_path(
-                source_v, target_v
+            path_lg, path_costs_lg, cost_sum_lg = lg_graph.single_sp(
+                **vars(self.cfg)
             )
             # assert that lg and other one are equal
             self.assertListEqual(list(path_lg), list(path))

@@ -3,24 +3,17 @@ from .weighted_graph import WeightedGraph
 from power_planner.utils.utils_ksp import KspUtils
 import numpy as np
 import time
-import matplotlib.pyplot as plt
 
 
 class WeightedKSP(WeightedGraph):
 
     def __init__(
-        self,
-        cost_instance,
-        hard_constraints,
-        directed=True,
-        graphtool=1,
-        verbose=1
+        self, cost_instance, hard_constraints, directed=True, verbose=1
     ):
         super(WeightedKSP, self).__init__(
             cost_instance,
             hard_constraints,
             directed=directed,
-            graphtool=graphtool,
             verbose=verbose
         )
         # load graph from file

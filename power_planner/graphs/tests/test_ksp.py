@@ -1,8 +1,9 @@
 import unittest
 import numpy as np
-
+from types import SimpleNamespace
 from power_planner.graphs.weighted_ksp import WeightedKSP
-from power_planner.graphs.impl_ksp import ImplicitKSP
+from power_planner.graphs.implicit_lg import ImplicitLG
+from power_planner.ksp import KSP
 
 
 class TestKsp(unittest.TestCase):
@@ -10,6 +11,19 @@ class TestKsp(unittest.TestCase):
     expl_shape = (100, 100)
     start_inds = np.array([6, 6])
     dest_inds = np.array([90, 85])
+
+    # create configuration
+    cfg = SimpleNamespace()
+    cfg.PYLON_DIST_MIN = 3
+    cfg.PYLON_DIST_MAX = 5
+    cfg.start_inds = start_inds
+    cfg.dest_inds = dest_inds
+    cfg.ANGLE_WEIGHT = 0.25
+    cfg.EDGE_WEIGHT = 0
+    cfg.MAX_ANGLE = np.pi / 2
+    cfg.MAX_ANGLE_LG = np.pi / 4
+    cfg.layer_classes = ["dummy_class"]
+    cfg.class_weights = [1]
 
     # construct random cost surface to assure that lg and impl output same
     example3 = np.random.rand(*expl_shape)
@@ -21,32 +35,13 @@ class TestKsp(unittest.TestCase):
     hard_cons[:5, :] = 0
     hard_cons[-5:, :] = 0
 
-    def build_graph(self, graph, max_angle_lg=np.pi / 4, ang_weight=0.25):
-        graph.set_shift(
-            3,
-            5,
-            self.dest_inds - self.start_inds,
-            np.pi / 2,
-            max_angle_lg=max_angle_lg
-        )
-        graph.set_edge_costs(["dummy_class"], [1], angle_weight=ang_weight)
-        graph.add_nodes()
-        corridor = np.ones(self.expl_shape) * 0.5
-        graph.set_corridor(
-            corridor, self.start_inds, self.dest_inds, factor_or_n_edges=1
-        )
-        graph.add_edges()
-        graph.sum_costs()
-        source_v, target_v = graph.add_start_and_dest(
-            self.start_inds, self.dest_inds
-        )
-        return graph, source_v, target_v
-
     def test_ksp(self) -> None:
         wg = WeightedKSP(np.array([self.example3]), self.hard_cons, verbose=0)
-        wg, source_v, target_v = self.build_graph(wg, ang_weight=0)
-        bestpath, _, best_cost_sum = wg.get_shortest_path(source_v, target_v)
+        bestpath, _, best_cost_sum = wg.single_sp(**vars(self.cfg))
         # self.assertListEqual(bestpath.)
+        source_v, target_v = wg.add_start_and_dest(
+            self.start_inds, self.dest_inds
+        )
         wg.get_shortest_path_tree(source_v, target_v)
         best2, _, best_cost_sum2 = wg.transform_path(wg.best_path)
         # assert that SP tree path is optimal one
@@ -76,23 +71,23 @@ class TestKsp(unittest.TestCase):
     def compare_ksp(self) -> None:
         max_angle_lg = np.pi
         # get impl lg ksp
-        impl_lg = ImplicitKSP(
+        impl_lg = ImplicitLG(
             np.array([self.example3]), self.hard_cons, verbose=0
         )
-        impl_lg, _, _ = self.build_graph(
-            impl_lg, max_angle_lg=max_angle_lg, ang_weight=0
-        )
-        impl_lg.get_shortest_path_tree(self.start_inds, self.dest_inds)
-        ksp_lg = impl_lg.find_ksp(self.start_inds, self.dest_inds, 10)
+        _ = impl_lg.sp_trees(**vars(self.cfg))
+        ksp = KSP(impl_lg)
+        ksp_lg = ksp.find_ksp(10)
         # get weighted ksp
         wg_graph = WeightedKSP(
             np.array([self.example3]), self.hard_cons, verbose=0
         )
-        wg_graph, source_v, target_v = self.build_graph(
-            wg_graph, max_angle_lg=max_angle_lg
+        bestpath, _, best_cost_sum = wg.single_sp(**vars(self.cfg))
+        # self.assertListEqual(bestpath.)
+        source_v, target_v = wg.add_start_and_dest(
+            self.start_inds, self.dest_inds
         )
         wg_graph.get_shortest_path_tree(source_v, target_v)
-        ksp_wg = wg_graph.k_shortest_paths(source_v, target_v, 10)
+        ksp_wg = wg_graph.find_ksp(source_v, target_v, 10)
         for k in range(10):
             path1 = ksp_wg[k][0]
             path2 = ksp_lg[k][0]

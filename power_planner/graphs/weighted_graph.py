@@ -1,6 +1,6 @@
 from power_planner.utils.utils_constraints import ConstraintUtils
 from power_planner.utils.utils import get_donut_vals
-from .general_graph import GeneralGraph
+from .general_graph import GeneralGraph, GRAPH_TOOL
 
 import numpy as np
 import time
@@ -9,12 +9,7 @@ import time
 class WeightedGraph(GeneralGraph):
 
     def __init__(
-        self,
-        cost_instance,
-        hard_constraints,
-        directed=True,
-        graphtool=1,
-        verbose=1
+        self, cost_instance, hard_constraints, directed=True, verbose=1
     ):
         # assert cost_instance.shape == hard_constraints.shape
         # , "Cost size must be equal to corridor definition size!"
@@ -23,18 +18,13 @@ class WeightedGraph(GeneralGraph):
         self.time_logs = {}
         tic = time.time()
 
-        # indicator whether to use networkx or graph tool
-        self.graphtool = graphtool
-
         # cost surface
         self.cost_instance = cost_instance
         self.hard_constraints = hard_constraints
         self.x_len, self.y_len = hard_constraints.shape
 
         # initialize graph:
-        GeneralGraph.__init__(
-            self, directed=directed, graphtool=graphtool, verbose=verbose
-        )
+        GeneralGraph.__init__(self, directed=directed, verbose=verbose)
 
         # print statements
         self.verbose = verbose
@@ -190,7 +180,7 @@ class WeightedGraph(GeneralGraph):
         """
         start_node_ind = self.pos2node[start_inds[0], start_inds[1]]
         dest_node_ind = self.pos2node[dest_inds[0], dest_inds[1]]
-        if self.graphtool:
+        if GRAPH_TOOL:
             return self.graph.vertex(start_node_ind
                                      ), self.graph.vertex(dest_node_ind)
         else:
@@ -206,7 +196,7 @@ class WeightedGraph(GeneralGraph):
 
         path = []
         for v in vertices_path:
-            if self.graphtool:
+            if GRAPH_TOOL:
                 ind = self.graph.vertex_index[v]
             else:
                 ind = int(v)

@@ -14,12 +14,7 @@ class LineGraph(GeneralGraph):
     """
 
     def __init__(
-        self,
-        cost_instance,
-        hard_constraints,
-        directed=True,
-        graphtool=1,
-        verbose=1
+        self, cost_instance, hard_constraints, directed=True, verbose=1
     ):
         tic = time.time()
         # assert cost_instance.shape == hard_constraints.shape
@@ -27,9 +22,7 @@ class LineGraph(GeneralGraph):
         self.hard_constraints = hard_constraints
 
         # initilize graph
-        GeneralGraph.__init__(
-            self, directed=directed, graphtool=graphtool, verbose=verbose
-        )
+        GeneralGraph.__init__(self, directed=directed, verbose=verbose)
 
         self.x_len, self.y_len = hard_constraints.shape
         self.pos2node = np.arange(self.x_len * self.y_len).reshape(

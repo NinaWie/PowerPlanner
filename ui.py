@@ -235,7 +235,11 @@ class DemoApp(App):
             self._mark_start_dest()
             print(self.disp_inst.shape)
             self.img_widget.set_array(self.disp_inst)
-            self.graph = ImplicitLG(self.instance, self.instance_corr)
+            self.graph = ImplicitLG(
+                self.instance,
+                self.instance_corr,
+                edge_instance=self.edge_inst,
+            )
             self.cfg = self.config.graph
             self.SCALE_PARAM = int(self.filepath.text.split(".")[0][-1])
             # enable button
@@ -293,7 +297,7 @@ class DemoApp(App):
         self.cfg.class_weights = new_class_weights
         # new_img = (np.random.rand(1000, 400, 3) * 150)
         # self.img_widget.set_array(new_img)
-        path, _, _ = self.graph.single_sp(self.edge_inst, **vars(self.cfg))
+        path, _, _ = self.graph.single_sp(**vars(self.cfg))
         plotted_inst = self.path_plotter(
             self.disp_inst.copy(), path, [255, 255, 255], buffer=buffer
         )
@@ -306,7 +310,7 @@ class DemoApp(App):
         self.cfg.ANGLE_WEIGHT = self.angle_slider.value
         self.cfg.EDGE_WEIGHT = self.edge_slider.value
         # set edge cost (must be repeated because of angle weight)
-        path, _, _ = self.graph.sp_trees(self.edge_inst, **vars(self.cfg))
+        path, _, _ = self.graph.sp_trees(**vars(self.cfg))
         # plot the path
         plotted_inst = self.path_plotter(
             self.disp_inst.copy(), path, [255, 255, 255], buffer=buffer

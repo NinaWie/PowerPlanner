@@ -1,5 +1,6 @@
 import numpy as np
 import unittest
+from types import SimpleNamespace
 from power_planner import graphs
 from power_planner.utils.utils import bresenham_line
 
@@ -7,8 +8,21 @@ from power_planner.utils.utils import bresenham_line
 class TestImplicitLG(unittest.TestCase):
 
     expl_shape = (50, 50)
+
+    # create configuration
+    cfg = SimpleNamespace()
+    cfg.PYLON_DIST_MIN = 3
+    cfg.PYLON_DIST_MAX = 5
     start_inds = np.array([6, 6])
     dest_inds = np.array([41, 43])
+    cfg.start_inds = start_inds
+    cfg.dest_inds = dest_inds
+    cfg.ANGLE_WEIGHT = 0.25
+    cfg.EDGE_WEIGHT = 0
+    cfg.MAX_ANGLE = np.pi / 2
+    cfg.MAX_ANGLE_LG = np.pi / 4
+    cfg.layer_classes = ["dummy_class"]
+    cfg.class_weights = [1]
 
     # construct simple line instance
     example_inst = np.ones(expl_shape)
@@ -26,23 +40,6 @@ class TestImplicitLG(unittest.TestCase):
     high_angle_corr[start_inds[0], dest_inds[1]] = 1
     high_angle_corr[start_inds[0] + 3:dest_inds[0] + 1, dest_inds[1]] = 1
 
-    def build_graph(self, graph, max_angle_lg=np.pi / 4, ang_weight=0.25):
-        graph.set_shift(
-            3,
-            5,
-            self.dest_inds - self.start_inds,
-            np.pi / 2,
-            max_angle_lg=max_angle_lg
-        )
-        corridor = np.ones(self.expl_shape) * 0.5
-        graph.set_corridor(
-            corridor, self.start_inds, self.dest_inds, factor_or_n_edges=1
-        )
-        graph.set_edge_costs(["dummy_class"], [1], angle_weight=ang_weight)
-        graph.add_nodes()
-
-        return graph
-
     def test_correct_shortest_path(self) -> None:
         """ Test the implicit line graph construction """
         graph = graphs.ImplicitLG(
@@ -51,8 +48,7 @@ class TestImplicitLG(unittest.TestCase):
             n_iters=10,
             verbose=0
         )
-        graph = self.build_graph(graph)
-        graph.add_edges()
+        path, path_costs, cost_sum = graph.single_sp(**vars(self.cfg))
         self.assertListEqual(graph.cost_weights.tolist(), [0.2, 0.8])
         self.assertTupleEqual(graph.instance.shape, self.expl_shape)
         self.assertEqual(np.sum(graph.cost_weights), 1)
@@ -77,9 +73,9 @@ class TestImplicitLG(unittest.TestCase):
             np.inf
         )
         # get actual best path
-        path, path_costs, cost_sum = graph.get_shortest_path(
-            self.start_inds, self.dest_inds
-        )
+        # path, path_costs, cost_sum = graph.get_shortest_path(
+        #     self.start_inds, self.dest_inds
+        # )
         self.assertNotEqual(len(path), 0)
         self.assertEqual(len(path), len(path_costs))
         self.assertGreaterEqual(cost_sum, 5)
@@ -95,13 +91,13 @@ class TestImplicitLG(unittest.TestCase):
             n_iters=10,
             verbose=0
         )
-        graph = self.build_graph(graph, ang_weight=0)
-        graph.add_edges(edge_weight=0.5)
+        self.cfg.ANGLE_WEIGHT = 0
+        self.cfg.EDGE_WEIGHT = 0.5
+        path, path_costs, cost_sum = graph.single_sp(**vars(self.cfg))
+        self.cfg.ANGLE_WEIGHT = 0.25
+        self.cfg.EDGE_WEIGHT = 0
         dest_costs = np.min(
             graph.dists[:, self.dest_inds[0], self.dest_inds[1]]
-        )
-        path, path_costs, cost_sum = graph.get_shortest_path(
-            self.start_inds, self.dest_inds
         )
         dest_costs_gt = len(path)  # everywhere 1
         a = []
@@ -124,22 +120,22 @@ class TestImplicitLG(unittest.TestCase):
             n_iters=10,
             verbose=0
         )
-        graph = self.build_graph(graph, max_angle_lg=np.pi / 4)
-        graph.add_edges()
+        path, path_costs, cost_sum = graph.single_sp(**vars(self.cfg))
         # assert that destination can NOT be reached
         self.assertFalse(
             np.min(graph.dists[:, self.dest_inds[0], self.dest_inds[1]]) <
             np.inf
         )
+
         # NEXT TRY: more angles allowed
+        self.cfg.MAX_ANGLE_LG = np.pi
         graph = graphs.ImplicitLG(
             np.array([self.example_inst]),
             self.high_angle_corr,
             n_iters=10,
             verbose=0
         )
-        graph = self.build_graph(graph, max_angle_lg=np.pi)
-        graph.add_edges()
+        path, path_costs, cost_sum = graph.single_sp(**vars(self.cfg))
         # assert that dest CAN be reached
         self.assertTrue(
             np.min(graph.dists[:, self.dest_inds[0], self.dest_inds[1]]) <
@@ -150,15 +146,10 @@ class TestImplicitLG(unittest.TestCase):
         lg_graph = graphs.LineGraph(
             np.array([self.example_inst]), self.high_angle_corr, verbose=0
         )
-        lg_graph = self.build_graph(lg_graph, max_angle_lg=np.pi)
-        lg_graph.add_edges()
-        lg_graph.sum_costs()
-        source_v, target_v = lg_graph.add_start_and_dest(
-            self.start_inds, self.dest_inds
+        path_lg, path_costs_lg, cost_sum_lg = lg_graph.single_sp(
+            **vars(self.cfg)
         )
-        path_lg, path_costs_lg, cost_sum_lg = lg_graph.get_shortest_path(
-            source_v, target_v
-        )
+        self.cfg.MAX_ANGLE_LG = np.pi / 4
         # assert that path is non-empty
         self.assertTrue(len(path_lg) > 0)
         self.assertEqual(len(path_lg), len(path_costs_lg))
@@ -172,14 +163,8 @@ class TestImplicitLG(unittest.TestCase):
         lg_graph = graphs.LineGraph(
             np.array([self.example_inst]), self.high_angle_corr, verbose=0
         )
-        lg_graph = self.build_graph(lg_graph, max_angle_lg=np.pi / 4)
-        lg_graph.add_edges()
-        lg_graph.sum_costs()
-        source_v, target_v = lg_graph.add_start_and_dest(
-            self.start_inds, self.dest_inds
-        )
-        path_lg, path_costs_lg, cost_sum_lg = lg_graph.get_shortest_path(
-            source_v, target_v
+        path_lg, path_costs_lg, cost_sum_lg = lg_graph.single_sp(
+            **vars(self.cfg)
         )
         self.assertTrue(len(path_lg) == 0)
 

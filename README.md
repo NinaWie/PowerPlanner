@@ -1,4 +1,4 @@
-[![Build Status]]
+[![Build Status](https://travis-ci.org/NinaWie/PowerPlanner.svg?branch=master)](https://travis-ci.org/NinaWie/PowerPlanner)
 
 # Optimizing power infrastructure layout
 

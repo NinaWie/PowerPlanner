@@ -24,7 +24,7 @@ parser.add_argument('-s', '--scale', help="resolution", type=int, default=1)
 args = parser.parse_args()
 
 # define out save name
-ID = "power_analysis_" + args.instance  # str(round(time.time() / 60))[-5:]
+ID = "power_analysis_angle_" + args.instance  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
@@ -68,9 +68,11 @@ else:
 IOPATH = os.path.join(PATH_FILES, f"{INST}_data_{SCENARIO}_{SCALE_PARAM}.dat")
 
 # LOAD CONFIGURATION
-cfg = load_config(
-    os.path.join(PATH_FILES, f"{INST}_config.json"), scale_factor=SCALE_PARAM
-)
+if not LOAD:
+    cfg = load_config(
+        os.path.join(PATH_FILES, f"{INST}_config.json"),
+        scale_factor=SCALE_PARAM
+    )
 
 # READ DATA
 if LOAD:
@@ -101,13 +103,13 @@ else:
             pickle.dump(data_out, outfile)
         print("successfully saved data")
 
-cfg.ANGLE_WEIGHT = 0.1
+cfg.ANGLE_WEIGHT = 50
 cfg.EDGE_WEIGHT = 0
 instance = instance * 100
 # for emergency fail
-instance[instance == 100] = np.mean(instance)
+# instance[instance == 100] = np.mean(instance)
 
-print("INSTACE", np.mean(instance), np.min(instance), np.max(instance))
+print("INSTANCE", np.mean(instance), np.min(instance), np.max(instance))
 save_path_costs = []
 
 for power in [1] + [round(c, 1) for c in np.logspace(0.1, 0.6, 6)]:
@@ -119,14 +121,12 @@ for power in [1] + [round(c, 1) for c in np.logspace(0.1, 0.6, 6)]:
 
     # DEFINE GRAPH AND ALGORITHM
     graph = GRAPH_TYPE(
-        instance, instance_corr, graphtool=cfg.GTNX, verbose=cfg.VERBOSE
+        instance, instance_corr, edge_instance=edge_cost, verbose=cfg.VERBOSE
     )
     tic = time.time()
 
     # PROCESS
-    path, path_costs, cost_sum = graph.single_sp(
-        edge_cost, power=power, **vars(cfg)
-    )
+    path, path_costs, cost_sum = graph.single_sp(power=power, **vars(cfg))
 
     # initialize normal graph:
     if power == 1:
@@ -164,6 +164,9 @@ for power in [1] + [round(c, 1) for c in np.logspace(0.1, 0.6, 6)]:
     )
 
     # -------------  PLOTTING: ----------------------
+    # graph.save_path_cost_csv(
+    #     OUT_PATH + "_" + str(power) + "_coords.csv", [path], **vars(cfg)
+    # )
 
     # SIMPLE
     plot_path(

@@ -8,6 +8,7 @@ from power_planner.graphs.fast_shortest_path import (
     average_lcp, sp_bf
 )
 import numpy as np
+import warnings
 import pandas as pd
 import time
 import pickle
@@ -21,13 +22,17 @@ class ImplicitLG():
         self,
         instance,
         instance_corr,
-        graphtool=1,
+        edge_instance=None,
         directed=True,
         verbose=1,
         n_iters=50
     ):
         self.cost_instance = instance
         self.hard_constraints = instance_corr
+        if edge_instance is None:
+            self.edge_cost_instance = instance.copy()
+        else:
+            self.edge_cost_instance = edge_instance
         self.x_len, self.y_len = instance_corr.shape
         self.n_iters = n_iters
         self.time_logs = {}
@@ -118,9 +123,7 @@ class ImplicitLG():
         self.start_inds = start_inds
         self.dest_inds = dest_inds
 
-    def set_edge_costs(
-        self, edge_cost, layer_classes, layer_weights, angle_weight=0.5
-    ):
+    def set_edge_costs(self, layer_classes, layer_weights, angle_weight=0.5):
         """
         angle_weight: how to consider angles in contrast to all other costs!
         """
@@ -147,7 +150,9 @@ class ImplicitLG():
             self.instance[np.isnan(self.instance)] = np.inf
 
         self.edge_inst = np.sum(
-            np.moveaxis(edge_cost, 0, -1) * self.cost_weights[1:], axis=2
+            np.moveaxis(self.edge_cost_instance, 0, -1) *
+            self.cost_weights[1:],
+            axis=2
         )
 
         if self.verbose:
@@ -321,7 +326,8 @@ class ImplicitLG():
 
     def get_shortest_path(self, start_inds, dest_inds, ret_only_path=False):
         if not np.any(self.dists[:, dest_inds[0], dest_inds[1]] < np.inf):
-            raise RuntimeWarning("empty path")
+            warnings.warn("empty path")
+            return [], [], 0
         tic = time.time()
         curr_point = dest_inds
         path = [dest_inds]
@@ -437,7 +443,7 @@ class ImplicitLG():
     # -----------------------------------------------------------------------
     # INTERFACE
 
-    def single_sp(self, edge_inst, power=1, **kwargs):
+    def single_sp(self, power=1, **kwargs):
         """
         Function for full processing until shortest path
         """
@@ -450,15 +456,8 @@ class ImplicitLG():
             kwargs["MAX_ANGLE"],
             max_angle_lg=kwargs["MAX_ANGLE_LG"]
         )
-        # self.set_corridor(
-        #     np.ones(self.hard_constraints.shape) * 0.5,
-        #     self.start_inds,
-        #     self.dest_inds,
-        #     factor_or_n_edges=1
-        # )
         print("1) Initialize shifts and instance (corridor)")
         self.set_edge_costs(
-            edge_inst,
             kwargs["layer_classes"],
             kwargs["class_weights"],
             angle_weight=kwargs["ANGLE_WEIGHT"]
@@ -478,9 +477,9 @@ class ImplicitLG():
         print("4) shortest path", cost_sum)
         return path, path_costs, cost_sum
 
-    def sp_trees(self, edge_inst, **kwargs):
+    def sp_trees(self, **kwargs):
         start_inds = kwargs["start_inds"]
         dest_inds = kwargs["dest_inds"]
-        path, path_costs, cost_sum = self.single_sp(edge_inst, **kwargs)
+        path, path_costs, cost_sum = self.single_sp(**kwargs)
         self.get_shortest_path_tree(start_inds, dest_inds)
         return path, path_costs, cost_sum

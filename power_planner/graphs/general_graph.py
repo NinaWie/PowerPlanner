@@ -1,7 +1,11 @@
 import numpy as np
-from graph_tool.all import Graph, shortest_path, load_graph
+try:
+    from graph_tool.all import Graph, shortest_path, load_graph
+    GRAPH_TOOL = 1
+except:
+    import networkx as nx
+    GRAPH_TOOL = 0
 import time
-import networkx as nx
 from power_planner.utils.utils import get_half_donut
 from power_planner.plotting import (
     plot_pareto_scatter_2d, plot_pareto_scatter_3d, plot_pareto_3d
@@ -15,9 +19,10 @@ class GeneralGraph():
     according to constraints
     """
 
-    def __init__(self, graphtool=1, directed=True, verbose=1):
+    def __init__(self, directed=True, verbose=1):
+        self.graphtool = GRAPH_TOOL
         # Initialize graph
-        if graphtool:
+        if self.graphtool:
             self.graph = Graph(directed=directed)
             self.weight = self.graph.new_edge_property("float")
         else:
@@ -29,7 +34,6 @@ class GeneralGraph():
         # set metaparameter
         self.time_logs = {}
         self.verbose = verbose
-        self.graphtool = graphtool
 
     def set_edge_costs(self, classes, weights, angle_weight=0):
         """
@@ -357,3 +361,48 @@ class GeneralGraph():
                 nodetype=int,
                 data=(('weight', float), )
             )
+
+    # -----------------------------------------------------------------------
+    # INTERFACE
+
+    def single_sp(self, **kwargs):
+        """
+        Function for full processing until shortest path
+        """
+        self.start_inds = kwargs["start_inds"]
+        self.dest_inds = kwargs["dest_inds"]
+        self.set_shift(
+            kwargs["PYLON_DIST_MIN"],
+            kwargs["PYLON_DIST_MAX"],
+            self.dest_inds - self.start_inds,
+            kwargs["MAX_ANGLE"],
+            max_angle_lg=kwargs["MAX_ANGLE_LG"]
+        )
+        self.set_corridor(
+            np.ones(self.hard_constraints.shape) * 0.5,
+            self.start_inds,
+            self.dest_inds,
+            factor_or_n_edges=1
+        )
+        print("1) Initialize shifts and instance (corridor)")
+        self.set_edge_costs(
+            kwargs["layer_classes"],
+            kwargs["class_weights"],
+            angle_weight=kwargs["ANGLE_WEIGHT"]
+        )
+        # add vertices
+        self.add_nodes()
+        print("2) Initialize distances to inf and predecessors")
+        self.add_edges()
+        print("3) Compute source shortest path tree")
+        print("number of vertices and edges:", self.n_nodes, self.n_edges)
+
+        # weighted sum of all costs
+        self.sum_costs()
+        source_v, target_v = self.add_start_and_dest(
+            self.start_inds, self.dest_inds
+        )
+        # get actual best path
+        path, path_costs, cost_sum = self.get_shortest_path(source_v, target_v)
+        print("4) shortest path", cost_sum)
+        return path, path_costs, cost_sum
