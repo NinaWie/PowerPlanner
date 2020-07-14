@@ -74,6 +74,7 @@ class WeightedGraph(GeneralGraph):
     def set_shift(self, lower, upper, vec, max_angle, max_angle_lg=0):
         GeneralGraph.set_shift(self, lower, upper, vec, max_angle)
         self.shift_vals = get_donut_vals(self.shifts, vec)
+        self.shift_tuples = self.shifts
 
     def add_nodes(self):
         tic = time.time()

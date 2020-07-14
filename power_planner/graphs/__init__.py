@@ -7,5 +7,4 @@ try:
     from .weighted_ksp import WeightedKSP
     from .weighted_reduced_graph import ReducedGraph
 except ModuleNotFoundError:
-    print(ModuleNotFoundError)
     pass

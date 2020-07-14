@@ -45,9 +45,11 @@ class GeneralGraph():
         weights = np.array(weights)
         # set different costs:
         self.cost_classes = classes
-        self.cost_props = [
-            self.graph.new_edge_property("float") for _ in range(len(classes))
-        ]
+        if self.graphtool:
+            self.cost_props = [
+                self.graph.new_edge_property("float")
+                for _ in range(len(classes))
+            ]
         self.cost_weights = weights / np.sum(weights)
         if self.verbose:
             print(self.cost_classes, self.cost_weights)
@@ -63,8 +65,10 @@ class GeneralGraph():
         :param vec: vector of diretion of edges
         :param max_angle: Maximum angle of edges to vec
         """
+        print("SHIFT:", lower, upper, vec, max_angle)
         self.shifts = get_half_donut(lower, upper, vec, angle_max=max_angle)
         self.shift_tuples = self.shifts
+        print(self.shifts)
 
     def set_corridor(
         self,
@@ -158,7 +162,13 @@ class GeneralGraph():
             if self.graphtool:
                 self.graph.add_edge_list(out, eprops=self.cost_props)
             else:
-                nx_edge_list = [(e[0], e[1], {"weight": e[2]}) for e in out]
+                nx_edge_list = [
+                    (
+                        e[0], e[1], {
+                            "weight": np.sum(e[2:] * self.cost_weights)
+                        }
+                    ) for e in out
+                ]
                 self.graph.add_edges_from(nx_edge_list)
             times_add_edges.append(round(time.time() - tic_graph, 3))
 
@@ -200,6 +210,8 @@ class GeneralGraph():
         Take the individual edge costs, compute weighted sum --> self.weight
         """
         # add sum of all costs
+        if not self.graphtool:
+            return
         tic = time.time()
         summed_costs_arr = np.zeros(self.cost_props[0].get_array().shape)
         for i in range(len(self.cost_props)):
