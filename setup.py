@@ -21,7 +21,8 @@ setup(
     url='https://gitlab.ethz.ch/wnina/power-planner',
     license='MIT',
     install_requires=[
-        'numpy', 'Kivy', 'numba', 'Pillow', 'rasterio', 'pandas', 'networkx'
+        'numpy', 'Kivy', 'numba', 'Pillow', 'rasterio', 'pandas', 'networkx',
+        'matplotlib', 'scipy'
     ],
     classifiers=[
         'Intended Audience :: Developers',
