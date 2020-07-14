@@ -68,7 +68,6 @@ class GeneralGraph():
         print("SHIFT:", lower, upper, vec, max_angle)
         self.shifts = get_half_donut(lower, upper, vec, angle_max=max_angle)
         self.shift_tuples = self.shifts
-        print(self.shifts)
 
     def set_corridor(
         self,
