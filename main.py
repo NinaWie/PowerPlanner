@@ -25,12 +25,12 @@ from power_planner.utils.utils import (
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-cluster', action='store_true')
-parser.add_argument('-i', '--instance', type=str, default="ch")
-parser.add_argument('-s', '--scale', help="resolution", type=int, default=1)
+parser.add_argument('-i', '--instance', type=str, default="test")
+parser.add_argument('-s', '--scale', help="resolution", type=int, default=2)
 args = parser.parse_args()
 
 # define out save name
-ID = "test_5_" + args.instance  # str(round(time.time() / 60))[-5:]
+ID = "test_2_" + args.instance  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
@@ -115,13 +115,13 @@ else:
 # plt.imshow(np.sum(instance, axis=0) + visualize_corr)
 # plt.colorbar()
 # plt.savefig(f"surface_s{INST}_{SCALE_PARAM}.png")
-config.graph.PYLON_DIST_MIN = 350 / 50  # RESOLUTION is 50
-config.graph.PYLON_DIST_MIN = 500 / 50
+cfg.PYLON_DIST_MIN = 350 / (10 * SCALE_PARAM)  # RESOLUTION is 50
+cfg.PYLON_DIST_MAX = 500 / (10 * SCALE_PARAM)
+cfg.ANGLE_WEIGHT = 0.5
+cfg.EDGE_WEIGHT = 0.2
 
 # DEFINE GRAPH AND ALGORITHM
-graph = GRAPH_TYPE(
-    instance, instance_corr, graphtool=cfg.GTNX, verbose=cfg.VERBOSE
-)
+graph = GRAPH_TYPE(instance, instance_corr, verbose=cfg.VERBOSE)
 
 # START PIPELINE
 tic = time.time()
@@ -133,6 +133,7 @@ time_infos = []
 for (factor, dist) in PIPELINE:
     print("----------- PIPELINE", factor, dist, "---------------")
     graph.set_corridor(corridor, start_inds, dest_inds, factor_or_n_edges=1)
+    print(cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX)
     graph.set_shift(
         cfg.PYLON_DIST_MIN,
         cfg.PYLON_DIST_MAX,
@@ -140,19 +141,17 @@ for (factor, dist) in PIPELINE:
         cfg.MAX_ANGLE,
         max_angle_lg=cfg.MAX_ANGLE_LG
     )
+    print("neighbors:", len(graph.shifts))
     print("1) set shift and corridor")
     graph.set_edge_costs(
-        edge_cost,
-        cfg.layer_classes,
-        cfg.class_weights,
-        angle_weight=cfg.ANGLE_WEIGHT
+        cfg.layer_classes, cfg.class_weights, angle_weight=cfg.ANGLE_WEIGHT
     )
     # add vertices
     graph.add_nodes()
     if height_resistance_path is not None:
         graph.init_heights(height_resistance_path, 60, 80, SCALE_PARAM)
     print("1.2) set shift, edge costs and added nodes")
-    graph.add_edges(edge_weight=0, height_weight=0)  # cfg.EDGE_WEIGHT)
+    graph.add_edges(edge_weight=cfg.EDGE_WEIGHT, height_weight=0)
     print("2) added edges", graph.n_edges)
     print("number of vertices:", graph.n_nodes)
 
