@@ -154,7 +154,13 @@ class ImplicitLG():
             self.cost_weights[1:],
             axis=2
         )
-
+        dirty_extend = self.edge_inst.copy()
+        x_len, y_len = self.edge_inst.shape
+        for i in range(1, x_len - 1):
+            for j in range(1, y_len - 1):
+                if np.any(self.edge_inst[i - 1:i + 2, j - 1:j + 2] == np.inf):
+                    dirty_extend[i, j] = np.inf
+        self.edge_inst = dirty_extend
         if self.verbose:
             print("instance shape", self.instance.shape)
 
@@ -177,11 +183,11 @@ class ImplicitLG():
             print("stack length", len(stack))
         tic = time.time()
         # precompute edge costs
-        self.edge_cost = np.zeros(self.preds.shape)
+        self.edge_cost = np.zeros(self.preds.shape) + np.inf
         if self.edge_weight > 0:
             self.edge_cost = edge_costs(
-                stack, np.array(self.shifts), self.edge_cost, self.edge_inst,
-                self.shift_lines, self.edge_weight
+                stack, np.array(self.shifts), self.edge_cost,
+                self.edge_inst.copy(), self.shift_lines, self.edge_weight
             )
             if self.verbose:
                 print("Computed edge instance")

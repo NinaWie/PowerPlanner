@@ -47,8 +47,8 @@ def edge_costs(stack, shifts, edge_cost, edge_inst, shift_lines, edge_weight):
     """
     # print(len(stack))
     for i in range(len(stack)):
-        v_x = stack[-i - 1][0]
-        v_y = stack[-i - 1][1]
+        v_x = stack[i][0]
+        v_y = stack[i][1]
         for s in range(len(shifts)):
             neigh_x = v_x + shifts[s][0]
             neigh_y = v_y + shifts[s][1]

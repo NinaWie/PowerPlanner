@@ -30,7 +30,7 @@ parser.add_argument('-s', '--scale', help="resolution", type=int, default=2)
 args = parser.parse_args()
 
 # define out save name
-ID = "test_2_" + args.instance  # str(round(time.time() / 60))[-5:]
+ID = "paths_2_e3_d50_" + args.instance  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
@@ -118,10 +118,12 @@ else:
 cfg.PYLON_DIST_MIN = 350 / (10 * SCALE_PARAM)  # RESOLUTION is 50
 cfg.PYLON_DIST_MAX = 500 / (10 * SCALE_PARAM)
 cfg.ANGLE_WEIGHT = 0.5
-cfg.EDGE_WEIGHT = 0.2
+cfg.EDGE_WEIGHT = 0.3
 
 # DEFINE GRAPH AND ALGORITHM
-graph = GRAPH_TYPE(instance, instance_corr, verbose=cfg.VERBOSE)
+graph = GRAPH_TYPE(
+    instance, instance_corr, edge_instance=edge_cost, verbose=cfg.VERBOSE
+)
 
 # START PIPELINE
 tic = time.time()
