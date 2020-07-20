@@ -13,7 +13,7 @@ import pandas as pd
 import time
 import pickle
 from numba.typed import List
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 
 class ImplicitLG():
@@ -78,15 +78,40 @@ class ImplicitLG():
 
     def add_nodes(self):
         tic = time.time()
+        # SORT --> Make stack
+        tmp_list = self._helper_list()
+        visit_points = (self.instance < np.inf).astype(int)
+        stack = topological_sort_jit(
+            self.dest_inds[0], self.dest_inds[1],
+            np.asarray(self.shifts) * (-1), visit_points, tmp_list
+        )
+        stack = del_after_dest(stack, self.start_inds[0], self.start_inds[1])
+        if self.verbose:
+            print("time topo sort:", round(time.time() - tic, 3))
+            print("stack length", len(stack))
+        tic = time.time()
 
-        self.dists = np.zeros((len(self.shifts), self.x_len, self.y_len))
-        self.dists += np.inf
-        i, j = self.start_inds
-        self.dists[:, i, j] = self.instance[i, j]
+        self.stack_array = np.array(stack)
+        self.dists = np.zeros(
+            (len(self.stack_array), len(self.shifts))
+        ) + np.inf
+        # self.dists = np.concatenate((self.stack_array, amend), axis=1)
+        self.dists[0, :] = self.instance[tuple(self.start_inds)]
+        self.pos2node = (np.zeros(self.instance.shape) -
+                         1).astype(int)  # -1 for the unfilled ones
+        # make mapping to position
+        for i in range(len(self.stack_array)):
+            (x, y) = tuple(self.stack_array[i])
+            self.pos2node[x, y] = i
+
+        # self.dists = np.zeros((len(self.shifts), self.x_len, self.y_len))
+        # self.dists += np.inf
+        # i, j = self.start_inds
+        # self.dists[:, i, j] = self.instance[i, j]
         self.preds = np.zeros(self.dists.shape) - 1
         self.time_logs["add_nodes"] = round(time.time() - tic, 3)
         self.n_nodes = self.x_len * self.y_len
-        self.n_edges = len(self.shifts) * self.x_len * self.y_len
+        self.n_edges = len(self.shifts) * len(self.dists)
         if self.verbose:
             print("memory taken (dists shape):", self.n_edges)
 
@@ -170,27 +195,18 @@ class ImplicitLG():
     def add_edges(self, mode="DAG", iters=100, edge_weight=0, height_weight=0):
         self.edge_weight = edge_weight
         tic = time.time()
-        # SORT --> Make stack
-        tmp_list = self._helper_list()
-        visit_points = (self.instance < np.inf).astype(int)
-        stack = topological_sort_jit(
-            self.dest_inds[0], self.dest_inds[1],
-            np.asarray(self.shifts) * (-1), visit_points, tmp_list
-        )
-        stack = del_after_dest(stack, self.start_inds[0], self.start_inds[1])
-        if self.verbose:
-            print("time topo sort:", round(time.time() - tic, 3))
-            print("stack length", len(stack))
-        tic = time.time()
         # precompute edge costs
-        self.edge_cost = np.zeros(self.preds.shape) + np.inf
         if self.edge_weight > 0:
+            self.edge_cost = np.zeros(self.preds.shape) + np.inf
             self.edge_cost = edge_costs(
-                stack, np.array(self.shifts), self.edge_cost,
+                self.stack_array,
+                self.pos2node, np.array(self.shifts), self.edge_cost,
                 self.edge_inst.copy(), self.shift_lines, self.edge_weight
             )
             if self.verbose:
                 print("Computed edge instance")
+        else:
+            self.edge_cost = np.zeros(self.preds.shape)
         # RUN - either directed acyclic or BF algorithm
         if mode == "BF":
             # TODO: nr iterations argument
@@ -200,12 +216,13 @@ class ImplicitLG():
             )
         elif mode == "DAG":
             self.dists, self.preds = sp_dag(
-                stack, np.array(self.shifts), self.angle_cost_array,
-                self.dists, self.preds, self.instance, self.edge_cost
+                self.stack_array, self.pos2node, np.array(self.shifts),
+                self.angle_cost_array, self.dists, self.preds, self.instance,
+                self.edge_cost
             )
         else:
             raise ValueError("wrong mode input: " + mode)
-        print(np.min(self.dists[:, self.dest_inds[0], self.dest_inds[1]]))
+        # print(np.min(self.dists[:, self.dest_inds[0], self.dest_inds[1]]))
         self.time_logs["add_all_edges"] = round(time.time() - tic, 3)
         if self.verbose:
             print("time edges:", round(time.time() - tic, 3))
@@ -220,45 +237,40 @@ class ImplicitLG():
         tic = time.time()
 
         # initialize dists array
-        self.dists_ba = np.zeros((len(self.shifts), self.x_len, self.y_len))
-        self.dists_ba += np.inf
-        i, j = self.dest_inds
+        self.dists_ba = np.zeros(self.dists.shape) + np.inf
         # this time need to set all incoming edges of dest to zero
-        d0, d1 = self.dest_inds
-        for s, (i, j) in enumerate(self.shifts):
-            self.dists_ba[s, d0 + i, d1 + j] = 0
+        # d0, d1 = self.dest_inds
+        # for s, (i, j) in enumerate(self.shifts):
+        #     pos_index = self.pos2node[d0 + i, d1 + j]
+        #     self.dists_ba[pos_index, s] = 0
 
-        # get stack
-        tmp_list = self._helper_list()
-        visit_points = (self.instance < np.inf).astype(int)
-        stack = topological_sort_jit(
-            self.start_inds[0], self.start_inds[1], np.asarray(self.shifts),
-            visit_points, tmp_list
-        )
-        stack = del_after_dest(stack, self.dest_inds[0], self.dest_inds[1])
         # compute distances: new method because out edges instead of in
         self.dists_ba, self.preds_ba = sp_dag_reversed(
-            stack,
+            self.stack_array, self.pos2node,
             np.array(self.shifts) * (-1), self.angle_cost_array, self.dists_ba,
-            self.instance, self.edge_inst, self.shift_lines, self.edge_weight
+            self.instance, self.edge_cost, self.shift_lines, self.edge_weight
         )
         self.time_logs["shortest_path_tree"] = round(time.time() - tic, 3)
         if self.verbose:
             print("time shortest_path_tree:", round(time.time() - tic, 3))
-
+        self._display_dists()
         # distance in ba: take IN edges to source, by computing in neighbors
         # take their first dim value (out edge to source) + source val
         (s0, s1) = self.start_inds
-        d_ba_arg = np.argmin(
-            [
-                self.dists_ba[s, s0 + i, s1 + j]
-                for s, (i, j) in enumerate(self.shifts)
-            ]
-        )
+        start_dests = []
+        for s, (i, j) in enumerate(self.shifts):
+            ind = self.pos2node[s0 + i, s1 + j]
+            if ind >= 0:
+                start_dests.append(self.dists_ba[ind, s])
+            else:
+                start_dests.append(np.inf)
+        d_ba_arg = np.argmin(start_dests)
         (i, j) = self.shifts[d_ba_arg]
-        d_ba = self.dists_ba[d_ba_arg, s0 + i, s1 + j] + self.instance[s0, s1]
+        d_ba = self.dists_ba[self.
+                             pos2node[s0 + i, s1 +
+                                      j], d_ba_arg] + self.instance[s0, s1]
 
-        d_ab = np.min(self.dists[:, self.dest_inds[0], self.dest_inds[1]])
+        d_ab = np.min(self.dists[self.pos2node[tuple(self.dest_inds)], :])
         assert np.isclose(
             d_ba, d_ab
         ), "start to dest != dest to start " + str(d_ab) + " " + str(d_ba)
@@ -267,6 +279,7 @@ class ImplicitLG():
             KspUtils.get_sp_dest_shift(
                 self.dists_ba,
                 self.preds_ba,
+                self.pos2node,
                 self.dest_inds,
                 self.start_inds,
                 np.array(self.shifts) * (-1),
@@ -289,12 +302,12 @@ class ImplicitLG():
         # compute path from start to middle point - incoming edge
         best_edge = np.array(best_edge)
         path_ac = KspUtils.get_sp_start_shift(
-            self.dists, self.preds, start, best_edge, np.array(self.shifts),
-            best_shift
+            self.dists, self.preds, self.pos2node, start, best_edge,
+            np.array(self.shifts), best_shift
         )
         # compute path from middle point to dest - outgoing edge
         path_cb = KspUtils.get_sp_dest_shift(
-            self.dists_ba, self.preds_ba, dest, best_edge,
+            self.dists_ba, self.preds_ba, self.pos2node, dest, best_edge,
             np.array(self.shifts) * (-1), best_shift
         )
         # concatenate
@@ -330,21 +343,32 @@ class ImplicitLG():
         return np.asarray(path
                           ).tolist(), path_costs.tolist(), cost_sum.tolist()
 
+    def _display_dists(self):
+        arr = np.zeros(self.pos2node.shape)
+        for i in range(len(self.pos2node)):
+            for j in range(len(self.pos2node[0])):
+                ind = self.pos2node[i, j]
+                if ind >= 0:
+                    arr[i, j] = np.min(self.dists_ba[ind, :])
+        plt.imshow(arr)
+        plt.savefig("dists_ba_view.png")
+
     def get_shortest_path(self, start_inds, dest_inds, ret_only_path=False):
-        if not np.any(self.dists[:, dest_inds[0], dest_inds[1]] < np.inf):
+        dest_ind_stack = self.pos2node[tuple(dest_inds)]
+        if not np.any(self.dists[dest_ind_stack, :] < np.inf):
             warnings.warn("empty path")
             return [], [], 0
         tic = time.time()
         curr_point = dest_inds
         path = [dest_inds]
         # first minimum: angles don't matter, just min of in-edges
-        min_shift = np.argmin(self.dists[:, dest_inds[0], dest_inds[1]])
+        min_shift = np.argmin(self.dists[dest_ind_stack, :])
         # track back until start inds
         while np.any(curr_point - start_inds):
             new_point = curr_point - self.shifts[int(min_shift)]
             # get new shift from argmins
-            min_shift = self.preds[int(min_shift), curr_point[0], curr_point[1]
-                                   ]
+            curr_ind_stack = self.pos2node[tuple(curr_point)]
+            min_shift = self.preds[curr_ind_stack, int(min_shift)]
             if min_shift == -1:
                 print(path)
                 raise RuntimeError("Problem! predecessor -1!")

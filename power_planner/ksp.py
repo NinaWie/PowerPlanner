@@ -9,7 +9,7 @@ class KSP:
     def __init__(self, graph):
         self.graph = graph
 
-    def compute_min_node_dists(self):
+    def compute_min_node_dists_bigmem(self):
         """
         Eppstein's algorithm: Sum up the two SP treest and iterate
         """
@@ -24,6 +24,33 @@ class KSP:
         # argsort
         v_shortest = np.argsort(min_node_dists.flatten())
         return min_node_dists, v_shortest, min_shift_dists
+
+    def compute_min_node_dists(self):
+        """
+        Eppstein's algorithm: Sum up the two SP treest and iterate
+        """
+        # sum both dists_ab and dists_ba, inst and edges are counted twice!
+        aux_inst = np.zeros(self.graph.dists.shape)
+        for i in range(len(self.graph.dists)):
+            (x, y) = tuple(self.graph.stack_array[i])
+            aux_inst[i, :] = self.graph.instance[x, y]
+        summed_dists = (
+            self.graph.dists + self.graph.dists_ba - aux_inst -
+            self.graph.edge_cost
+        )
+        # mins along outgoing edges
+        min_node_dists = np.min(summed_dists, axis=1)
+        min_shift_dists = np.argmin(summed_dists, axis=1)
+        # project back to 2D:
+        min_dists_2d = np.zeros(self.graph.instance.shape) + np.inf
+        min_shifts_2d = np.zeros(self.graph.instance.shape)
+        for (x, y) in self.graph.stack_array:
+            pos_ind = self.graph.pos2node[x, y]
+            min_dists_2d[x, y] = min_node_dists[pos_ind]
+            min_shifts_2d[x, y] = min_shift_dists[pos_ind]
+        # argsort
+        v_shortest = np.argsort(min_dists_2d.flatten())
+        return min_dists_2d, v_shortest, min_shifts_2d
 
     def laplace(self, k, radius=20, cost_add=0.01):
         """
@@ -63,8 +90,6 @@ class KSP:
             (x2, x3) = current_best // arr_len, current_best % arr_len
             # print(x2, x3, arr_len, current_best)
             x1 = min_shift_dists[x2, x3]
-            if self.graph.dists_ba[x1, x2, x3] == 0:
-                continue
             # compute and add
             vertices_path = self.graph._combined_paths(
                 self.graph.start_inds, self.graph.dest_inds, x1, [x2, x3]
@@ -121,10 +146,10 @@ class KSP:
             # counter large enough --> expand
             (x2, x3) = v_shortest[j] // arr_len, v_shortest[j] % arr_len
             x1 = min_shift_dists[x2, x3]
-            if self.graph.dists_ba[x1, x2, x3] == 0:
-                # print("inc edge to self.graph.dest_inds")
-                # = 0 for inc edges of self.graph.dest_inds_inds (init of dists_ba)
-                continue
+            # if self.graph.dists_ba[x1, x2, x3] == 0:
+            # print("inc edge to self.graph.dest_inds")
+            # = 0 for inc edges of self.graph.dest_inds_inds (init of dists_ba)
+            # continue
             vertices_path = self.graph._combined_paths(
                 self.graph.start_inds, self.graph.dest_inds, x1, [x2, x3]
             )
@@ -197,10 +222,10 @@ class KSP:
             if np.min(eucl_dist) > min_dist:
                 expanded += 1
                 x1 = min_shift_dists[x2, x3]
-                if self.graph.dists_ba[x1, x2, x3] == 0:
-                    # print("inc edge to self.graph.dest_inds")
-                    # = 0 for inc edges of self.graph.dest_inds_inds (init of dists_ba)
-                    continue
+                # if self.graph.dists_ba[x1, x2, x3] == 0:
+                # print("inc edge to self.graph.dest_inds")
+                # = 0 for inc edges of self.graph.dest_inds_inds (init of dists_ba)
+                #  continue
                 vertices_path = self.graph._combined_paths(
                     self.graph.start_inds, self.graph.dest_inds, x1, [x2, x3]
                 )
@@ -250,9 +275,9 @@ class KSP:
             x1 = min_shift_dists[x2, x3]
 
             # get shortest path through this node
-            if self.graph.dists_ba[x1, x2, x3] == 0:
-                # = 0 for inc edges of self.graph.dest_inds_inds (init of dists_ba)
-                continue
+            # if self.graph.dists_ba[x1, x2, x3] == 0:
+            # = 0 for inc edges of self.graph.dest_inds_inds (init of dists_ba)
+            # continue
             vertices_path = self.graph._combined_paths(
                 self.graph.start_inds, self.graph.dest_inds, x1, [x2, x3]
             )

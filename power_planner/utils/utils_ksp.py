@@ -22,7 +22,7 @@ class KspUtils():
     @staticmethod
     def get_sp_from_preds(pred_map, curr_vertex, start_vertex):
         """
-        Compute path from start_vertex to curr_vertex form the predecessor map
+        Compute path from start_vertex to curr_vertex from the predecessor map
         Arguments:
             pred_map: map / dictionary with predecessor for each vertex
             curr_vertex: integer denoting any vertex
@@ -127,6 +127,7 @@ class KspUtils():
     def get_sp_dest_shift(
         dists,
         preds,
+        pos2node,
         start_inds,
         dest_inds,
         shifts,
@@ -137,27 +138,31 @@ class KspUtils():
         dest_edge: If it's the edge at destination, we cannot take the current
         """
         if not dest_edge:
-            min_shift = preds[int(min_shift), dest_inds[0], dest_inds[1]]
+            dest_ind = pos2node[tuple(dest_inds)]
+            min_shift = preds[dest_ind, int(min_shift)]
         curr_point = np.asarray(dest_inds)
         my_path = [dest_inds]
         while np.any(curr_point - start_inds):
             new_point = curr_point - shifts[int(min_shift)]
-            min_shift = preds[int(min_shift), new_point[0], new_point[1]]
+            pred_ind = pos2node[tuple(new_point)]
+            min_shift = preds[pred_ind, int(min_shift)]
             my_path.append(new_point)
             curr_point = new_point
         return my_path
 
     @staticmethod
     def get_sp_start_shift(
-        dists, preds, start_inds, dest_inds, shifts, min_shift
+        dists, preds, pos2node, start_inds, dest_inds, shifts, min_shift
     ):
-        if not np.any(dists[:, dest_inds[0], dest_inds[1]] < np.inf):
+        dest_ind_stack = pos2node[tuple(dest_inds)]
+        if not np.any(dists[dest_ind_stack, :] < np.inf):
             raise RuntimeWarning("empty path")
         curr_point = np.asarray(dest_inds)
         my_path = [dest_inds]
         while np.any(curr_point - start_inds):
             new_point = curr_point - shifts[int(min_shift)]
-            min_shift = preds[int(min_shift), curr_point[0], curr_point[1]]
+            pred_ind = pos2node[tuple(curr_point)]
+            min_shift = preds[pred_ind, int(min_shift)]
             my_path.append(new_point)
             curr_point = new_point
         return my_path
