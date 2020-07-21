@@ -35,7 +35,10 @@ def time_test_csv(
     :params: all parameters to save in the csv
     """
     # get scale factor and number of nonzero pixels:
-    factor = graph.factor
+    try:
+        factor = graph.factor
+    except AttributeError:
+        factor = 1
     n_pixels = np.sum(np.mean(graph.cost_rest, axis=0) > 0)
     # --> csv columns:
     # scale,graphtool,graphtype,n_nodes,n_edges,add_nodes_time,add_edge_time,
