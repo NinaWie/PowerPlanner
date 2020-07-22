@@ -139,8 +139,8 @@ class DemoApp(App):
             size_hint=(right_bar_size, 1)
         )
         self.load_json_but.disabled = True
-        config_box.add_widget(self.json_fp)
-        config_box.add_widget(self.load_json_but)
+        # config_box.add_widget(self.json_fp)
+        # config_box.add_widget(self.load_json_but)
 
         # Declare initial status
         self.data_loaded = False
@@ -184,7 +184,7 @@ class DemoApp(App):
             size=(Window.width * right_bar_size, 30)
         )
         self.alternative_button = Button(
-            text="Replacement path",
+            text="Informed path routing",
             on_press=self.rect_popup,
             size=(Window.width * right_bar_size, 30)
         )
@@ -231,7 +231,10 @@ class DemoApp(App):
                     self.config
                 ) = data
             print(self.instance.shape)
-            self.disp_inst = np.moveaxis(self.instance, 0, -1)[:, :, :3] * 255
+            # disp instance is with RGB and overlayed with corridor
+            self.disp_inst = (
+                np.moveaxis(self.instance, 0, -1)[:, :, :3] * 255
+            ) * np.expand_dims(self.instance_corr, 2)
             self._mark_start_dest()
             print(self.disp_inst.shape)
             self.img_widget.set_array(self.disp_inst)

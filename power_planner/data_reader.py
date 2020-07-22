@@ -177,12 +177,16 @@ class DataReader():
     @padding
     @binarize
     @reduce_instance
-    def get_hard_constraints(self):
+    def get_hard_constraints(self, is_edge=False):
         """
         Intersection of all "Forbidden"-layers
         """
-        hard_cons_rows = self.class_csv[self.class_csv[
-            "weight_" + str(self.scenario)] == "Forbidden"]
+        if is_edge:
+            hard_cons_rows = self.class_csv[self.class_csv[
+                "weight_" + str(self.scenario) + "_edge"] == "Forbidden"]
+        else:
+            hard_cons_rows = self.class_csv[self.class_csv[
+                "weight_" + str(self.scenario)] == "Forbidden"]
         # read in corresponding tifs
         hard_constraints = []
         for fname in hard_cons_rows["Layer Name"]:
@@ -368,9 +372,9 @@ class DataReader():
         # data.set_padding(PYLON_DIST_MAX * SCALE_PARAM)
 
         # Construct hard constraints (infinity cost regions)
-        hard_constraints = self.get_mask_corridor()
+        project_region = self.get_mask_corridor()
         hard_cons = self.get_hard_constraints()
-        hard_constraints = hard_constraints * hard_cons
+        hard_constraints = project_region * hard_cons
 
         # Construct instance and edge instance
         instance = self.get_costs_per_class(oneclass=self.config.ONE_CLASS)
@@ -379,6 +383,12 @@ class DataReader():
             edge_inst = self.get_costs_per_class(
                 oneclass=self.config.ONE_CLASS, is_edge=True
             )
+            edge_corr = self.get_hard_constraints(
+                is_edge=True
+            ) * project_region
+            edge_corr_inf = (edge_corr == 0).astype(float)
+            edge_corr_inf[edge_corr_inf > 0] = np.inf
+            edge_inst = edge_inst + edge_corr_inf
         elif self.config.CABLE_FORBIDDEN:
             print("Ueberspannen forbidden!")
             # don't take separate weights for edge instance,
