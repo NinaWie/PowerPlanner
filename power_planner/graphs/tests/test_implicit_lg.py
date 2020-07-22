@@ -56,22 +56,12 @@ class TestImplicitLG(unittest.TestCase):
         # all initialized to infinity
         # self.assertTrue(not np.any([graph.dists[graph.dists < np.inf]]))
         # start point was set to normalized value
-        self.assertEqual(
-            0.8, graph.dists[0, self.start_inds[0], self.start_inds[1]]
-        )
+        start_ind = graph.pos2node[tuple(self.start_inds)]
+        self.assertEqual(0.8, graph.dists[start_ind, 0])
         # all start dists have same value
-        self.assertEqual(
-            len(
-                np.unique(
-                    graph.dists[:, self.start_inds[0], self.start_inds[1]]
-                )
-            ), 1
-        )
+        self.assertEqual(len(np.unique(graph.dists[start_ind])), 1)
         # not all values still inf
-        self.assertLess(
-            np.min(graph.dists[:, self.dest_inds[0], self.dest_inds[1]]),
-            np.inf
-        )
+        self.assertLess(np.min(graph.dists[start_ind]), np.inf)
         # get actual best path
         # path, path_costs, cost_sum = graph.get_shortest_path(
         #     self.start_inds, self.dest_inds
@@ -96,9 +86,8 @@ class TestImplicitLG(unittest.TestCase):
         path, path_costs, cost_sum = graph.single_sp(**vars(self.cfg))
         self.cfg.ANGLE_WEIGHT = 0.25
         self.cfg.EDGE_WEIGHT = 0
-        dest_costs = np.min(
-            graph.dists[:, self.dest_inds[0], self.dest_inds[1]]
-        )
+        dest_ind = graph.pos2node[tuple(self.dest_inds)]
+        dest_costs = np.min(graph.dists[dest_ind])
         dest_costs_gt = len(path)  # everywhere 1
         a = []
         path = np.array(path)
@@ -122,10 +111,8 @@ class TestImplicitLG(unittest.TestCase):
         )
         path, path_costs, cost_sum = graph.single_sp(**vars(self.cfg))
         # assert that destination can NOT be reached
-        self.assertFalse(
-            np.min(graph.dists[:, self.dest_inds[0], self.dest_inds[1]]) <
-            np.inf
-        )
+        dest_ind = graph.pos2node[tuple(self.dest_inds)]
+        self.assertFalse(np.min(graph.dists[dest_ind]) < np.inf)
 
         # NEXT TRY: more angles allowed
         self.cfg.MAX_ANGLE_LG = np.pi
@@ -137,10 +124,8 @@ class TestImplicitLG(unittest.TestCase):
         )
         path, path_costs, cost_sum = graph.single_sp(**vars(self.cfg))
         # assert that dest CAN be reached
-        self.assertTrue(
-            np.min(graph.dists[:, self.dest_inds[0], self.dest_inds[1]]) <
-            np.inf
-        )
+        dest_ind = graph.pos2node[tuple(self.dest_inds)]
+        self.assertTrue(np.min(graph.dists[dest_ind]) < np.inf)
 
         # same with linegraph:
         lg_graph = graphs.LineGraph(

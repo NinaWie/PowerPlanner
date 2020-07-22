@@ -179,13 +179,13 @@ class ImplicitLG():
             self.cost_weights[1:],
             axis=2
         )
-        dirty_extend = self.edge_inst.copy()
-        x_len, y_len = self.edge_inst.shape
-        for i in range(1, x_len - 1):
-            for j in range(1, y_len - 1):
-                if np.any(self.edge_inst[i - 1:i + 2, j - 1:j + 2] == np.inf):
-                    dirty_extend[i, j] = np.inf
-        self.edge_inst = dirty_extend
+        # dirty_extend = self.edge_inst.copy()
+        # x_len, y_len = self.edge_inst.shape
+        # for i in range(1, x_len - 1):
+        #     for j in range(1, y_len - 1):
+        #         if np.any(self.edge_inst[i - 1:i + 2, j - 1:j + 2] == np.inf):
+        #             dirty_extend[i, j] = np.inf
+        # self.edge_inst = dirty_extend
         if self.verbose:
             print("instance shape", self.instance.shape)
 
@@ -253,7 +253,7 @@ class ImplicitLG():
         self.time_logs["shortest_path_tree"] = round(time.time() - tic, 3)
         if self.verbose:
             print("time shortest_path_tree:", round(time.time() - tic, 3))
-        self._display_dists()
+        # self._display_dists(self.dists_ba)
         # distance in ba: take IN edges to source, by computing in neighbors
         # take their first dim value (out edge to source) + source val
         (s0, s1) = self.start_inds
@@ -343,13 +343,13 @@ class ImplicitLG():
         return np.asarray(path
                           ).tolist(), path_costs.tolist(), cost_sum.tolist()
 
-    def _display_dists(self):
+    def _display_dists(self, edge_array, func=np.min):
         arr = np.zeros(self.pos2node.shape)
         for i in range(len(self.pos2node)):
             for j in range(len(self.pos2node[0])):
                 ind = self.pos2node[i, j]
                 if ind >= 0:
-                    arr[i, j] = np.min(self.dists_ba[ind, :])
+                    arr[i, j] = func(edge_array[ind, :])
         plt.imshow(arr)
         plt.savefig("dists_ba_view.png")
 

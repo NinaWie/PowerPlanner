@@ -8,6 +8,14 @@ class KSP:
 
     def __init__(self, graph):
         self.graph = graph
+        try:
+            print(self.graph.dists_ba.shape)
+            print(self.graph.preds_ba.shape)
+        except AttributeError:
+            raise RuntimeError(
+                "Cannot initialize KSP object with a graph without"\
+                "shortest path trees in both directions!"
+            )
 
     def compute_min_node_dists_bigmem(self):
         """
