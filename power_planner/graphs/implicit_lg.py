@@ -1,8 +1,9 @@
 from power_planner.utils.utils import (
-    get_half_donut, angle, discrete_angle_costs, bresenham_line
+    get_half_donut, angle, discrete_angle_costs, bresenham_line, angle_360
 )
 from power_planner.utils.utils_costs import CostUtils
 from power_planner.utils.utils_ksp import KspUtils
+from power_planner.plotting import plot_pareto_scatter_3d
 from power_planner.graphs.fast_shortest_path import (
     sp_dag, sp_dag_reversed, topological_sort_jit, del_after_dest, edge_costs,
     average_lcp, sp_bf
@@ -69,7 +70,12 @@ class ImplicitLG():
         :param max_angle: Maximum angle of edges to vec
         """
         self.angle_norm_factor = max_angle_lg
-        self.shifts = get_half_donut(lower, upper, vec, angle_max=max_angle)
+        shifts = get_half_donut(lower, upper, vec, angle_max=max_angle)
+        shift_angles = [angle_360(s, vec) for s in shifts]
+        # sort the shifts
+        self.shifts = np.asarray(shifts)[np.argsort(shift_angles)]
+
+        # construct bresenham lines
         shift_lines = List()
         for shift in self.shifts:
             line = bresenham_line(0, 0, shift[0], shift[1])
@@ -513,3 +519,65 @@ class ImplicitLG():
         path, path_costs, cost_sum = self.single_sp(**kwargs)
         self.get_shortest_path_tree(start_inds, dest_inds)
         return path, path_costs, cost_sum
+
+    def pareto(self, save_img_path=None, **kwargs):
+        """
+        vary: dictionary of the form
+            "var_name":[1,2,3]
+            where var_name refers to the variable to change and the list
+            specificies the possible values
+        cost_names: The names of the classes to be compared
+        """
+        pareto, weight_list, cost_sum = [], [], []
+        compare_names = ["angle", "edge_costs", "resistance"]
+        angle_weights = [0.1, 0.3]  # , 0.6, 0.9]
+        edge_weights = [0.2, 0.5]  # , 0.8, 1.5, 2.0]
+        minimal_weights = np.array(
+            [np.min(angle_weights),
+             np.min(edge_weights)]
+        )
+        maximal_weights = np.array(
+            [np.max(angle_weights),
+             np.max(edge_weights)]
+        )
+        # iterate over combinations
+        for a_w in angle_weights:
+            for e_w in edge_weights:
+                kwargs["ANGLE_WEIGHT"] = a_w
+                kwargs["EDGE_WEIGHT"] = e_w
+                path, _, _ = self.single_sp(**kwargs)
+
+                # get path costs
+                path_cost_raw, column_names = self.raw_path_costs(path)
+                path_cost_table = np.array(
+                    [
+                        path_cost_raw[:, column_names.index(comp_name)]
+                        for comp_name in compare_names
+                    ]
+                )
+                pareto.append(np.sum(path_cost_table, axis=1))
+                cost_sum.append(np.sum(path_cost_table))
+
+                # cumbersome transformation of weights
+                normed_weights = (np.array([a_w, e_w]) - minimal_weights
+                                  ) / (maximal_weights - minimal_weights)
+                weights = list(normed_weights)
+                weights.append(np.max([1.5 - np.sum(weights), 0]))
+                weights = weights / np.sum(weights)
+                weight_list.append(np.array(weights))
+        pareto = np.asarray(pareto)
+        weight_list = np.asarray(weight_list)
+
+        # save as pickle
+        with open(save_img_path + "_pareto_data.dat", "wb") as outfile:
+            pickle.dump(
+                (pareto, weight_list, compare_names, cost_sum), outfile
+            )
+
+        plot_pareto_scatter_3d(
+            pareto,
+            weight_list,
+            compare_names,
+            cost_sum=cost_sum,
+            out_path=save_img_path
+        )
