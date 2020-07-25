@@ -241,6 +241,118 @@ def sp_bf(
     return dists, preds
 
 
+@jit(nopython=True)
+def efficient_update_sp(
+    stack, pos2node, shifts, angles_all, dists, preds, instance, edge_cost
+):
+    """
+    Implemented more efficient method for angle updates
+    Corresponds to sp_dag, but with improved runtime (O(k log k + l) instead)
+    of O(kl) for a vertex update with k incoming and l outgoing edges
+    """
+    inst_x_len, inst_y_len = instance.shape
+    n_neighbors = len(shifts)
+
+    # Iterate over vertices
+    for i in range(len(dists)):
+        v_x = stack[i, 0]
+        v_y = stack[i, 1]
+
+        # sort the in edge distances and initialize
+        initial_S = np.argsort(dists[i])
+        marked_plus = np.zeros(n_neighbors)
+        marked_minus = np.zeros(n_neighbors)
+
+        # initialize dists and do first pass
+        neighbor_vals = np.zeros(n_neighbors) + np.inf
+        neighbor_inds = np.zeros(n_neighbors) - 1
+
+        for s in range(n_neighbors):
+            neigh_x = int(v_x + shifts[s][0])
+            neigh_y = int(v_y + shifts[s][1])
+            if (
+                0 <= neigh_x < inst_x_len and 0 <= neigh_y < inst_y_len
+                and pos2node[neigh_x, neigh_y] >= 0
+                and instance[neigh_x, neigh_y] < np.inf
+            ):
+                neighbor_vals[s] = instance[neigh_x, neigh_y]
+                neigh_stack_ind = pos2node[neigh_x, neigh_y]
+                neighbor_inds[s] = neigh_stack_ind
+                # initialize distances to the straight line value
+                dists[neigh_stack_ind, s] = dists[i, s] + instance[
+                    neigh_x, neigh_y] + edge_cost[neigh_stack_ind, s]
+                preds[neigh_stack_ind, s] = s
+
+        # set current tuple: in edge and shift
+        # (out edge index unncessary because same as in edge)
+        current_in_edge = initial_S[0]
+        current_shift = 0
+        tuple_counter = 0
+
+        while tuple_counter < len(initial_S) - 1:
+            # best out edge is exactly the same shift!
+            current_out_edge = (current_in_edge + current_shift) % n_neighbors
+
+            # compute possible update value:
+            update_val = dists[i, current_in_edge] + angles_all[
+                current_out_edge, current_in_edge]
+
+            if current_shift == 0:
+                marked = marked_plus[current_out_edge
+                                     ] and marked_minus[current_out_edge]
+            elif current_shift > 0:
+                marked = marked_plus[current_out_edge]
+            else:
+                marked = marked_minus[current_out_edge]
+
+            # update only if better
+            neigh_stack_ind = int(neighbor_inds[current_out_edge])
+
+            if marked == 0 and neigh_stack_ind >= 0 and np.around(
+                update_val + neighbor_vals[current_out_edge] +
+                edge_cost[neigh_stack_ind, current_out_edge], 5
+            ) <= np.around(dists[neigh_stack_ind, current_out_edge], 5):
+                dists[
+                    neigh_stack_ind, current_out_edge
+                ] = update_val + neighbor_vals[current_out_edge] + edge_cost[
+                    neigh_stack_ind, current_out_edge]
+                preds[neigh_stack_ind, current_out_edge] = current_in_edge
+
+                # progress one edge further
+                progress_one = True
+
+            # inf neighbor --> jump over it if its incoming edge is worse
+            elif marked == 0 and neigh_stack_ind < 0 and np.around(
+                update_val, 5
+            ) <= np.around(dists[i, current_out_edge], 5):
+                progress_one = True
+
+            # already marked or update not successful:
+            # Consider first edge in other direction or next overall tuple
+            else:
+                progress_one = False
+                if current_shift > 0:
+                    current_shift = -1
+                else:
+                    # get next tuple from stack
+                    tuple_counter += 1
+                    current_in_edge = initial_S[tuple_counter]
+                    current_shift = 0
+
+            # Progress to next edge
+            if progress_one:
+
+                if current_shift < 0:
+                    current_shift -= 1
+                if current_shift <= 0:
+                    marked_minus[current_out_edge] = 1
+                if current_shift >= 0:
+                    current_shift += 1
+                    marked_plus[current_out_edge] = 1
+
+    return dists, preds
+
+
 def old_BF_slow(n_iters, shifts, instance, angle_cost_array, dists, preds):
     """
     Implementation of angle BF without numba, uses numpy.roll to update

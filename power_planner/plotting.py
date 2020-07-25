@@ -18,7 +18,7 @@ def plot_path(instance, path, out_path=None, buffer=2):
         Saving or showing the path image
     """
     # normalize instance for better display
-    non_inf = instance[instance < np.inf] 
+    non_inf = instance[instance < np.inf]
     instance = (instance -
                 np.min(non_inf)) / (np.max(non_inf) - np.min(non_inf))
     # expand from greyscale to colour channels
@@ -315,19 +315,20 @@ def plot_pareto_scatter_3d(
         plt.ylabel(classes[ind2], fontsize=17)
     legend_elements = [
         Line2D(
-            [0], [0],
+            [0],
+            [0],
             marker='o',
             color=[1, 0, 0],
             markersize=10,
             lw=0.1,
-            label='only ' + classes[0]
+            label='high ' + classes[0] + ' weight',
         ),
         Line2D(
             [0], [0],
             marker='o',
             color=[0, 1, 0],
             lw=0.1,
-            label='only ' + classes[1],
+            label='high ' + classes[1] + ' weight',
             markersize=10
         ),
         Line2D(
@@ -335,7 +336,7 @@ def plot_pareto_scatter_3d(
             marker='o',
             color=[0, 0, 1],
             lw=0.1,
-            label='only ' + classes[2],
+            label='high ' + classes[2] + ' weight',
             markersize=10
         )
     ]

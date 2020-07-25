@@ -242,8 +242,8 @@ def angle_360(vec1, vec2):
     v1 = vec1 / np.linalg.norm(vec1)
     v2 = vec2 / np.linalg.norm(vec2)
     # dot product and determinant
-    x1, x2 = v1
-    y1, y2 = v2
+    x1, y1 = v1
+    x2, y2 = v2
     dot = x1 * x2 + y1 * y2  # dot product
     det = x1 * y2 - y1 * x2  # determinant
     angle = np.arctan2(det, dot)
