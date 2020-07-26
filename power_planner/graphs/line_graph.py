@@ -147,20 +147,37 @@ class LineGraph(GeneralGraph):
             except IndexError:
                 pass
 
-        start_v = self.graph.add_vertex()
-        dest_v = self.graph.add_vertex()
-        start_ind = self.graph.vertex_index[start_v]
-        dest_ind = self.graph.vertex_index[dest_v]
+        if self.graphtool:
+            start_v = self.graph.add_vertex()
+            dest_v = self.graph.add_vertex()
+            start_ind = self.graph.vertex_index[start_v]
+            dest_ind = self.graph.vertex_index[dest_v]
+        else:
+            start_v = self.n_nodes
+            dest_v = self.n_nodes + 1
+            self.graph.add_nodes_from([start_v, dest_v])
 
         mean_costs = np.mean(self.cost_instance, axis=(1, 2)).tolist()
         mean_costs.insert(0, 0)  # insert zero angle cost
 
-        start_edges = [
-            [start_ind, u] + mean_costs for u in possible_start_edges
-        ]
-        dest_edges = [[u, dest_ind] + mean_costs for u in possible_dest_edges]
-        self.graph.add_edge_list(start_edges, eprops=self.cost_props)
-        self.graph.add_edge_list(dest_edges, eprops=self.cost_props)
+        if self.graphtool:
+            start_edges = [
+                [start_ind, u] + mean_costs for u in possible_start_edges
+            ]
+            dest_edges = [
+                [u, dest_ind] + mean_costs for u in possible_dest_edges
+            ]
+            self.graph.add_edge_list(start_edges, eprops=self.cost_props)
+            self.graph.add_edge_list(dest_edges, eprops=self.cost_props)
+        else:
+            nx_edge_list = [
+                (start_v, u, {
+                    "weight": 0
+                }) for u in possible_start_edges
+            ] + [(u, dest_v, {
+                "weight": 0
+            }) for u in possible_dest_edges]
+            self.graph.add_edges_from(nx_edge_list)
 
         self.time_logs["add_start_end"] = round(time.time() - tic, 3)
 

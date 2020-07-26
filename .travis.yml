@@ -10,5 +10,5 @@ before_script:
 
 script:
   - python3 -c "import power_planner"
-  - python3 -m unittest discover -t . -p "test_*py" power_planner/utils
+  - python3 -m unittest discover -t . -p "test_*py" power_planner
 

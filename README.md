@@ -27,14 +27,16 @@ cd PowerPlanner
 pip install -e .
 ```
 
-### Install manually:
+### Install graph-tool with conda
+
+Unfortunately, there is a major clash between the `kivy` and the `graph-tool` package. `graph-tool` is not used in the angle-constrained shortest path algorithms, but in the baseline algorithms which use a normal Bellman Ford algorithm. If you want to install `graph-tool`, you need `Anaconda` and you can install from the provided yaml file:
 
 ```sh
-pip install -r requirements.txt
+conda env create -f environment.yml
+source activate penv
 ```
 
-NOTE: If you do not want to use the UI, you can edit requirements.txt and delete ```Kivy``` modules from that.
-
+Note: If this environment is active, then the UI can not be used as `kivy` is not installed.
 
 ## Optimal power infrastructure planning
 

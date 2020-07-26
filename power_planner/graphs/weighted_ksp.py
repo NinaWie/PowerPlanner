@@ -1,4 +1,9 @@
-from graph_tool.all import shortest_distance
+try:
+    from graph_tool.all import shortest_distance
+    GRAPH_TOOL = 1
+except ImportError:
+    import networkx as nx
+    GRAPH_TOOL = 0
 from .weighted_graph import WeightedGraph
 from power_planner.utils.utils_ksp import KspUtils
 import numpy as np
@@ -29,9 +34,10 @@ class WeightedKSP(WeightedGraph):
         )
         return path, out_costs, cost_sum
 
-    def get_shortest_path_tree(self, source, target):
-        tic = time.time()
-
+    def graphtool_sp_tree(self, source, target):
+        """
+        Interface to graph tool for computing both shortest path trees
+        """
         self.dist_map_ab, self.pred_map_ab = shortest_distance(
             self.graph,
             source,
@@ -54,6 +60,47 @@ class WeightedKSP(WeightedGraph):
         )
         # again turn around to recover graph
         self.graph.set_reversed(is_reversed=False)
+
+    def networkx_sp_tree(self, source, target):
+        # compute source-rooted SP tree
+        (preds_ab, self.dist_map_ab) = nx.dijkstra_predecessor_and_distance(
+            self.graph, source, weight="weight"
+        )
+        # transform because we want only one predecessor for each
+        self.pred_map_ab = {
+            key: int(next(iter(pred_list), key))
+            for key, pred_list in preds_ab.items()
+        }
+        # reverse edge directions
+        self.graph = self.graph.reverse(copy=False)
+        # compute target-rooted SP tree
+        (preds_ba, self.dist_map_ba) = nx.dijkstra_predecessor_and_distance(
+            self.graph, target, weight="weight"
+        )
+        # fill the ones that are not in dictionary yet
+        (self.pred_map_ba, self.pred_map_ba) = {}, {}
+        vertices = np.unique(self.pos2node)[1:]
+        for v in vertices:
+            try:
+                self.pred_map_ba[v] = int(next(iter(preds_ba[v]), v))
+            except KeyError:
+                self.pred_map_ba[v] = v
+                self.dist_map_ba[v] = np.inf
+            try:
+                self.pred_map_ab[v] = int(next(iter(preds_ab[v]), v))
+            except KeyError:
+                self.pred_map_ab[v] = v
+                self.dist_map_ab[v] = np.inf
+        self.graph = self.graph.reverse(copy=False)
+
+    def get_shortest_path_tree(self, source, target):
+        tic = time.time()
+
+        if self.graphtool:
+            self.graphtool_sp_tree(source, target)
+        else:
+            self.networkx_sp_tree(source, target)
+
         self.time_logs["shortest_path_tree"] = round(time.time() - tic, 3)
 
         path_ab = KspUtils.get_sp_from_preds(self.pred_map_ab, target, source)

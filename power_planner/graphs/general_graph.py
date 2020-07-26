@@ -2,7 +2,7 @@ import numpy as np
 try:
     from graph_tool.all import Graph, shortest_path, load_graph
     GRAPH_TOOL = 1
-except:
+except ImportError:
     import networkx as nx
     GRAPH_TOOL = 0
 import time
@@ -339,7 +339,10 @@ class GeneralGraph():
                 negative_weights=True
             )
         else:
-            vertices_path = nx.dijkstra_path(self.graph, source, target)
+            try:
+                vertices_path = nx.dijkstra_path(self.graph, source, target)
+            except nx.exception.NetworkXNoPath:
+                return []
 
         self.time_logs["shortest_path"] = round(time.time() - tic, 3)
         return vertices_path

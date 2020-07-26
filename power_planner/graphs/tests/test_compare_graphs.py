@@ -7,9 +7,9 @@ from power_planner.utils.utils import get_distance_surface
 
 class TestCompGraphs(unittest.TestCase):
     # define params for test instance
-    expl_shape = (100, 100)
+    expl_shape = (50, 50)
     start_inds = np.array([6, 6])
-    dest_inds = np.array([90, 85])
+    dest_inds = np.array([44, 40])
 
     # create configuration
     cfg = SimpleNamespace()
