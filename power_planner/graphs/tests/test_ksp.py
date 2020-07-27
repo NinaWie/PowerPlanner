@@ -38,11 +38,7 @@ class TestKsp(unittest.TestCase):
     def test_ksp(self) -> None:
         wg = WeightedKSP(np.array([self.example3]), self.hard_cons, verbose=0)
         bestpath, _, best_cost_sum = wg.single_sp(**vars(self.cfg))
-        # self.assertListEqual(bestpath.)
-        source_v, target_v = wg.add_start_and_dest(
-            self.start_inds, self.dest_inds
-        )
-        wg.get_shortest_path_tree(source_v, target_v)
+        wg.get_shortest_path_tree()
         best2, _, best_cost_sum2 = wg.transform_path(wg.best_path)
         # assert that SP tree path is optimal one
         for b in range(len(best2)):
@@ -50,12 +46,7 @@ class TestKsp(unittest.TestCase):
         self.assertEqual(best_cost_sum, best_cost_sum2)
         # TEST DIVERSE
         ksp = wg.dispersion_ksp(
-            source_v,
-            target_v,
-            9,
-            cost_thresh=1.05,
-            dist_mode="eucl_mean",
-            count_thresh=3
+            9, cost_thresh=1.05, dist_mode="eucl_mean", count_thresh=3
         )
         for k in ksp:
             path = k[0]
@@ -82,12 +73,8 @@ class TestKsp(unittest.TestCase):
             np.array([self.example3]), self.hard_cons, verbose=0
         )
         bestpath, _, best_cost_sum = wg.single_sp(**vars(self.cfg))
-        # self.assertListEqual(bestpath.)
-        source_v, target_v = wg.add_start_and_dest(
-            self.start_inds, self.dest_inds
-        )
-        wg_graph.get_shortest_path_tree(source_v, target_v)
-        ksp_wg = wg_graph.find_ksp(source_v, target_v, 10)
+        wg_graph.get_shortest_path_tree()
+        ksp_wg = wg_graph.find_ksp(10)
         for k in range(10):
             path1 = ksp_wg[k][0]
             path2 = ksp_lg[k][0]

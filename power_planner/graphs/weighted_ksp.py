@@ -93,7 +93,10 @@ class WeightedKSP(WeightedGraph):
                 self.dist_map_ab[v] = np.inf
         self.graph = self.graph.reverse(copy=False)
 
-    def get_shortest_path_tree(self, source, target):
+    def get_shortest_path_tree(self):
+
+        source = self.pos2node[tuple(self.start_inds)]
+        target = self.pos2node[tuple(self.dest_inds)]
         tic = time.time()
 
         if self.graphtool:
@@ -109,8 +112,9 @@ class WeightedKSP(WeightedGraph):
         self.best_path = path_ab
         # return self.transform_path(path_ab)
 
-    def best_in_window(self, w_xmin, w_xmax, w_ymin, w_ymax, source, dest):
-        tic = time.time()
+    def best_in_window(self, w_xmin, w_xmax, w_ymin, w_ymax):
+        source = self.pos2node[tuple(self.start_inds)]
+        dest = self.pos2node[tuple(self.dest_inds)]
         min_dist = np.inf
         for x in range(w_xmin, w_xmax + 1, 1):
             for y in range(w_ymin, w_ymax + 1, 1):
@@ -134,7 +138,9 @@ class WeightedKSP(WeightedGraph):
         vertices_path = path_ac + path_cb[1:]
         return vertices_path
 
-    def find_ksp(self, source, dest, k, overlap=0.5, mode="myset"):
+    def find_ksp(self, k, overlap=0.5, mode="myset"):
+        source = self.pos2node[tuple(self.start_inds)]
+        dest = self.pos2node[tuple(self.dest_inds)]
         tic = time.time()
         # initialize list of paths
         sp_set = set(self.best_path)
@@ -231,13 +237,7 @@ class WeightedKSP(WeightedGraph):
         )
 
     def dispersion_ksp(
-        self,
-        source,
-        dest,
-        k,
-        cost_thresh=1.01,
-        dist_mode="jaccard",
-        count_thresh=5
+        self, k, cost_thresh=1.01, dist_mode="jaccard", count_thresh=5
     ):
         """
         Implement reversed formulation: Given a threshold on the costs,
@@ -246,6 +246,8 @@ class WeightedKSP(WeightedGraph):
             cost_thresh: threshold on the costs (1.01 means 1% more than
                             best path costs)
         """
+        source = self.pos2node[tuple(self.start_inds)]
+        dest = self.pos2node[tuple(self.dest_inds)]
         # compute sorted list of paths
         vertices = np.unique(self.pos2node)[1:]
         v_dists = [self.dist_map_ab[v] + self.dist_map_ba[v] for v in vertices]
