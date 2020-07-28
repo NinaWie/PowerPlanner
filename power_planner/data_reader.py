@@ -193,6 +193,12 @@ class DataReader():
             file_path = os.path.join(self.path, "tif_layers", fname + ".tif")
             if os.path.exists(file_path):
                 constraint = self.read_tif(file_path)
+                if len(constraint[0]) == 3725:
+                    print(
+                        fname, constraint.shape,
+                        np.unique(constraint, return_counts=True)
+                    )
+                    constraint = constraint[:, :-1]
                 constraint = self._resize_raster(constraint)
                 if "Scenario" in fname:
                     hard_constraints.append((constraint == 1).astype(int))
@@ -243,6 +249,12 @@ class DataReader():
                 )
                 if os.path.exists(file_path):
                     costs_raw = self.read_tif(file_path)
+                    if len(costs_raw[0]) == 3725:
+                        print(
+                            fname, costs_raw.shape,
+                            np.unique(costs_raw, return_counts=True)
+                        )
+                        costs_raw = costs_raw[:, :-1]
                     # binarize single tif layer so it can be weighted
                     # -1  because in tifs the costly areas are black
                     # costs = np.absolute(normalize(costs) - 1)
@@ -325,6 +337,9 @@ class DataReader():
             min_startend = np.min(
                 [start_x, start_y, x_len - end_x, y_len - end_y]
             )
+            print("reset here")
+            min_startend = int(min_startend / 3.5)
+            print(min_startend)
             start_x, start_y = (min_startend, min_startend)
             end_x, end_y = (x_len - min_startend, y_len - min_startend)
 

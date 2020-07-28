@@ -42,9 +42,11 @@ class KSP:
         for i in range(len(self.graph.dists)):
             (x, y) = tuple(self.graph.stack_array[i])
             aux_inst[i, :] = self.graph.instance[x, y]
+
+        double_counted = aux_inst + self.graph.edge_cost
+        double_counted[double_counted == np.inf] = 0
         summed_dists = (
-            self.graph.dists + self.graph.dists_ba - aux_inst -
-            self.graph.edge_cost
+            self.graph.dists + self.graph.dists_ba - double_counted
         )
         # mins along outgoing edges
         min_node_dists = np.min(summed_dists, axis=1)

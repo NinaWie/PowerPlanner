@@ -59,6 +59,7 @@ def edge_costs(
                 0 <= neigh_x < edge_inst_len_x
                 and 0 <= neigh_y < edge_inst_len_y
                 and edge_inst[neigh_x, neigh_y] < np.inf
+                and pos2node[neigh_x, neigh_y] >= 0
             ):
                 bres_line = shift_lines[s] + np.array([v_x, v_y])
                 edge_cost_list = np.zeros(len(bres_line))
