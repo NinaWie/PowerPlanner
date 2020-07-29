@@ -106,27 +106,28 @@ OUT_PATH_orig = OUT_PATH
 # print(bullshit_var)
 
 COMPARISONS = []
-# for a_w in [0.1, 0.3, 0.6, 0.9]:
-#     for e_w in [0.2, 0.5, 0.8, 1.5, 2.0, 3]:
-#         COMPARISONS.append([a_w, e_w])
-for b_w in [0, 0.2, 0.4, 0.6, 0.8, 1]:
-    for p_w in [0, 0.2, 0.4, 0.6, 0.8, 1]:
-        if b_w + p_w <= 1:
-            COMPARISONS.append([b_w, p_w, 1 - b_w - p_w])
+for a_w in [0.1, 0.3, 0.6, 0.9]:
+    for e_w in [0.2, 0.5, 0.8, 1.5, 2.0, 3]:
+        COMPARISONS.append([a_w, e_w])
+# for b_w in [0, 0.2, 0.4, 0.6, 0.8, 1]:
+#     for p_w in [0, 0.2, 0.4, 0.6, 0.8, 1]:
+#         if b_w + p_w <= 1:
+#             COMPARISONS.append([b_w, p_w, 1 - b_w - p_w])
 print("Number comparisons", len(COMPARISONS))
-shortcut = ["b", "p", "u"]
+shortcut = ["a", "e"]
+# shortcut = ["b", "p", "u"]
 # for angle_weight in
 for COMP in COMPARISONS:
-    # (a_w, e_w) = COMP
+    (a_w, e_w) = COMP
     # u_w = 1 - p_w - b_w
     ID_list = [
         shortcut[i] + str(round(COMP[i] * 10)) for i in range(len(COMP))
     ]
     ID = "sensitivity_" + "_".join(ID_list)
     OUT_PATH = OUT_PATH_orig + ID
-    # cfg.ANGLE_WEIGHT = a_w
-    # cfg.EDGE_WEIGHT = e_w
-    cfg.class_weights = COMP
+    cfg.ANGLE_WEIGHT = a_w
+    cfg.EDGE_WEIGHT = e_w
+    # cfg.class_weights = COMP
     # DEFINE GRAPH AND ALGORITHM
     graph = GRAPH_TYPE(
         instance, instance_corr, edge_instance=edge_cost, verbose=cfg.VERBOSE
