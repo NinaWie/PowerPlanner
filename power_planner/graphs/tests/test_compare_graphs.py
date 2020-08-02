@@ -37,26 +37,6 @@ class TestCompGraphs(unittest.TestCase):
     hard_cons[:5, :] = 0
     hard_cons[-5:, :] = 0
 
-    def build_graph(self, graph, max_angle_lg=np.pi / 4, ang_weight=0.25):
-        graph.set_shift(
-            3,
-            5,
-            self.dest_inds - self.start_inds,
-            np.pi / 2,
-            max_angle_lg=max_angle_lg
-        )
-        corridor = self.corridor
-        graph.set_corridor(
-            corridor, self.start_inds, self.dest_inds, factor_or_n_edges=1
-        )
-        graph.set_edge_costs(
-            graph.cost_instance.copy(), ["dummy_class"], [1],
-            angle_weight=ang_weight
-        )
-        graph.add_nodes()
-        graph.add_edges()
-        return graph
-
     def test_lg_equal_weighted(self) -> None:
         # compare whether angle costs are decreasing
         self.cfg.MAX_ANGLE_LG = np.pi

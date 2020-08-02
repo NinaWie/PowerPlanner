@@ -6,7 +6,7 @@ from power_planner.utils.utils_ksp import KspUtils
 from power_planner.plotting import plot_pareto_scatter_3d
 from power_planner.graphs.fast_shortest_path import (
     sp_dag, sp_dag_reversed, topological_sort_jit, del_after_dest, edge_costs,
-    average_lcp, sp_bf
+    average_lcp, sp_bf, efficient_update_sp
 )
 import numpy as np
 import warnings
@@ -116,7 +116,8 @@ class ImplicitLG():
         # self.dists[:, i, j] = self.instance[i, j]
         self.preds = np.zeros(self.dists.shape) - 1
         self.time_logs["add_nodes"] = round(time.time() - tic, 3)
-        self.n_nodes = self.x_len * self.y_len
+        self.n_pixels = self.x_len * self.y_len
+        self.n_nodes = len(self.stack_array)
         self.n_edges = len(self.shifts) * len(self.dists)
         if self.verbose:
             print("memory taken (dists shape):", self.n_edges)
@@ -154,15 +155,32 @@ class ImplicitLG():
         self.start_inds = start_inds
         self.dest_inds = dest_inds
 
-    def set_edge_costs(self, layer_classes, layer_weights, angle_weight=0.5):
+    def set_edge_costs(
+        self,
+        layer_classes=["resistance"],
+        class_weights=[1],
+        angle_weight=0.5,
+        **kwargs
+    ):
         """
         angle_weight: how to consider angles in contrast to all other costs!
         """
+        tic = time.time()
+        assert len(layer_classes) == len(
+            class_weights
+        ), f"classes ({len(layer_classes)}) and\
+            weights({len(class_weights)}) must be of same length!"
+
+        assert len(layer_classes) == len(
+            self.cost_rest
+        ), f"classes ({len(layer_classes)}) and\
+            instance layers ({len(self.cost_rest)}) must be of same length!"
+
         # set weights and add angle weight
         self.cost_classes = ["angle"] + list(layer_classes)
-        ang_weight_norm = angle_weight * np.sum(layer_weights)
-        self.cost_weights = np.array([ang_weight_norm] + list(layer_weights))
-        # print("class weights", layer_weights)
+        ang_weight_norm = angle_weight * np.sum(class_weights)
+        self.cost_weights = np.array([ang_weight_norm] + list(class_weights))
+        # print("class weights", class_weights)
         self.cost_weights = self.cost_weights / np.sum(self.cost_weights)
         if self.verbose:
             print("cost weights", self.cost_weights)
@@ -192,6 +210,7 @@ class ImplicitLG():
         #         if np.any(self.edge_inst[i - 1:i + 2, j - 1:j + 2] == np.inf):
         #             dirty_extend[i, j] = np.inf
         # self.edge_inst = dirty_extend
+        self.time_logs["add_all_edges"] = round(time.time() - tic, 3)
         if self.verbose:
             print("instance shape", self.instance.shape)
 
@@ -217,8 +236,9 @@ class ImplicitLG():
         if mode == "BF":
             # TODO: nr iterations argument
             self.dists, self.preds = sp_bf(
-                iters, stack, np.array(self.shifts), self.angle_cost_array,
-                self.dists, self.preds, self.instance, self.edge_cost
+                iters, self.stack_array, np.array(self.shifts),
+                self.angle_cost_array, self.dists, self.preds, self.instance,
+                self.edge_cost
             )
         elif mode == "DAG":
             self.dists, self.preds = sp_dag(
@@ -229,7 +249,7 @@ class ImplicitLG():
         else:
             raise ValueError("wrong mode input: " + mode)
         # print(np.min(self.dists[:, self.dest_inds[0], self.dest_inds[1]]))
-        self.time_logs["add_all_edges"] = round(time.time() - tic, 3)
+        self.time_logs["shortest_path"] = round(time.time() - tic, 3)
         if self.verbose:
             print("time edges:", round(time.time() - tic, 3))
 
@@ -344,7 +364,7 @@ class ImplicitLG():
             self.cost_weights, np.sum(np.array(path_costs), axis=0)
         ) + np.sum(edge_costs) * self.edge_weight
         # cost_sum = np.dot(
-        #     self.layer_weights, np.sum(np.array(path_costs), axis=0)
+        #     self.class_weights, np.sum(np.array(path_costs), axis=0)
         # )  # scalar: weighted sum of the summed class costs
         return np.asarray(path
                           ).tolist(), path_costs.tolist(), cost_sum.tolist()
@@ -385,7 +405,7 @@ class ImplicitLG():
         if ret_only_path:
             return path
         self.sp = path
-        self.time_logs["shortest_path"] = round(time.time() - tic, 3)
+        self.time_logs["path"] = round(time.time() - tic, 3)
         return self.transform_path(path)
 
     # ---------------------------------------------------------------------
@@ -411,11 +431,6 @@ class ImplicitLG():
         except AttributeError:
             heights = np.zeros((len(edge_costs), 1))
         # concatenate
-        print(
-            np.expand_dims(ang_costs, 1).shape,
-            np.expand_dims(edge_costs, 1).shape, path_costs.shape,
-            heights.shape
-        )
         all_costs = np.concatenate(
             (
                 np.expand_dims(ang_costs, 1), path_costs,
@@ -426,20 +441,60 @@ class ImplicitLG():
         assert all_costs.shape[1] == len(names)
         return all_costs, names
 
-    def save_path_cost_csv(self, save_path, paths, **kwargs):
+    def save_path_cost_csv(self, save_path, paths, big_inst=None, **kwargs):
         """
         save coordinates in original instance (tifs) without padding etc
         """
+        # shifts caused by scaling
+        scale = kwargs["scale"]
+        start_shift_x, start_shift_y = (
+            kwargs["orig_start"][0] % scale, kwargs["orig_start"][1] % scale
+        )
+        dest_shift_x, dest_shift_y = (
+            kwargs["orig_dest"][0] % scale, kwargs["orig_dest"][1] % scale
+        )
         # out_path_list = []
         for i, path in enumerate(paths):
             # compute raw costs and column names
             raw_cost, names = self.raw_path_costs(path)
             # round raw costs of this particular path
             raw_costs = np.around(raw_cost, 2)
-            # scale and shift
-            scaled_path = np.asarray(path) * kwargs["scale"]
-            shift_to_orig = kwargs["orig_start"] - scaled_path[0]
-            power_path = scaled_path + shift_to_orig
+            # compute_shift shift
+            path = np.asarray(path)
+            shift_to_orig = (kwargs["orig_start"] /
+                             scale).astype(int) - path[0]
+            print("shift", shift_to_orig)
+            print(
+                "correct start ", kwargs["orig_start"], start_shift_x,
+                start_shift_y
+            )
+            print(
+                "correct dest ", kwargs["orig_dest"], dest_shift_x,
+                dest_shift_y
+            )
+            shifted_path = path + shift_to_orig
+            power_path = shifted_path * scale
+
+            # correct the start and end
+            power_path[0] = power_path[0] + [start_shift_x, start_shift_y]
+            power_path[-1] = power_path[-1] + [dest_shift_x, dest_shift_y]
+
+            if big_inst is not None:
+                new_path = []
+                for k, (i, j) in enumerate(power_path):
+                    # skip start and dest
+                    if k == 0 or k == len(power_path) - 1:
+                        new_path.append([i, j])
+                        continue
+                    check_patch = big_inst[i:i + scale, j:j + scale]
+                    min_x, min_y = np.where(check_patch == np.min(check_patch))
+                    new_path.append([i + min_x[0], j + min_y[0]])
+                    print("prev:", i, j, "new", [i + min_x[0], j + min_y[0]])
+                power_path = np.asarray(new_path)
+
+            # scaled_path = np.asarray(path) * kwargs["scale"]
+            # shift_to_orig = kwargs["orig_start"] - scaled_path[0]
+            # power_path = scaled_path + shift_to_orig
             # out_path_list.append(shifted_path.tolist())
 
             coordinates = [kwargs["transform_matrix"] * p for p in power_path]
@@ -493,11 +548,12 @@ class ImplicitLG():
             max_angle_lg=kwargs["MAX_ANGLE_LG"]
         )
         print("1) Initialize shifts and instance (corridor)")
-        self.set_edge_costs(
-            kwargs["layer_classes"],
-            kwargs["class_weights"],
-            angle_weight=kwargs["ANGLE_WEIGHT"]
-        )
+        # TODO
+        try:
+            kwargs["angle_weight"] = kwargs["ANGLE_WEIGHT"]
+        except KeyError:
+            pass
+        self.set_edge_costs(**kwargs)
         self.instance = self.instance**power
         # add vertices
         self.add_nodes()

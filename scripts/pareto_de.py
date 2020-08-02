@@ -48,48 +48,15 @@ if args.cluster:
 SAVE_PICKLE = 1
 
 # define IO paths
-if LOAD:
-    PATH_FILES = os.path.join("data")
-else:
-    # PATH_FILES = "/Volumes/Nina Backup/data_master_thesis/large_instance"
-    PATH_FILES = f"../data/instance_{INST}.nosync"
+PATH_FILES = os.path.join("data")
 IOPATH = os.path.join(PATH_FILES, f"{INST}_data_{SCENARIO}_{SCALE_PARAM}.dat")
 
-# LOAD CONFIGURATION
-if not LOAD:
-    cfg = load_config(
-        os.path.join(PATH_FILES, f"{INST}_config.json"),
-        scale_factor=SCALE_PARAM
-    )
-
-# READ DATA
-if LOAD:
-    # load from pickle
-    with open(IOPATH, "rb") as infile:
-        data = pickle.load(infile)
-        try:
-            (instance, edge_cost, instance_corr, config) = data
-            cfg = config.graph
-            start_inds = config.graph.start_inds
-            dest_inds = config.graph.dest_inds
-        except ValueError:
-            warnings.warn("Edge weights not available - taking normal costs")
-            (instance, instance_corr, start_inds, dest_inds) = data.data
-            edge_cost = instance.copy()
-else:
-    # read in files
-    data = DataReader(PATH_FILES, SCENARIO, SCALE_PARAM, cfg)
-    instance, edge_cost, instance_corr, config = data.get_data()
-    # get graph processing specific cfg
+with open(IOPATH, "rb") as infile:
+    data = pickle.load(infile)
+    (instance, edge_cost, instance_corr, config) = data
     cfg = config.graph
-    start_inds = cfg.start_inds
-    dest_inds = cfg.dest_inds
-    # save
-    if SAVE_PICKLE:
-        data_out = (instance, edge_cost, instance_corr, config)
-        with open(IOPATH, "wb") as outfile:
-            pickle.dump(data_out, outfile)
-        print("successfully saved data")
+    start_inds = config.graph.start_inds
+    dest_inds = config.graph.dest_inds
 
 print("INSTANCE", np.mean(instance), np.min(instance), np.max(instance))
 save_path_costs = []
@@ -107,7 +74,7 @@ OUT_PATH_orig = OUT_PATH
 
 COMPARISONS = []
 for a_w in [0.1, 0.3, 0.6, 0.9]:
-    for e_w in [0.2, 0.5, 0.8, 1.5, 2.0, 3]:
+    for e_w in [0.2, 0.5, 0.8, 1.5, 3]:
         COMPARISONS.append([a_w, e_w])
 # for b_w in [0, 0.2, 0.4, 0.6, 0.8, 1]:
 #     for p_w in [0, 0.2, 0.4, 0.6, 0.8, 1]:

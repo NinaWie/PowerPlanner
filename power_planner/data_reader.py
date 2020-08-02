@@ -109,6 +109,7 @@ class DataReader():
         self.config = config.data
         # read csv file with resistances
         weights = pd.read_csv(os.path.join(base_path, self.config.WEIGHT_CSV))
+        print(weights["weight_1"])
         self.class_csv = weights.dropna()
         if len(weights) < 1:
             raise ValueError("layer weights csv file empty")
@@ -191,6 +192,7 @@ class DataReader():
         hard_constraints = []
         for fname in hard_cons_rows["Layer Name"]:
             file_path = os.path.join(self.path, "tif_layers", fname + ".tif")
+            # TODO!!
             if os.path.exists(file_path):
                 constraint = self.read_tif(file_path)
                 if len(constraint[0]) == 3725:
@@ -249,6 +251,7 @@ class DataReader():
                 )
                 if os.path.exists(file_path):
                     costs_raw = self.read_tif(file_path)
+                    # TODO!!
                     if len(costs_raw[0]) == 3725:
                         print(
                             fname, costs_raw.shape,
@@ -337,9 +340,11 @@ class DataReader():
             min_startend = np.min(
                 [start_x, start_y, x_len - end_x, y_len - end_y]
             )
-            print("reset here")
-            min_startend = int(min_startend / 3.5)
-            print(min_startend)
+            # TODO!!
+            if instance.shape[0] == 3078 or instance[1] == 3078:
+                print("reset here")
+                min_startend = int(min_startend / 3.5)
+                print(min_startend)
             start_x, start_y = (min_startend, min_startend)
             end_x, end_y = (x_len - min_startend, y_len - min_startend)
 
@@ -428,6 +433,10 @@ class DataReader():
         self.general_config.graph.dest_inds = dest_inds
         self.general_config.graph.start_inds = start_inds
         print("start cells:", start_inds, "dest cells:", dest_inds)
+        print(
+            "orig start cells:", self.orig_start, "orig dest cells:",
+            self.orig_dest
+        )
         # add classes and weights to config:
         self.general_config.graph.layer_classes = self.layer_classes
         self.general_config.graph.class_weights = self.class_weights
@@ -447,40 +456,36 @@ class DataReader():
 
     @staticmethod
     def get_raw_data(layer_path, csv_path, scenario=1):
-        """
-        Get original data without any scaling, croppting etc
-        Arguments:
-            layer_path: file path to folder with layer tifs
-            csv_path: file path to csv file with weights
-            scenario: indiates which columns of the csv is relevant
-        Returns:
-            layer_arr: 3D numpy array #layers x width x height
-            forb_arr: 3D numpy array of the forbidden layers
-            df: pandas dataframe with metainfo about each layer (by index)
-        """
         layer_list = pd.read_csv(csv_path).dropna()
         layer_arr = []
         layer_weights, layer_names, layer_classes = [], [], []
         forb_arr = []
-        for _, row in layer_list.iterrows():
+        for i, row in layer_list.iterrows():
             file_path = os.path.join(layer_path, row["Layer Name"] + ".tif")
             if os.path.exists(file_path):
                 with rasterio.open(file_path, 'r') as ds:
                     arr = ds.read()[0]
                 # binarize single tif layer so it can be weighted
                 # -1  because in tifs the costly areas are black
-
+                if len(arr) == 3078:
+                    arr = arr[:3078, :3724]
                 # add to hard constraints or general instance
                 if row["weight_" + str(scenario)] == "Forbidden":
-                    constraint = arr.astype(int) > 0.5 * np.max(arr)
+                    constraint = (arr.astype(int) != 1).astype(int)
                     forb_arr.append(constraint)
                     print(constraint.shape)
                 else:
-                    costs = np.absolute(normalize(arr) - 1)
+                    costs = (arr == 1).astype(int)
+                    # costs = np.absolute(normalize(arr) - 1)
                     layer_arr.append(costs)
-                    layer_weights.append(row["weight_" + str(scenario)])
+                    layer_weights.append(
+                        int(row["weight_" + str(scenario)]) *
+                        int(row["category_weight_" + str(scenario)])
+                    )
                     layer_classes.append(row["class"])
-                    layer_names.append(row["Corresponding Name"])
+                    layer_names.append(
+                        row["Layer Name"]
+                    )  # ["Corresponding Name"])
             else:
                 print("file not found:", row["Layer Name"])
         df = pd.DataFrame()
@@ -488,7 +493,10 @@ class DataReader():
         df["arr_inds"] = [i for i in range(len(layer_arr))]
         df["class"] = layer_classes
         df["layer"] = layer_names
-        return np.swapaxes(np.array(layer_arr), 2,
+        layer_arr = np.asarray(layer_arr)
+        if len(forb_arr) == 0:
+            forb_arr = np.ones(layer_arr.shape)
+        return np.swapaxes(layer_arr, 2,
                            1), np.swapaxes(np.array(forb_arr), 2, 1), df
 
     def save_coordinates(self, power_path, out_path, scale_factor=1):
