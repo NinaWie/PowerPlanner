@@ -17,13 +17,18 @@ def topological_sort_jit(v_x, v_y, shifts, to_visit, stack):
     Returns:
         stack
     """
+    x_len, y_len = to_visit.shape
     # Mark the current node as visited.
     to_visit[v_x, v_y] = 0
     # Recur for all the vertices adjacent to this vertex
     for s in range(len(shifts)):
         neigh_x = v_x + shifts[s, 0]
         neigh_y = v_y + shifts[s, 1]
-        if to_visit[neigh_x, neigh_y] == 1:
+        # in array bounds and not visited yet
+        if (
+            neigh_x >= 0 and neigh_x < x_len and neigh_y >= 0
+            and neigh_y < y_len and to_visit[neigh_x, neigh_y] == 1
+        ):
             topological_sort_jit(neigh_x, neigh_y, shifts, to_visit, stack)
     # Push current vertex to stack which stores result
     l_tmp = List()

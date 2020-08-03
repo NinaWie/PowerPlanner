@@ -341,7 +341,7 @@ class DataReader():
                 [start_x, start_y, x_len - end_x, y_len - end_y]
             )
             # TODO!!
-            if instance.shape[0] == 3078 or instance[1] == 3078:
+            if instance.shape[0] == 3078 or instance.shape[1] == 3078:
                 print("reset here")
                 min_startend = int(min_startend / 3.5)
                 print(min_startend)
