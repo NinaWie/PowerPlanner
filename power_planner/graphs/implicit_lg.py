@@ -62,15 +62,29 @@ class ImplicitLG():
                    ] = angles_all[angles_all < np.inf] * self.angle_weight
         return angles_all
 
-    def set_shift(self, lower, upper, vec, max_angle, max_angle_lg=np.pi / 4):
+    def set_shift(
+        self,
+        start,
+        dest,
+        pylon_dist_min=3,
+        pylon_dist_max=5,
+        max_angle=np.pi / 2,
+        max_angle_lg=np.pi / 4,
+        **kwargs
+    ):
         """
         Initialize shift variable by getting the donut values
-        :param lower, upper: min and max distance of pylons
+        :param pylon_dist_min, pylon_dist_max: min and max distance of pylons
         :param vec: vector of diretion of edges
         :param max_angle: Maximum angle of edges to vec
         """
+        self.start_inds = np.asarray(start)
+        self.dest_inds = np.asarray(dest)
         self.angle_norm_factor = max_angle_lg
-        shifts = get_half_donut(lower, upper, vec, angle_max=max_angle)
+        vec = self.dest_inds - self.start_inds
+        shifts = get_half_donut(
+            pylon_dist_min, pylon_dist_max, vec, angle_max=max_angle
+        )
         shift_angles = [angle_360(s, vec) for s in shifts]
         # sort the shifts
         self.shifts = np.asarray(shifts)[np.argsort(shift_angles)]
@@ -217,7 +231,7 @@ class ImplicitLG():
     # --------------------------------------------------------------------
     # SHORTEST PATH COMPUTATION
 
-    def add_edges(self, mode="DAG", iters=100, edge_weight=0, height_weight=0):
+    def add_edges(self, mode="DAG", iters=100, edge_weight=0, **kwargs):
         self.edge_weight = edge_weight
         tic = time.time()
         # precompute edge costs
@@ -540,25 +554,14 @@ class ImplicitLG():
         """
         self.start_inds = kwargs["start_inds"]
         self.dest_inds = kwargs["dest_inds"]
-        self.set_shift(
-            kwargs["PYLON_DIST_MIN"],
-            kwargs["PYLON_DIST_MAX"],
-            self.dest_inds - self.start_inds,
-            kwargs["MAX_ANGLE"],
-            max_angle_lg=kwargs["MAX_ANGLE_LG"]
-        )
+        self.set_shift(self.start_inds, self.dest_inds, **kwargs)
         print("1) Initialize shifts and instance (corridor)")
-        # TODO
-        try:
-            kwargs["angle_weight"] = kwargs["ANGLE_WEIGHT"]
-        except KeyError:
-            pass
         self.set_edge_costs(**kwargs)
         self.instance = self.instance**power
         # add vertices
         self.add_nodes()
         print("2) Initialize distances to inf and predecessors")
-        self.add_edges(edge_weight=kwargs["EDGE_WEIGHT"])
+        self.add_edges(**kwargs)
         print("3) Compute source shortest path tree")
         print("number of vertices and edges:", self.n_nodes, self.n_edges)
 

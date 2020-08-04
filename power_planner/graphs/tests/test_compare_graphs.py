@@ -13,14 +13,14 @@ class TestCompGraphs(unittest.TestCase):
 
     # create configuration
     cfg = SimpleNamespace()
-    cfg.PYLON_DIST_MIN = 3
-    cfg.PYLON_DIST_MAX = 5
+    cfg.pylon_dist_min = 3
+    cfg.pylon_dist_max = 5
     cfg.start_inds = start_inds
     cfg.dest_inds = dest_inds
-    cfg.ANGLE_WEIGHT = 0.25
-    cfg.EDGE_WEIGHT = 0
-    cfg.MAX_ANGLE = np.pi / 2
-    cfg.MAX_ANGLE_LG = np.pi / 4
+    cfg.angle_weight = 0.25
+    cfg.edge_weight = 0
+    cfg.max_angle = np.pi / 2
+    cfg.max_angle_lg = np.pi / 4
     cfg.layer_classes = ["dummy_class"]
     cfg.class_weights = [1]
 
@@ -39,12 +39,12 @@ class TestCompGraphs(unittest.TestCase):
 
     def test_lg_equal_weighted(self) -> None:
         # compare whether angle costs are decreasing
-        self.cfg.MAX_ANGLE_LG = np.pi
+        self.cfg.max_angle_lg = np.pi
         impl_lg = graphs.ImplicitLG(
             np.array([self.example3]), self.hard_cons, n_iters=15, verbose=0
         )
         impl_lg.set_corridor(self.corridor, self.start_inds, self.dest_inds)
-        self.cfg.ANGLE_WEIGHT = 0
+        self.cfg.angle_weight = 0
         path, path_costs, cost_sum = impl_lg.single_sp(**vars(self.cfg))
         # get lg path
         lg_graph = graphs.LineGraph(
@@ -86,8 +86,8 @@ class TestCompGraphs(unittest.TestCase):
                 n_iters=10,
                 verbose=0
             )
-            self.cfg.ANGLE_WEIGHT = ang_weight
-            self.cfg.MAX_ANGLE_LG = max_angle
+            self.cfg.angle_weight = ang_weight
+            self.cfg.max_angle_lg = max_angle
             path, path_costs, cost_sum = impl_lg.single_sp(**vars(self.cfg))
             # get lg path
             lg_graph = graphs.LineGraph(

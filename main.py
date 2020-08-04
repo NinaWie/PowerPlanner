@@ -30,7 +30,7 @@ parser.add_argument('-s', '--scale', help="resolution", type=int, default=2)
 args = parser.parse_args()
 
 # define out save name
-ID = "paths_2_e3_d50_" + args.instance  # str(round(time.time() / 60))[-5:]
+ID = "xytest_" + args.instance  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
@@ -114,15 +114,18 @@ else:
 # plt.figure(figsize=(8, 5))
 # plt.imshow(np.sum(instance, axis=0) + visualize_corr)
 # plt.colorbar()
-# plt.savefig(f"surface_s{INST}_{SCALE_PARAM}.png")
-cfg.PYLON_DIST_MIN = 350 / (10 * SCALE_PARAM)  # RESOLUTION is 50
-cfg.PYLON_DIST_MAX = 500 / (10 * SCALE_PARAM)
-cfg.ANGLE_WEIGHT = 0.5
-cfg.EDGE_WEIGHT = 0.3
+# plt.savefig(f"surface_s100_i100_{INST}_{SCALE_PARAM}.png")
+# plt.imshow(np.mean(edge_cost, axis=0))
+# plt.savefig(f"edgecost_s100_i100_{INST}_{SCALE_PARAM}.png")
+print(cfg.pylon_dist_min, cfg.pylon_dist_max)
+# cfg.PYLON_DIST_MIN = 350 / (10 * SCALE_PARAM)  # RESOLUTION is 50
+# cfg.PYLON_DIST_MAX = 500 / (10 * SCALE_PARAM)
+cfg.angle_weight = 0.1
+cfg.edge_weight = 0.3
 
 # DEFINE GRAPH AND ALGORITHM
 graph = GRAPH_TYPE(
-    instance, instance_corr, edge_instance=edge_cost, verbose=cfg.VERBOSE
+    instance, instance_corr, edge_instance=edge_cost, verbose=cfg.verbose
 )
 
 # START PIPELINE
@@ -132,86 +135,119 @@ output_paths = []
 plot_surfaces = []
 time_infos = []
 
-for (factor, dist) in PIPELINE:
-    print("----------- PIPELINE", factor, dist, "---------------")
-    graph.set_corridor(corridor, start_inds, dest_inds, factor_or_n_edges=1)
-    print(cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX)
-    graph.set_shift(
-        cfg.PYLON_DIST_MIN,
-        cfg.PYLON_DIST_MAX,
-        dest_inds - start_inds,
-        cfg.MAX_ANGLE,
-        max_angle_lg=cfg.MAX_ANGLE_LG
-    )
-    print("neighbors:", len(graph.shifts))
-    print("1) set shift and corridor")
-    graph.set_edge_costs(
-        cfg.layer_classes, cfg.class_weights, angle_weight=cfg.ANGLE_WEIGHT
-    )
-    # add vertices
-    graph.add_nodes()
-    if height_resistance_path is not None:
-        graph.init_heights(height_resistance_path, 60, 80, SCALE_PARAM)
-    print("1.2) set shift, edge costs and added nodes")
-    graph.add_edges(edge_weight=cfg.EDGE_WEIGHT, height_weight=0)
-    print("2) added edges", graph.n_edges)
-    print("number of vertices:", graph.n_nodes)
+path, path_costs, cost_sum = graph.single_sp(**vars(cfg))
+# path, path_costs, cost_sum = graph.sp_tree(**vars(cfg))
 
-    # weighted sum of all costs
-    graph.sum_costs()
-    source_v, target_v = graph.add_start_and_dest(start_inds, dest_inds)
-    print("3) summed cost, get source and dest")
-    # get actual best path
-    path, path_costs, cost_sum = graph.get_shortest_path(source_v, target_v)
-    print("4) shortest path", cost_sum)
-    # save for inspection
-    output_paths.append((path, path_costs))
-    plot_surfaces.append(graph.instance.copy())
-    # get several paths --> possible to replace by pareto_out[0]
-    # paths = [path]
-    time_infos.append(graph.time_logs.copy())
+ksp = KSP(graph)
+alternatives = ksp.find_ksp(cfg.k)
 
-    if cfg.VERBOSE:
-        graph.time_logs.pop('edge_list_times', None)
-        graph.time_logs.pop('add_edges_times', None)
-        print(graph.time_logs)
+# SIMPLE
+plot_path(graph.instance, path, buffer=2, out_path=OUT_PATH + ".png")
 
-    if dist > 0:
-        # PRINT AND SAVE timing test
-        time_test_csv(
-            ID, cfg.CSV_TIMES, SCALE_PARAM, cfg.GTNX, GRAPH_TYPE, graph,
-            path_costs, cost_sum, dist, 0, NOTES
-        )
-        # Define paths around which to place corridor
-        if USE_KSP:
-            graph.get_shortest_path_tree(source_v, target_v)
-            ksp = graph.find_ksp(source_v, target_v, 3, overlap=0.2)
-            paths = [k[0] for k in ksp]
-            flat_list = [item for sublist in paths for item in sublist]
-            del output_paths[-1]
-            output_paths.append((flat_list, path_costs))
-            plot_k_sp(
-                ksp,
-                graph.instance * (corridor > 0).astype(int),
-                out_path=OUT_PATH + str(factor)
-            )
-        else:
-            paths = [path]
+# FOR COST COMPARISON
+plot_path_costs(
+    instance * instance_corr,
+    path,
+    path_costs,
+    cfg.layer_classes,
+    buffer=2,
+    out_path=OUT_PATH + "_costs.png"
+)
 
-        # do specified numer of dilations
-        corridor = get_distance_surface(
-            graph.hard_constraints.shape,
-            paths,
-            mode="dilation",
-            n_dilate=dist
-        )
-        print("5) compute distance surface")
-        # remove the edges of vertices in the corridor (to overwrite)
-        graph.remove_vertices(corridor, delete_padding=cfg.PYLON_DIST_MAX)
-        print("6) remove edges")
+time_pipeline = round(time.time() - tic, 3)
+print("FINISHED PIPELINE:", time_pipeline)
+print("path length", len(path))
+# SAVE timing test
+time_test_csv(
+    ID, cfg.csv_times, SCALE_PARAM, 1, GRAPH_TYPE, graph,
+    [round(s, 3) for s in np.sum(path_costs, axis=0)], cost_sum, 0,
+    time_pipeline, NOTES
+)
+
+graph.save_path_cost_csv(OUT_PATH, [path], **vars(cfg))
+
+# -------------------------- LONG FLEXIBLE VERSION ---------------------
+
+# for (factor, dist) in PIPELINE:
+#     print("----------- PIPELINE", factor, dist, "---------------")
+#     graph.set_corridor(corridor, start_inds, dest_inds, factor_or_n_edges=1)
+#     print(cfg.PYLON_DIST_MIN, cfg.PYLON_DIST_MAX)
+#     graph.set_shift(
+#         cfg.PYLON_DIST_MIN,
+#         cfg.PYLON_DIST_MAX,
+#         dest_inds - start_inds,
+#         cfg.MAX_ANGLE,
+#         max_angle_lg=cfg.MAX_ANGLE_LG
+#     )
+#     print("neighbors:", len(graph.shifts))
+#     print("1) set shift and corridor")
+#     graph.set_edge_costs(
+#         cfg.layer_classes, cfg.class_weights, angle_weight=cfg.ANGLE_WEIGHT
+#     )
+#     # add vertices
+#     graph.add_nodes()
+#     if height_resistance_path is not None:
+#         graph.init_heights(height_resistance_path, 60, 80, SCALE_PARAM)
+#     print("1.2) set shift, edge costs and added nodes")
+#     graph.add_edges(edge_weight=cfg.EDGE_WEIGHT, height_weight=0)
+#     print("2) added edges", graph.n_edges)
+#     print("number of vertices:", graph.n_nodes)
+
+#     # weighted sum of all costs
+#     graph.sum_costs()
+#     source_v, target_v = graph.add_start_and_dest(start_inds, dest_inds)
+#     print("3) summed cost, get source and dest")
+#     # get actual best path
+#     path, path_costs, cost_sum = graph.get_shortest_path(source_v, target_v)
+#     print("4) shortest path", cost_sum)
+#     # save for inspection
+#     output_paths.append((path, path_costs))
+#     plot_surfaces.append(graph.instance.copy())
+#     # get several paths --> possible to replace by pareto_out[0]
+#     # paths = [path]
+#     time_infos.append(graph.time_logs.copy())
+
+#     if cfg.verbose:
+#         graph.time_logs.pop('edge_list_times', None)
+#         graph.time_logs.pop('add_edges_times', None)
+#         print(graph.time_logs)
+
+#     if dist > 0:
+#         # PRINT AND SAVE timing test
+#         time_test_csv(
+#             ID, cfg.csv_times, SCALE_PARAM, GRAPH_TYPE, graph, path_costs,
+#             cost_sum, dist, 0, NOTES
+#         )
+#         # Define paths around which to place corridor
+#         if USE_KSP:
+#             graph.get_shortest_path_tree(source_v, target_v)
+#             ksp = graph.find_ksp(source_v, target_v, 3, overlap=0.2)
+#             paths = [k[0] for k in ksp]
+#             flat_list = [item for sublist in paths for item in sublist]
+#             del output_paths[-1]
+#             output_paths.append((flat_list, path_costs))
+#             plot_k_sp(
+#                 ksp,
+#                 graph.instance * (corridor > 0).astype(int),
+#                 out_path=OUT_PATH + str(factor)
+#             )
+#         else:
+#             paths = [path]
+
+#         # do specified numer of dilations
+#         corridor = get_distance_surface(
+#             graph.hard_constraints.shape,
+#             paths,
+#             mode="dilation",
+#             n_dilate=dist
+#         )
+#         print("5) compute distance surface")
+#         # remove the edges of vertices in the corridor (to overwrite)
+#         graph.remove_vertices(corridor, delete_padding=cfg.PYLON_DIST_MAX)
+#         print("6) remove edges")
 
 # necessary for ALL further computations:
-graph.get_shortest_path_tree(source_v, target_v)
+# graph.get_shortest_path_tree(source_v, target_v)
 
 # BEST IN WINDOW
 # path_window, path_window_cost, cost_sum_window = graph.best_in_window(
@@ -235,9 +271,7 @@ graph.get_shortest_path_tree(source_v, target_v)
 # )
 
 # COMPUTE KSP
-ksp = KSP(graph)
-ksp_out = ksp.max_vertex_ksp(cfg.KSP, min_dist=50)
-plot_k_sp(ksp_out, graph.instance, out_path=OUT_PATH)
+#
 # ksp = graph.k_diverse_paths(
 #     source_v,
 #     target_v,
@@ -258,16 +292,6 @@ plot_k_sp(ksp_out, graph.instance, out_path=OUT_PATH)
 # )
 # plot_pareto_paths(pareto_out, graph.instance, out_path=OUT_PATH)
 
-time_pipeline = round(time.time() - tic, 3)
-print("FINISHED PIPELINE:", time_pipeline)
-print("path length", len(path))
-# SAVE timing test
-time_test_csv(
-    ID, cfg.CSV_TIMES, SCALE_PARAM, cfg.GTNX, GRAPH_TYPE, graph,
-    [round(s, 3) for s in np.sum(path_costs, axis=0)], cost_sum, dist,
-    time_pipeline, NOTES
-)
-
 # -------------  PLOTTING: ----------------------
 
 # FOR PIPELINE
@@ -283,18 +307,6 @@ time_test_csv(
 # plot_path(
 #     graph.instance, path_window, buffer=0, out_path=OUT_PATH + "_window.png"
 # )
-# SIMPLE
-plot_path(graph.instance, path, buffer=2, out_path=OUT_PATH + ".png")
-
-# FOR COST COMPARISON
-plot_path_costs(
-    instance * instance_corr,
-    path,
-    path_costs,
-    cfg.layer_classes,
-    buffer=2,
-    out_path=OUT_PATH + "_costs.png"
-)
 
 # -------------  SAVE INFOS: ----------------------
 
@@ -307,8 +319,18 @@ plot_path_costs(
 #     OUT_PATH, output_paths, time_infos, PIPELINE, SCALE_PARAM
 # )
 
+# with open(
+#     os.path.join(PATH_FILES, f"{INST}_data_{SCENARIO}_1.dat"), "rb"
+# ) as infile:
+#     (big_inst, _, _, _) = pickle.load(infile)
+#     print(big_inst.shape)
+# big_inst = np.sum(
+#     np.moveaxis(big_inst, 0, -1) * np.asarray(cfg.class_weights), axis=2
+# )
+# print(big_inst.shape)
+
 # save just coordinates of path
-graph.save_path_cost_csv(OUT_PATH, [k[0] for k in ksp_out], **vars(cfg))
+#  [k[0] for k in ksp_out]
 # data.save_original_path(OUT_PATH, [k[0] for k in ksp], output_coords=True)
 
 # LINE GRAPH FROM FILE:
@@ -316,5 +338,5 @@ graph.save_path_cost_csv(OUT_PATH, [k[0] for k in ksp_out], **vars(cfg))
 #     # Load file and derive line graph
 #     graph_file = "outputs/path_02852_graph"
 #     graph = LineGraphFromGraph(
-#         graph_file, instance, instance_corr, graphtool=GTNX, verbose=VERBOSE
+#         graph_file, instance, instance_corr, graphtool=GTNX, verbose=verbose
 #     )

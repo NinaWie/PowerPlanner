@@ -35,22 +35,24 @@ class GeneralGraph():
         self.time_logs = {}
         self.verbose = verbose
 
-    def set_edge_costs(self, classes, weights, angle_weight=0):
+    def set_edge_costs(
+        self, layer_classes=["resistance"], class_weights=[1], **kwargs
+    ):
         """
         Initialize edge cost variables
         :param classes: list of cost categories
         :param weights: list of weights for cost categories - must be of same 
                         shape as classes (if None, then equal weighting)
         """
-        weights = np.array(weights)
+        class_weights = np.array(class_weights)
         # set different costs:
-        self.cost_classes = classes
+        self.cost_classes = layer_classes
         if self.graphtool:
             self.cost_props = [
                 self.graph.new_edge_property("float")
-                for _ in range(len(classes))
+                for _ in range(len(layer_classes))
             ]
-        self.cost_weights = weights / np.sum(weights)
+        self.cost_weights = class_weights / np.sum(class_weights)
         if self.verbose:
             print(self.cost_classes, self.cost_weights)
         # save weighted instance for plotting
@@ -58,15 +60,26 @@ class GeneralGraph():
             np.moveaxis(self.cost_instance, 0, -1) * self.cost_weights, axis=2
         ) * self.hard_constraints
 
-    def set_shift(self, lower, upper, vec, max_angle):
+    def set_shift(
+        self,
+        start,
+        dest,
+        pylon_dist_min=3,
+        pylon_dist_max=5,
+        max_angle=np.pi / 2,
+        **kwargs
+    ):
         """
         Initialize shift variable by getting the donut values
         :param lower, upper: min and max distance of pylons
         :param vec: vector of diretion of edges
         :param max_angle: Maximum angle of edges to vec
         """
-        print("SHIFT:", lower, upper, vec, max_angle)
-        self.shifts = get_half_donut(lower, upper, vec, angle_max=max_angle)
+        vec = dest - start
+        print("SHIFT:", pylon_dist_min, pylon_dist_max, vec, max_angle)
+        self.shifts = get_half_donut(
+            pylon_dist_min, pylon_dist_max, vec, angle_max=max_angle
+        )
         self.shift_tuples = self.shifts
 
     def set_corridor(
@@ -385,13 +398,7 @@ class GeneralGraph():
         """
         self.start_inds = kwargs["start_inds"]
         self.dest_inds = kwargs["dest_inds"]
-        self.set_shift(
-            kwargs["PYLON_DIST_MIN"],
-            kwargs["PYLON_DIST_MAX"],
-            self.dest_inds - self.start_inds,
-            kwargs["MAX_ANGLE"],
-            max_angle_lg=kwargs["MAX_ANGLE_LG"]
-        )
+        self.set_shift(self.start_inds, self.dest_inds, **kwargs)
         self.set_corridor(
             np.ones(self.hard_constraints.shape) * 0.5,
             self.start_inds,
@@ -399,11 +406,7 @@ class GeneralGraph():
             factor_or_n_edges=1
         )
         print("1) Initialize shifts and instance (corridor)")
-        self.set_edge_costs(
-            kwargs["layer_classes"],
-            kwargs["class_weights"],
-            angle_weight=kwargs["ANGLE_WEIGHT"]
-        )
+        self.set_edge_costs(**kwargs)
         # add vertices
         self.add_nodes()
         print("2) Initialize distances to inf and predecessors")

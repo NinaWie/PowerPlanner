@@ -401,7 +401,7 @@ class DataReader():
         if "weight_" + str(self.scenario) + "_edge" in self.class_csv.columns:
             print("EDGE COL EXISTS --> constructing edge instance")
             edge_inst = self.get_costs_per_class(
-                oneclass=self.config.ONE_CLASS, is_edge=True
+                oneclass=self.config.one_class, is_edge=True
             )
             edge_corr = self.get_hard_constraints(
                 is_edge=True
@@ -409,7 +409,7 @@ class DataReader():
             edge_corr_inf = (edge_corr == 0).astype(float)
             edge_corr_inf[edge_corr_inf > 0] = np.inf
             edge_inst = edge_inst + edge_corr_inf
-        elif self.config.CABLE_FORBIDDEN:
+        elif self.config.cable_forbidden:
             print("Ueberspannen forbidden!")
             # don't take separate weights for edge instance,
             # but forbid ueberspannen of hard constraint regions
@@ -447,9 +447,9 @@ class DataReader():
             hard_constraints,
             start_inds,
             dest_inds,
-            emergency_dist=self.config.EMERGENCY_DIST /
-            (self.config.RASTER * self.scale_factor),
-            percent_padding=self.config.PERC_PAD
+            emergency_dist=self.config.emergency_dist /
+            (self.config.raster * self.scale_factor),
+            percent_padding=self.config.perc_pad
         )
         # percent_padding: 5 for large instance, 0.25 small
         return instance, edge_inst, hard_constraints, self.general_config

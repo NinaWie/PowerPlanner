@@ -71,9 +71,25 @@ class WeightedGraph(GeneralGraph):
         # self.pos2node[start_inds[0], start_inds[1]] = np.max(self.pos2node)+1
         self.time_logs["set_cost_rest"] = round(time.time() - tic, 3)
 
-    def set_shift(self, lower, upper, vec, max_angle, max_angle_lg=0):
-        GeneralGraph.set_shift(self, lower, upper, vec, max_angle)
-        self.shift_vals = get_donut_vals(self.shifts, vec)
+    def set_shift(
+        self,
+        start,
+        dest,
+        pylon_dist_min=3,
+        pylon_dist_max=5,
+        max_angle=np.pi / 2,
+        max_angle_lg=0,
+        **kwargs
+    ):
+        GeneralGraph.set_shift(
+            self,
+            start,
+            dest,
+            pylon_dist_min=pylon_dist_min,
+            pylon_dist_max=pylon_dist_max,
+            max_angle=max_angle
+        )
+        self.shift_vals = get_donut_vals(self.shifts, dest - start)
         self.shift_tuples = self.shifts
 
     def add_nodes(self):

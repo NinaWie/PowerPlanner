@@ -11,16 +11,16 @@ class TestImplicitLG(unittest.TestCase):
 
     # create configuration
     cfg = SimpleNamespace()
-    cfg.PYLON_DIST_MIN = 3
-    cfg.PYLON_DIST_MAX = 5
+    cfg.pylon_dist_min = 3
+    cfg.pylon_dist_max = 5
     start_inds = np.array([6, 6])
     dest_inds = np.array([41, 43])
     cfg.start_inds = start_inds
     cfg.dest_inds = dest_inds
-    cfg.ANGLE_WEIGHT = 0.25
-    cfg.EDGE_WEIGHT = 0
-    cfg.MAX_ANGLE = np.pi / 2
-    cfg.MAX_ANGLE_LG = np.pi / 4
+    cfg.angle_weight = 0.25
+    cfg.edge_weight = 0
+    cfg.max_angle = np.pi / 2
+    cfg.max_angle_lg = np.pi / 4
     cfg.layer_classes = ["dummy_class"]
     cfg.class_weights = [1]
 
@@ -81,11 +81,11 @@ class TestImplicitLG(unittest.TestCase):
             n_iters=10,
             verbose=0
         )
-        self.cfg.ANGLE_WEIGHT = 0
-        self.cfg.EDGE_WEIGHT = 0.5
+        self.cfg.angle_weight = 0
+        self.cfg.edge_weight = 0.5
         path, path_costs, cost_sum = graph.single_sp(**vars(self.cfg))
-        self.cfg.ANGLE_WEIGHT = 0.25
-        self.cfg.EDGE_WEIGHT = 0
+        self.cfg.angle_weight = 0.25
+        self.cfg.edge_weight = 0
         dest_ind = graph.pos2node[tuple(self.dest_inds)]
         dest_costs = np.min(graph.dists[dest_ind])
         dest_costs_gt = len(path)  # everywhere 1
@@ -115,7 +115,7 @@ class TestImplicitLG(unittest.TestCase):
         self.assertFalse(np.min(graph.dists[dest_ind]) < np.inf)
 
         # NEXT TRY: more angles allowed
-        self.cfg.MAX_ANGLE_LG = np.pi
+        self.cfg.max_angle_lg = np.pi
         graph = graphs.ImplicitLG(
             np.array([self.example_inst]),
             self.high_angle_corr,
@@ -134,7 +134,7 @@ class TestImplicitLG(unittest.TestCase):
         path_lg, path_costs_lg, cost_sum_lg = lg_graph.single_sp(
             **vars(self.cfg)
         )
-        self.cfg.MAX_ANGLE_LG = np.pi / 4
+        self.cfg.max_angle_lg = np.pi / 4
         # assert that path is non-empty
         self.assertTrue(len(path_lg) > 0)
         self.assertEqual(len(path_lg), len(path_costs_lg))

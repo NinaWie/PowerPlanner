@@ -40,26 +40,53 @@ class LineGraph(GeneralGraph):
         return self.pos2node[v1_arr] * self.n_neighbors + neighbor_ind
         # return self.pos2node[v1_arr] * self.n_entries + self.pos2node[v2_arr]
 
-    def set_shift(self, lower, upper, vec, max_angle, max_angle_lg=np.pi / 4):
+    def set_shift(
+        self,
+        start,
+        dest,
+        pylon_dist_min=3,
+        pylon_dist_max=5,
+        max_angle=np.pi / 2,
+        max_angle_lg=np.pi / 4,
+        **kwargs
+    ):
+        # self, lower, upper, vec, max_angle, max_angle_lg=np.pi / 4):
         """
         Get donut tuples (for vertices) and angle tuples (for edges)
         """
-        GeneralGraph.set_shift(self, lower, upper, vec, max_angle)
+        GeneralGraph.set_shift(
+            self,
+            start,
+            dest,
+            pylon_dist_min=pylon_dist_min,
+            pylon_dist_max=pylon_dist_max,
+            max_angle=max_angle
+        )
         self.max_angle_lg = max_angle_lg
         self.shift_tuples = get_lg_donut(
-            lower, upper, vec, max_angle, max_angle_lg=max_angle_lg
+            pylon_dist_min,
+            pylon_dist_max,
+            dest - start,
+            max_angle,
+            max_angle_lg=max_angle_lg
         )
         self.n_neighbors = len(self.shifts)
         self.shift_dict = {tuple(s): i for i, s in enumerate(self.shifts)}
 
-    def set_edge_costs(self, classes, weights, angle_weight=0.5):
+    def set_edge_costs(
+        self,
+        layer_classes=["resistance"],
+        class_weights=[1],
+        angle_weight=0.5,
+        **kwargs
+    ):
         """
         Initialize edge properties as in super, but add angle costs
         """
-        classes_w_ang = ["angle"] + classes
-        GeneralGraph.set_edge_costs(self, classes_w_ang, weights)
+        classes_w_ang = ["angle"] + layer_classes
+        GeneralGraph.set_edge_costs(self, classes_w_ang, class_weights)
         weights_norm = np.array(
-            [angle_weight * np.sum(weights)] + list(weights)
+            [angle_weight * np.sum(class_weights)] + list(class_weights)
         )
         self.cost_weights = weights_norm / np.sum(weights_norm)
         if self.verbose:
