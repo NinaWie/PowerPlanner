@@ -66,12 +66,14 @@ def load_config(config_filepath, scale_factor=1):
     # load file
     with open(config_filepath, "r") as infile:
         cfg_dict = json.load(infile)
+        print(config_filepath)
+        print(cfg_dict)
         cfg = SimpleNamespace()
         cfg.data = SimpleNamespace(**cfg_dict["data"])
         cfg.graph = SimpleNamespace(**cfg_dict["graph"])
-        (cfg.graph.PYLON_DIST_MIN,
-         cfg.graph.PYLON_DIST_MAX) = compute_pylon_dists(
-             cfg.data.PYLON_DIST_MIN, cfg.data.PYLON_DIST_MAX, cfg.data.RASTER,
+        (cfg.graph.pylon_dist_min,
+         cfg.graph.pylon_dist_max) = compute_pylon_dists(
+             cfg.data.pylon_dist_min, cfg.data.pylon_dist_max, cfg.data.raster,
              scale_factor
          )
     return cfg

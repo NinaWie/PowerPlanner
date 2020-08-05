@@ -20,6 +20,8 @@ class LineGraph(GeneralGraph):
         # assert cost_instance.shape == hard_constraints.shape
         self.cost_instance = cost_instance
         self.hard_constraints = hard_constraints
+        self.cost_rest = self.cost_instance * (self.hard_constraints >
+                                               0).astype(int)
 
         # initilize graph
         GeneralGraph.__init__(self, directed=directed, verbose=verbose)

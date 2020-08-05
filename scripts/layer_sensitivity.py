@@ -53,17 +53,27 @@ config.graph.ANGLE_WEIGH = 0.3
 config.graph.EDGE_WEIGHT = 0.5
 
 change_dict = {
-    "I_1422_Wald_ohne_Bedeutung": [0, 1, 3],
-    "I_2713_Landschaftspraegende_Denkmaeler_inkl_3000m": [0, 1, 2]
+    "I_1422_Wald_ohne_Bedeutung": [2, 0, 1, 3],
+    "I_2713_Landschaftspraegende_Denkmaeler_inkl_3000m": [0, 1, 3],
+    "I_1111_Wohnumfeldschutz": [0, 1, 2],
+    "I_1311_Landschaftl_Vorbehaltsgebiet": [0, 1, 3],
+    "I_1421_Bannwald": [0, 1, 2],
+    "I_1812_Strassen_ueberregional.tif": [-3, -2, 0],
+    "TA_Laerm_Grenzwerte": [0, 1, 2],
+    "I_2214_VS_5000m": [0, 1, 3],
+    "I_2224_Gesetzl_geschuetzte_Biotope": [0, 1, 3],
+    "I_2511_Wald_Bedeutung_Klimaschutz": [0, 1, 3],
+    "I_2611_Landschaftsbildeinheit_sehr_und_hohe_Bedeutung": [0, 1, 3],
+    "I_2711_Bodendenkmaeler": [0, 2, 3]
 }
 
 for layer, new_weights in change_dict.items():
     weight_csv = pd.read_csv(
-        os.path.join(PATH_FILES, config.data.WEIGHT_CSV[:-4] + "_orig.csv")
+        os.path.join(PATH_FILES, config.data.weight_csv[:-4] + "_orig.csv")
     ).set_index("Layer Name")
     for w in new_weights:
         weight_csv.loc[layer, "weight_1"] = w
-        weight_csv.to_csv(os.path.join(PATH_FILES, config.data.WEIGHT_CSV))
+        weight_csv.to_csv(os.path.join(PATH_FILES, config.data.weight_csv))
 
         # CONSTRUCT DATA
         data = DataReader(PATH_FILES, SCENARIO, SCALE_PARAM, config)
@@ -73,7 +83,10 @@ for layer, new_weights in change_dict.items():
         dest_inds = cfg.dest_inds
 
         # ID
-        ID = f"_{layer}_{w}"
+        if layer == "I_1422_Wald_ohne_Bedeutung" and w == 2:
+            ID = "baseline"
+        else:
+            ID = f"_{layer}_{w}"
         OUT_PATH = OUT_PATH_orig + ID
 
         # DEFINE GRAPH AND ALGORITHM
@@ -81,7 +94,7 @@ for layer, new_weights in change_dict.items():
             instance,
             instance_corr,
             edge_instance=edge_cost,
-            verbose=cfg.VERBOSE
+            verbose=cfg.verbose
         )
         tic = time.time()
 
@@ -94,8 +107,8 @@ for layer, new_weights in change_dict.items():
 
         # SAVE timing test
         time_test_csv(
-            ID, cfg.CSV_TIMES, SCALE_PARAM * 10, cfg.GTNX, "impl_lg_" + INST,
-            graph, 1, cost_sum, 1, time_pipeline, 1
+            ID, cfg.csv_times, SCALE_PARAM * 10, 1, "impl_lg_" + INST, graph,
+            1, cost_sum, 1, time_pipeline, 1
         )
 
         # -------------  PLOTTING: ----------------------

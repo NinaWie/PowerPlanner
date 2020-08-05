@@ -21,7 +21,6 @@ class RandomGraph():
         self.hard_constraints = hard_constraints
         self.cost_instance = cost_instance
         self.time_logs = {}
-        print("init of RandomGraph")
 
     def set_corridor(
         self,
@@ -47,15 +46,17 @@ class RandomGraph():
             n_nodes_hard = len(corridor[corridor > 0])
             # edges_approx is the number of edges we would get if we take all
             n_edges_approx = len(self.shift_tuples) * n_nodes_hard
-            print(
-                "Desired edges", factor_or_n_edges, "n nodes in corridor",
-                n_nodes_hard, "approximate_edges", n_edges_approx
-            )
+            if self.verbose:
+                print(
+                    "Desired edges", factor_or_n_edges, "n nodes in corridor",
+                    n_nodes_hard, "approximate_edges", n_edges_approx
+                )
             # ratio of edges to delete x
             ratio_keep = (factor_or_n_edges / n_edges_approx)
             # min because might happen that corridor has less edges anyways
             factor = max([1 - ratio_keep, 0])
-            print("Ratio of edges to remove :", round(factor, 2))
+            if self.verbose:
+                print("Ratio of edges to remove :", round(factor, 2))
             self.factor = factor
         # NOT AUTO
         else:
@@ -69,7 +70,8 @@ class RandomGraph():
             return 0
 
         # Different strategies to construct corridor prob distribution
-        print("MODE", mode)
+        if self.verbose:
+            print("MODE", mode)
         if mode == "gauss":
             gauss = lambda x: np.exp(-(x - 1)**2 / (0.5))
             corridor = normalize(gauss(corridor))
@@ -118,18 +120,13 @@ class RandomGraph():
 class RandomWeightedGraph(WeightedKSP, RandomGraph):
 
     def __init__(
-        self,
-        cost_instance,
-        hard_constraints,
-        directed=True,
-        graphtool=1,
-        verbose=1
+        self, cost_instance, hard_constraints, directed=True, verbose=1
     ):
+        self.corridor = hard_constraints * 1.1
         super(RandomWeightedGraph, self).__init__(
             cost_instance,
             hard_constraints,
             directed=directed,
-            graphtool=graphtool,
             verbose=verbose
         )
 
@@ -160,18 +157,14 @@ class RandomWeightedGraph(WeightedKSP, RandomGraph):
 class RandomLineGraph(LineGraph, RandomGraph):
 
     def __init__(
-        self,
-        cost_instance,
-        hard_constraints,
-        directed=True,
-        graphtool=1,
-        verbose=1
+        self, cost_instance, hard_constraints, directed=True, verbose=1
     ):
+        # initialize corridor to all
+        self.corridor = hard_constraints * 1.1
         super(RandomLineGraph, self).__init__(
             cost_instance,
             hard_constraints,
             directed=directed,
-            graphtool=graphtool,
             verbose=verbose
         )
 

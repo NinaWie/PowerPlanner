@@ -76,7 +76,8 @@ class GeneralGraph():
         :param max_angle: Maximum angle of edges to vec
         """
         vec = dest - start
-        print("SHIFT:", pylon_dist_min, pylon_dist_max, vec, max_angle)
+        if self.verbose:
+            print("SHIFT:", pylon_dist_min, pylon_dist_max, vec, max_angle)
         self.shifts = get_half_donut(
             pylon_dist_min, pylon_dist_max, vec, angle_max=max_angle
         )
@@ -399,20 +400,23 @@ class GeneralGraph():
         self.start_inds = kwargs["start_inds"]
         self.dest_inds = kwargs["dest_inds"]
         self.set_shift(self.start_inds, self.dest_inds, **kwargs)
-        self.set_corridor(
-            np.ones(self.hard_constraints.shape) * 0.5,
-            self.start_inds,
-            self.dest_inds,
-            factor_or_n_edges=1
-        )
-        print("1) Initialize shifts and instance (corridor)")
+        # self.set_corridor(
+        #     np.ones(self.hard_constraints.shape) * 0.5,
+        #     self.start_inds,
+        #     self.dest_inds,
+        #     factor_or_n_edges=1
+        # )
+        if self.verbose:
+            print("1) Initialize shifts and instance (corridor)")
         self.set_edge_costs(**kwargs)
         # add vertices
         self.add_nodes()
-        print("2) Initialize distances to inf and predecessors")
+        if self.verbose:
+            print("2) Initialize distances to inf and predecessors")
         self.add_edges()
-        print("3) Compute source shortest path tree")
-        print("number of vertices and edges:", self.n_nodes, self.n_edges)
+        if self.verbose:
+            print("3) Compute source shortest path tree")
+            print("number of vertices and edges:", self.n_nodes, self.n_edges)
 
         # weighted sum of all costs
         self.sum_costs()
@@ -421,5 +425,6 @@ class GeneralGraph():
         )
         # get actual best path
         path, path_costs, cost_sum = self.get_shortest_path(source_v, target_v)
-        print("4) shortest path", cost_sum)
+        if self.verbose:
+            print("4) shortest path", cost_sum)
         return path, path_costs, cost_sum

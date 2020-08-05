@@ -108,8 +108,7 @@ class DataReader():
         self.general_config = config
         self.config = config.data
         # read csv file with resistances
-        weights = pd.read_csv(os.path.join(base_path, self.config.WEIGHT_CSV))
-        print(weights["weight_1"])
+        weights = pd.read_csv(os.path.join(base_path, self.config.weight_csv))
         self.class_csv = weights.dropna()
         if len(weights) < 1:
             raise ValueError("layer weights csv file empty")
@@ -120,7 +119,7 @@ class DataReader():
 
         # load project region as the main dataset
         with rasterio.open(
-            os.path.join(base_path, self.config.CORR_PATH)
+            os.path.join(base_path, self.config.corr_path)
         ) as dataset:
             # binary mask
             layer = dataset.read()[0]
@@ -146,7 +145,7 @@ class DataReader():
             class_weight = np.unique(
                 class_rows["category_weight_" + str(self.scenario)]
             )
-            assert self.config.ONE_CLASS or len(
+            assert self.config.one_class or len(
                 class_weight
             ) == 1, "multiple weights for single class"
             self.layer_classes.append(c)
@@ -397,7 +396,7 @@ class DataReader():
         hard_constraints = project_region * hard_cons
 
         # Construct instance and edge instance
-        instance = self.get_costs_per_class(oneclass=self.config.ONE_CLASS)
+        instance = self.get_costs_per_class(oneclass=self.config.one_class)
         if "weight_" + str(self.scenario) + "_edge" in self.class_csv.columns:
             print("EDGE COL EXISTS --> constructing edge instance")
             edge_inst = self.get_costs_per_class(
@@ -425,9 +424,9 @@ class DataReader():
 
         # Get start and end point and save in config
         start_inds, self.orig_start = self.get_shape_point(
-            self.config.START_PATH
+            self.config.start_path
         )
-        dest_inds, self.orig_dest = self.get_shape_point(self.config.DEST_PATH)
+        dest_inds, self.orig_dest = self.get_shape_point(self.config.dest_path)
         self.general_config.graph.orig_start = self.orig_start
         self.general_config.graph.orig_dest = self.orig_dest
         self.general_config.graph.dest_inds = dest_inds

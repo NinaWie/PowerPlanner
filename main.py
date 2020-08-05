@@ -38,10 +38,6 @@ SCALE_PARAM = args.scale
 SCENARIO = 1
 INST = args.instance  # "belgium"
 height_resistance_path = None  # "../data/Instance_CH.nosync/dtm_10m.tif"
-# for SCALE_PARAM in [1, 2, 5]:
-#     for INST in ["belgium", "ch", "de"]:
-#         print()
-#         print("-------------- new scnario", SCALE_PARAM, INST, "-------")
 
 # DEFINE CONFIGURATION
 # normal graph pipeline
@@ -53,7 +49,7 @@ PIPELINE = [(1, 0)]
 # PIPELINE = [(5000000, 100), (5000000, 0)]  # auto pipeline
 USE_KSP = 0
 
-GRAPH_TYPE = graphs.ImplicitLG
+GRAPH_TYPE = graphs.RandomWeightedGraph
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, ImplicitLG
 # ImplicitLgKSP, WeightedKSP
 print("graph type:", GRAPH_TYPE)
@@ -109,23 +105,14 @@ else:
             pickle.dump(data_out, outfile)
         print("successfully saved data")
 
-# visualize_corr = 1 - instance_corr
-# visualize_corr[visualize_corr == 1] = np.inf
-# plt.figure(figsize=(8, 5))
-# plt.imshow(np.sum(instance, axis=0) + visualize_corr)
-# plt.colorbar()
-# plt.savefig(f"surface_s100_i100_{INST}_{SCALE_PARAM}.png")
-# plt.imshow(np.mean(edge_cost, axis=0))
-# plt.savefig(f"edgecost_s100_i100_{INST}_{SCALE_PARAM}.png")
 print(cfg.pylon_dist_min, cfg.pylon_dist_max)
-# cfg.PYLON_DIST_MIN = 350 / (10 * SCALE_PARAM)  # RESOLUTION is 50
-# cfg.PYLON_DIST_MAX = 500 / (10 * SCALE_PARAM)
 cfg.angle_weight = 0.1
 cfg.edge_weight = 0.3
 
 # DEFINE GRAPH AND ALGORITHM
 graph = GRAPH_TYPE(
-    instance, instance_corr, edge_instance=edge_cost, verbose=cfg.verbose
+    instance,
+    instance_corr  #, edge_instance=edge_cost, verbose=cfg.verbose
 )
 
 # START PIPELINE

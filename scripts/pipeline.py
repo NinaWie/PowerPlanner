@@ -117,6 +117,7 @@ for (factor, dist) in PIPELINE:
         cfg.MAX_ANGLE,
         max_angle_lg=cfg.MAX_ANGLE_LG
     )
+    # TODO wtf
     corridor = np.ones(inst_corr_curr.shape) * 0.5  # start with all
     graph.set_corridor(
         corridor, start_inds_curr, dest_inds_curr, factor_or_n_edges=1
@@ -156,8 +157,8 @@ for (factor, dist) in PIPELINE:
     if dist > 0:
         # PRINT AND SAVE timing test
         time_test_csv(
-            ID, cfg.CSV_TIMES, SCALE_PARAM, cfg.GTNX, GRAPH_TYPE, graph,
-            path_costs, cost_sum, dist, 0, NOTES
+            ID, cfg.csv_times, SCALE_PARAM, 1, GRAPH_TYPE, graph, path_costs,
+            cost_sum, dist, 0, NOTES
         )
         # Define paths around which to place corridor
         if USE_KSP:

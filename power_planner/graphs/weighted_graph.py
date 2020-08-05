@@ -22,6 +22,8 @@ class WeightedGraph(GeneralGraph):
         self.cost_instance = cost_instance
         self.hard_constraints = hard_constraints
         self.x_len, self.y_len = hard_constraints.shape
+        self.cost_rest = self.cost_instance * (self.hard_constraints >
+                                               0).astype(int)
 
         # initialize graph:
         GeneralGraph.__init__(self, directed=directed, verbose=verbose)
