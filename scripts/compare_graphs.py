@@ -54,8 +54,8 @@ for angle_weight in [0.05, 0.1, 0.3]:
     for g, GRAPH_TYPE in enumerate(
         [graphs.ImplicitLG, graphs.WeightedGraph, graphs.LineGraph]
     ):
-        cfg.EDGE_WEIGHT = 0
-        cfg.ANGLE_WEIGHT = angle_weight
+        cfg.edge_weight = 0
+        cfg.angle_weight = angle_weight
 
         # ID
         graphtype = graph_names[g]
@@ -91,9 +91,9 @@ for angle_weight in [0.05, 0.1, 0.3]:
             ID, INST, SCALE_PARAM * 10, n_pixels, graphtype, graph.n_nodes,
             graph.n_edges, time_pipeline, graph.time_logs["add_nodes"],
             graph.time_logs["add_all_edges"], graph.time_logs["shortest_path"],
-            cfg.ANGLE_WEIGHT, angle_cost, summed_costs, weighted_sum
+            cfg.angle_weight, angle_cost, summed_costs, weighted_sum
         ]
-        with open(cfg.CSV_TIMES, 'a+', newline='') as write_obj:
+        with open(cfg.csv_times, 'a+', newline='') as write_obj:
             # Create a writer object from csv module
             csv_writer = writer(write_obj)
             # Add contents of list as last row in the csv file

@@ -8,9 +8,8 @@ from power_planner.graphs.fast_shortest_path import (
     sp_dag, sp_dag_reversed, topological_sort_jit, del_after_dest, edge_costs,
     average_lcp, sp_bf, efficient_update_sp
 )
-import numpy as np
 import warnings
-import pandas as pd
+import numpy as np
 import time
 import pickle
 from numba.typed import List
@@ -233,6 +232,12 @@ class ImplicitLG():
 
     def add_edges(self, mode="DAG", iters=100, edge_weight=0, **kwargs):
         self.edge_weight = edge_weight
+        shift_norms = np.array([np.linalg.norm(s) for s in self.shifts])
+        if np.any(shift_norms == 1):
+            warnings.warn("Raster approach, EDGE WEIGHT IS SET TO ZERO")
+            self.edge_weight = 0
+
+        shift_norms = [np.linalg.norm(s) for s in self.shifts]
         tic = time.time()
         # precompute edge costs
         if self.edge_weight > 0:
@@ -421,105 +426,6 @@ class ImplicitLG():
         self.sp = path
         self.time_logs["path"] = round(time.time() - tic, 3)
         return self.transform_path(path)
-
-    # ---------------------------------------------------------------------
-    # Compute raw (unnormalized) costs and output csv
-
-    def raw_path_costs(self, path):
-        """
-        Compute raw angles, edge costs, pylon heights and normal costs
-        (without weighting)
-        Arguments:
-            List or array of path coordinates
-        """
-        path_costs = np.array(
-            [self.cost_instance[:, p[0], p[1]] for p in path]
-        )
-        # raw angle costs
-        ang_costs = CostUtils.compute_raw_angles(path)
-        # raw edge costs
-        edge_costs = CostUtils.compute_edge_costs(path, self.edge_inst)
-        # pylon heights
-        try:
-            heights = np.expand_dims(self.heights, 1)
-        except AttributeError:
-            heights = np.zeros((len(edge_costs), 1))
-        # concatenate
-        all_costs = np.concatenate(
-            (
-                np.expand_dims(ang_costs, 1), path_costs,
-                np.expand_dims(edge_costs, 1), heights
-            ), 1
-        )
-        names = self.cost_classes + ["edge_costs", "heigths"]
-        assert all_costs.shape[1] == len(names)
-        return all_costs, names
-
-    def save_path_cost_csv(self, save_path, paths, big_inst=None, **kwargs):
-        """
-        save coordinates in original instance (tifs) without padding etc
-        """
-        # shifts caused by scaling
-        scale = kwargs["scale"]
-        start_shift_x, start_shift_y = (
-            kwargs["orig_start"][0] % scale, kwargs["orig_start"][1] % scale
-        )
-        dest_shift_x, dest_shift_y = (
-            kwargs["orig_dest"][0] % scale, kwargs["orig_dest"][1] % scale
-        )
-        # out_path_list = []
-        for i, path in enumerate(paths):
-            # compute raw costs and column names
-            raw_cost, names = self.raw_path_costs(path)
-            # round raw costs of this particular path
-            raw_costs = np.around(raw_cost, 2)
-            # compute_shift shift
-            path = np.asarray(path)
-            shift_to_orig = (kwargs["orig_start"] /
-                             scale).astype(int) - path[0]
-            print("shift", shift_to_orig)
-            print(
-                "correct start ", kwargs["orig_start"], start_shift_x,
-                start_shift_y
-            )
-            print(
-                "correct dest ", kwargs["orig_dest"], dest_shift_x,
-                dest_shift_y
-            )
-            shifted_path = path + shift_to_orig
-            power_path = shifted_path * scale
-
-            # correct the start and end
-            power_path[0] = power_path[0] + [start_shift_x, start_shift_y]
-            power_path[-1] = power_path[-1] + [dest_shift_x, dest_shift_y]
-
-            if big_inst is not None:
-                new_path = []
-                for k, (i, j) in enumerate(power_path):
-                    # skip start and dest
-                    if k == 0 or k == len(power_path) - 1:
-                        new_path.append([i, j])
-                        continue
-                    check_patch = big_inst[i:i + scale, j:j + scale]
-                    min_x, min_y = np.where(check_patch == np.min(check_patch))
-                    new_path.append([i + min_x[0], j + min_y[0]])
-                    print("prev:", i, j, "new", [i + min_x[0], j + min_y[0]])
-                power_path = np.asarray(new_path)
-
-            # scaled_path = np.asarray(path) * kwargs["scale"]
-            # shift_to_orig = kwargs["orig_start"] - scaled_path[0]
-            # power_path = scaled_path + shift_to_orig
-            # out_path_list.append(shifted_path.tolist())
-
-            coordinates = [kwargs["transform_matrix"] * p for p in power_path]
-
-            all_coords = np.concatenate(
-                (coordinates, power_path, raw_costs), axis=1
-            )
-            df = pd.DataFrame(
-                all_coords, columns=["X", "Y", "X_raw", "Y_raw"] + names
-            )
-            df.to_csv(save_path + "_" + str(i) + ".csv", index=False)
 
     # ----------------------------------------------------------------------
     # Other auxiliary functions

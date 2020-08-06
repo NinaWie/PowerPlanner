@@ -9,7 +9,12 @@ import time
 class WeightedGraph(GeneralGraph):
 
     def __init__(
-        self, cost_instance, hard_constraints, directed=True, verbose=1
+        self,
+        cost_instance,
+        hard_constraints,
+        edge_instance=None,
+        directed=True,
+        verbose=1
     ):
         # assert cost_instance.shape == hard_constraints.shape
         # , "Cost size must be equal to corridor definition size!"
