@@ -9,6 +9,7 @@ import warnings
 # utils imports
 from power_planner.data_reader import DataReader
 from power_planner import graphs
+from power_planner.evaluate_path import save_path_cost_csv
 from power_planner.plotting import (
     plot_path_costs, plot_pipeline_paths, plot_path, plot_k_sp,
     plot_pareto_paths
@@ -154,7 +155,7 @@ for COMP in COMPARISONS:
     )
 
     # -------------  PLOTTING: ----------------------
-    graph.save_path_cost_csv(OUT_PATH, [path], **vars(cfg))
+    save_path_cost_csv(OUT_PATH, [path], instance, **vars(cfg))
 
     # SIMPLE
     plot_path(
