@@ -8,6 +8,7 @@ from csv import writer
 import warnings
 import matplotlib.pyplot as plt
 # utils imports
+from power_planner.utils.utils_ksp import KspUtils
 from power_planner.utils.utils_costs import CostUtils
 from power_planner.evaluate_path import save_path_cost_csv
 from power_planner import graphs
@@ -28,13 +29,26 @@ def convert_instance(instance, instance_corr):
     return tuned_inst, tuned_inst_corr
 
 
-def logging(ID, graph, path, path_costs, cfg, time_pipeline):
+def logging(ID, graph, path, path_costs, cfg, time_pipeline, comp_path=None):
+    if comp_path is None:
+        max_eucl = 0
+        mean_eucl = 0
+    else:
+        # compute path distances and multiply with resolution to get meters
+        max_eucl = (
+            KspUtils.path_distance(path, comp_path, mode="eucl_max") *
+            cfg.scale * 10
+        )
+        mean_eucl = (
+            KspUtils.path_distance(path, comp_path, mode="eucl_mean") *
+            cfg.scale * 10
+        )
     # SAVE timing test
-    angle_cost = round(np.sum(CostUtils.compute_angle_costs(path)), 3)
+    angle_cost = round(np.sum(CostUtils.compute_angle_costs(path)), 2)
     n_categories = len(cfg.class_weights)
     path_costs = np.asarray(path_costs)
-    summed_costs = np.around(np.sum(path_costs[:, -n_categories:], axis=0), 3)
-    weighted_sum = round(np.dot(summed_costs, cfg.class_weights), 3)
+    summed_costs = np.around(np.sum(path_costs[:, -n_categories:], axis=0), 2)
+    weighted_sum = round(np.dot(summed_costs, cfg.class_weights), 2)
     n_pixels = np.sum(instance_corr > 0)
 
     # csv_header = ["ID", "instance", "resolution", "graph", "number pixels"
@@ -45,7 +59,8 @@ def logging(ID, graph, path, path_costs, cfg, time_pipeline):
         ID, INST, SCALE_PARAM * 10, n_pixels, graphtype, graph.n_nodes,
         graph.n_edges, time_pipeline, graph.time_logs["add_nodes"],
         graph.time_logs["add_all_edges"], graph.time_logs["shortest_path"],
-        cfg.angle_weight, angle_cost, summed_costs, weighted_sum
+        cfg.angle_weight, angle_cost, summed_costs, weighted_sum, mean_eucl,
+        max_eucl
     ]
     with open(cfg.csv_times, 'a+', newline='') as write_obj:
         # Create a writer object from csv module
@@ -95,17 +110,16 @@ OUT_PATH_orig = OUT_PATH
 
 orig_pylon_dist_min = cfg.pylon_dist_min
 orig_pylon_dist_max = cfg.pylon_dist_max
-print(config)
 
 graph_names = ["Implicit line graph", "Normal graph"]
-for a, angle_weight in enumerate([0.05, 0.1, 0.3]):
-    for g, GRAPH_TYPE in enumerate([graphs.ImplicitLG, graphs.WeightedGraph]):
+for g, GRAPH_TYPE in enumerate([graphs.ImplicitLG, graphs.WeightedGraph]):
+    for a, angle_weight in enumerate([0.05, 0.1, 0.3]):
         cfg.edge_weight = 0
         cfg.angle_weight = angle_weight
 
         # ID
         graphtype = graph_names[g]
-        ID = f"_{graph_names[g]}_{SCALE_PARAM}_{INST}_{angle_weight*100}"
+        ID = f"_{graph_names[g]}_{SCALE_PARAM}_{INST}_{int(angle_weight*100)}"
         OUT_PATH = OUT_PATH_orig + ID
 
         # if cable is not forbidden, we need to design helper corridor and inst
@@ -165,7 +179,15 @@ for a, angle_weight in enumerate([0.05, 0.1, 0.3]):
         print("FINISHED ")
         print("----------------------------")
 
-        logging(ID, graph_gt, path_gt, path_costs_gt, cfg, time_pipeline)
+        logging(
+            ID,
+            graph_gt,
+            path_gt,
+            path_costs_gt,
+            cfg,
+            time_pipeline,
+            comp_path=path_bl
+        )
 
         save_path_cost_csv(OUT_PATH, [path_gt], instance, **vars(cfg))
 
@@ -177,6 +199,6 @@ for a, angle_weight in enumerate([0.05, 0.1, 0.3]):
         plt.plot(path_gt[:, 1], path_gt[:, 0])
         plt.savefig(OUT_PATH + "_paths.png")
 
-    if g == 1 and a == 0:
-        # angle weight only needs to be varied for the implicit lg
-        break
+        if g == 1 and a == 0:
+            # angle weight only needs to be varied for the implicit lg
+            break

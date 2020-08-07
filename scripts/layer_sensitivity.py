@@ -9,6 +9,7 @@ import pandas as pd
 # utils imports
 from power_planner.data_reader import DataReader
 from power_planner import graphs
+from power_planner.evaluate_path import save_path_cost_csv
 
 from power_planner.utils.utils import (time_test_csv, load_config)
 
@@ -49,8 +50,8 @@ config = load_config(
 OUT_PATH_orig = OUT_PATH
 
 # TODO: select appropriate parameters for sensitivity analysis:
-config.graph.ANGLE_WEIGH = 0.3
-config.graph.EDGE_WEIGHT = 0.5
+config.graph.angle_weight = 0.3
+config.graph.edge_weight = 0.5
 
 change_dict = {
     "I_1422_Wald_ohne_Bedeutung": [2, 0, 1, 3],
@@ -106,10 +107,10 @@ for layer, new_weights in change_dict.items():
         print("----------------------------")
 
         # SAVE timing test
-        time_test_csv(
-            ID, cfg.csv_times, SCALE_PARAM * 10, 1, "impl_lg_" + INST, graph,
-            1, cost_sum, 1, time_pipeline, 1
-        )
+        # time_test_csv(
+        #     ID, cfg.csv_times, SCALE_PARAM * 10, 1, "impl_lg_" + INST, graph,
+        #     1, cost_sum, 1, time_pipeline, 1
+        # )
 
         # -------------  PLOTTING: ----------------------
-        graph.save_path_cost_csv(OUT_PATH, [path], **vars(cfg))
+        save_path_cost_csv(OUT_PATH, [path], instance, **vars(cfg))

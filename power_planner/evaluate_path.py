@@ -66,8 +66,8 @@ def save_path_cost_csv(
     # out_path_list = []
     for i, path in enumerate(paths):
         # compute raw costs and column names
-        names = ["angle costs"
-                 ] + list(class_weights) + ["edge costs", "heights"]
+        names = ["angle costs"] + list(kwargs["layer_classes"]
+                                       ) + ["edge costs", "heights"]
         raw_cost = raw_path_costs(
             cost_instance, path, edge_instance=edge_instance, heights=heights
         )
