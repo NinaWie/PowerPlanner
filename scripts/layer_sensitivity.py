@@ -68,49 +68,55 @@ change_dict = {
     "I_2711_Bodendenkmaeler": [0, 2, 3]
 }
 
-for layer, new_weights in change_dict.items():
+layer_list = list(change_dict.keys())
+layer_combs = []
+for i in range(len(layer_list)):
+    for j in range(i + 1, len(layer_list)):
+        layer_combs.append((layer_list[i], layer_list[j]))
+        # print(layer_list[i], layer_list[j])
+
+# for layer, new_weights in change_dict.items():
+for (layer1, layer2) in layer_combs:
     weight_csv = pd.read_csv(
         os.path.join(PATH_FILES, config.data.weight_csv[:-4] + "_orig.csv")
     ).set_index("Layer Name")
-    for w in new_weights:
-        weight_csv.loc[layer, "weight_1"] = w
-        weight_csv.to_csv(os.path.join(PATH_FILES, config.data.weight_csv))
+    # for w in new_weights:
+    weight_csv.loc[layer1, "weight_1"] = 0
+    weight_csv.loc[layer2, "weight_1"] = 0
+    weight_csv.to_csv(os.path.join(PATH_FILES, config.data.weight_csv))
 
-        # CONSTRUCT DATA
-        data = DataReader(PATH_FILES, SCENARIO, SCALE_PARAM, config)
-        instance, edge_cost, instance_corr, config = data.get_data()
-        cfg = config.graph
-        start_inds = cfg.start_inds
-        dest_inds = cfg.dest_inds
+    # CONSTRUCT DATA
+    data = DataReader(PATH_FILES, SCENARIO, SCALE_PARAM, config)
+    instance, edge_cost, instance_corr, config = data.get_data()
+    cfg = config.graph
+    start_inds = cfg.start_inds
+    dest_inds = cfg.dest_inds
 
-        # ID
-        if layer == "I_1422_Wald_ohne_Bedeutung" and w == 2:
-            ID = "baseline"
-        else:
-            ID = f"_{layer}_{w}"
-        OUT_PATH = OUT_PATH_orig + ID
+    # ID
+    # if layer == "I_1422_Wald_ohne_Bedeutung" and w == 2:
+    #     ID = "baseline"
+    # else:
+    ID = f"-{layer1}-{layer2}"
+    OUT_PATH = OUT_PATH_orig + ID
 
-        # DEFINE GRAPH AND ALGORITHM
-        graph = GRAPH_TYPE(
-            instance,
-            instance_corr,
-            edge_instance=edge_cost,
-            verbose=cfg.verbose
-        )
-        tic = time.time()
+    # DEFINE GRAPH AND ALGORITHM
+    graph = GRAPH_TYPE(
+        instance, instance_corr, edge_instance=edge_cost, verbose=cfg.verbose
+    )
+    tic = time.time()
 
-        # PROCESS
-        path, path_costs, cost_sum = graph.single_sp(**vars(cfg))
+    # PROCESS
+    path, path_costs, cost_sum = graph.single_sp(**vars(cfg))
 
-        time_pipeline = round(time.time() - tic, 3)
-        print("FINISHED :", time_pipeline)
-        print("----------------------------")
+    time_pipeline = round(time.time() - tic, 3)
+    print("FINISHED :", time_pipeline)
+    print("----------------------------")
 
-        # SAVE timing test
-        # time_test_csv(
-        #     ID, cfg.csv_times, SCALE_PARAM * 10, 1, "impl_lg_" + INST, graph,
-        #     1, cost_sum, 1, time_pipeline, 1
-        # )
+    # SAVE timing test
+    # time_test_csv(
+    #     ID, cfg.csv_times, SCALE_PARAM * 10, 1, "impl_lg_" + INST, graph,
+    #     1, cost_sum, 1, time_pipeline, 1
+    # )
 
-        # -------------  PLOTTING: ----------------------
-        save_path_cost_csv(OUT_PATH, [path], instance, **vars(cfg))
+    # -------------  PLOTTING: ----------------------
+    save_path_cost_csv(OUT_PATH, [path], instance, **vars(cfg))
