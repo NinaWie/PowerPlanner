@@ -196,16 +196,16 @@ for PIPE, random in zip(PIPELINES, randomness):
                     **vars(cfg)
                 )
 
-            if dist > 0:
-                corridor = get_distance_surface(
-                    graph.hard_constraints.shape, [path_wg],
-                    mode="dilation",
-                    n_dilate=dist
-                )
-            else:
-                break
-            graph.remove_vertices(corridor)
             edge_numbers.append(graph.n_edges)
+
+            if dist == 0:
+                break
+            corridor = get_distance_surface(
+                graph.hard_constraints.shape, [path_wg],
+                mode="dilation",
+                n_dilate=dist
+            )
+            graph.remove_vertices(corridor)
             # plt.imshow(graph.corridor)
             # plt.colorbar()
             # plt.show()
@@ -223,12 +223,12 @@ for PIPE, random in zip(PIPELINES, randomness):
         # )
 
     LEN_PIPE = len(PIPE)
-    ID = f"{INST[:2].upper()} {PIPE}"
+    ID = str(PIPE)  # f"{INST[:2].upper()} {PIPE}"
     # f"random_results_{MAX_EDGES}_{LEN_PIPE}_{D1}_{D2}.dat"
     with open(os.path.join(OUT_DIR, ID), "wb") as outfile:
         pickle.dump((output, max_nr_edges, times_pipeline, correct), outfile)
 
     logging(
-        os.path.join(OUT_DIR, str(PIPE)), os.path.join(OUT_DIR, "random_results.csv"),
+        os.path.join(OUT_DIR, ID), os.path.join(OUT_DIR, "random_results.csv"),
         ID
     )
