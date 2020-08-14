@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
+import os
+import matplotlib.pyplot as plt
 from power_planner.utils.utils_costs import CostUtils
+from power_planner.utils.utils import bresenham_line
 
 # ---------------------------------------------------------------------
 # Compute raw (unnormalized) costs and output csv
@@ -119,3 +122,61 @@ def save_path_cost_csv(
             df.to_csv(save_path + ".csv", index=False)
         else:
             df.to_csv(save_path + "_" + str(i) + ".csv", index=False)
+
+
+def cells_crossed_plot(
+    folders, disp_inst, out_path=None, buffer=4, line_buffer=2
+):
+    """
+    Plotting function to visualize how often each cell is crossed
+    Arguments:
+        folders: List of directory paths that contain the paths to analyze
+        disp_inst: 2D array, instance to display and plot the paths on
+        out_path: saving fp for plot
+    """
+    # e.g. path_dir ["sensitivity_tuples", "weight_sensitivity_0905",
+    # "optimal_paths", "weight_sensitivity_0905", "layer_sensitivity"]
+    path_list = []
+    for path in folders:
+        for fn in os.listdir(
+            os.path.join("../../outputs/de_presentation", path)
+        ):
+            if fn[-3:] == "csv":
+                path_table = pd.read_csv(
+                    os.path.join("../../outputs/de_presentation", path, fn)
+                )
+                path_list.append((np.asarray(path_table[["X_raw", "Y_raw"]])))
+
+    x_len, y_len = disp_inst.shape
+    mark_array = np.zeros((y_len, x_len))
+    for path in path_list:  # path_tuple_list
+        path = np.asarray(path).astype(int)
+        for p in range(len(path)):
+            (i, j) = path[p]
+            mark_array[i:i + buffer + 1, j:j + buffer +
+                       1] = mark_array[i:i + buffer + 1, j:j + buffer + 1] + 1
+            if p < len(path) - 1:
+                (k, l) = path[p + 1]
+                line_points = bresenham_line(i, j, k, l)
+                for (x, y) in line_points[1:-1]:
+                    mark_array[x:x + line_buffer, y:y +
+                               line_buffer] = mark_array[x:x +
+                                                         line_buffer, y:y +
+                                                         line_buffer] + 1
+
+    grey_disp_inst = np.tile(np.expand_dims(disp_inst, 2), 3)
+    x_nonzero, y_nonzero = np.where(mark_array > 0)
+    max_val = np.max(mark_array)
+    for (x, y) in zip(x_nonzero, y_nonzero):
+        normed = mark_array[x, y] / (max_val - 200)
+        grey_disp_inst[y, x] = [
+            np.clip(1 - normed, 0, 1),
+            np.clip(normed + 0.3, 0, 1), 0.2
+        ]
+
+    plt.figure(figsize=(20, 20))
+    plt.imshow(grey_disp_inst)
+    if out_path is not None:
+        plt.savefig(out_path + ".png")
+    else:
+        plt.show()

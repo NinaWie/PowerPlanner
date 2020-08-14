@@ -44,6 +44,7 @@ class WeightedGraph(GeneralGraph):
         )
         self.pos2node *= (self.hard_constraints > 0).astype(int)
         self.pos2node -= 1
+        self.initial_pos2node = self.pos2node.copy()
         if self.verbose:
             print("initialized weighted graph pos2node")
 
@@ -73,6 +74,7 @@ class WeightedGraph(GeneralGraph):
         # inverted_corridor = np.absolute(1 - corridor).astype(bool)
         inverted_corridor = (dist_surface == 0).astype(bool)
         # set all which are not in the corridor to -1
+        self.pos2node = self.initial_pos2node.copy()
         self.pos2node[inverted_corridor] = -1
         # self.pos2node[dest_inds[0], dest_inds[1]] = np.max(self.pos2node) + 1
         # self.pos2node[start_inds[0], start_inds[1]] = np.max(self.pos2node)+1

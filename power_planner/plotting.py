@@ -160,6 +160,8 @@ def plot_k_sp(ksp, inst, out_path=None):
     # get relevant information
     costs = [k[2] for k in ksp]
     paths = [k[0] for k in ksp]
+    # to plot the best one at last
+    paths.reverse()
 
     # plot main image (cost surface)
     plt.figure(figsize=(10, 20))
