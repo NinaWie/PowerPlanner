@@ -128,7 +128,7 @@ D2 = 50
 random = True
 
 RAND_PIPES = []
-for MAX_EDGES in [500000, 1000000, 5000000]:
+for MAX_EDGES in [4000000, 5000000, 6000000]:
     for D1 in [100, 150, 200]:
         for D2 in [0, 50, 75]:
             RAND_PIPES.append(
@@ -136,9 +136,9 @@ for MAX_EDGES in [500000, 1000000, 5000000]:
             )
 
 NORM_PIPES = []
-for sample_factor in [4, 5]:
-    for D1 in [50, 100, 150]:
-        for D2 in [0, 25, 50, 75]:
+for sample_factor in [3, 4]:
+    for D1 in [40, 60, 80]:
+        for D2 in [0, 15, 30, 40]:
             if D2 == 0:
                 second_factor = 1
             else:
@@ -183,7 +183,6 @@ for PIPE, random in zip(PIPELINES, randomness):
         tic = time.time()
 
         for factor, dist in PIPE:
-            print("-----------", factor, dist)
             graph.set_corridor(
                 corridor,
                 cfg.start_inds,
@@ -214,7 +213,11 @@ for PIPE, random in zip(PIPELINES, randomness):
 
         times_pipeline.append(time_pipeline)
         max_nr_edges.append(np.max(edge_numbers))
-        correct.append(np.all(np.array(path_wg) == np.asarray(path_gt)))
+        if len(path_wg) == len(path_gt):
+            correct.append(np.all(np.array(path_wg) == np.asarray(path_gt)))
+        else:
+            correct.append(False)
+        print("-----------", factor, dist, "correct:", correct)
         output.append([path_wg, path_costs_wg, cost_sum_wg])
 
         # print(
