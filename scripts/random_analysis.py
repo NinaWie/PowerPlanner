@@ -154,6 +154,7 @@ randomness = [0 for _ in range(len(NORM_PIPES))
 # PIPE = [(MAX_EDGES, D1), (MAX_EDGES, D2), (MAX_EDGES, 0)]
 for PIPE, random in zip(PIPELINES, randomness):
     print(" ------------------- NEW PIPELINE -------------------")
+    ID = f"{INST[:2].upper()}_{PIPE}"
     if os.path.exists(os.path.join(OUT_DIR, ID)):
         print("already there")
         continue
@@ -229,7 +230,7 @@ for PIPE, random in zip(PIPELINES, randomness):
         # )
 
     LEN_PIPE = len(PIPE)
-    ID = str(PIPE)  # f"{INST[:2].upper()} {PIPE}"
+    # ID = str(PIPE)  # f"{INST[:2].upper()} {PIPE}"
     # f"random_results_{MAX_EDGES}_{LEN_PIPE}_{D1}_{D2}.dat"
     with open(os.path.join(OUT_DIR, ID), "wb") as outfile:
         pickle.dump((output, max_nr_edges, times_pipeline, correct), outfile)
