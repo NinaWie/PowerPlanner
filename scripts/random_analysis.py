@@ -154,6 +154,9 @@ randomness = [0 for _ in range(len(NORM_PIPES))
 # PIPE = [(MAX_EDGES, D1), (MAX_EDGES, D2), (MAX_EDGES, 0)]
 for PIPE, random in zip(PIPELINES, randomness):
     print(" ------------------- NEW PIPELINE -------------------")
+    if os.path.exists(os.path.join(OUT_DIR, ID)):
+        print("already there")
+        continue
     # PIPE = [(4,100), (2,25), (1,0)] did not work, and for 50 instead of 50 there were nans
     print(PIPE)
     max_nr_edges = []
