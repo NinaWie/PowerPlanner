@@ -128,7 +128,7 @@ D2 = 50
 random = True
 
 RAND_PIPES = []
-for MAX_EDGES in [1000000, 2000000, 4000000, 5000000]:
+for MAX_EDGES in [500000, 750000, 1000000, 2500000]:
     for D1 in [100, 150, 200]:
         for D2 in [0, 50, 75]:
             RAND_PIPES.append(
@@ -136,13 +136,13 @@ for MAX_EDGES in [1000000, 2000000, 4000000, 5000000]:
             )
 
 NORM_PIPES = []
-for sample_factor in [3, 4]:
-    for D1 in [30, 40, 50]:
-        for D2 in [0, 10, 20]:
+for sample_factor in [5, 6]:
+    for D1 in [40, 50, 70]:
+        for D2 in [0, 20, 30]:
             if D2 == 0:
                 second_factor = 1
             else:
-                second_factor = 2
+                second_factor = 3
             NORM_PIPES.append(
                 [(sample_factor, D1), (second_factor, D2), (1, 0)]
             )
@@ -205,9 +205,9 @@ for PIPE, random in zip(PIPELINES, randomness):
                 n_dilate=dist
             )
             graph.remove_vertices(corridor)
-            plt.imshow((corridor > 0).astype(int) * graph.instance)
-            plt.colorbar()
-            plt.savefig("rand_1.png")
+            # plt.imshow((corridor > 0).astype(int) * graph.instance)
+            # plt.colorbar()
+            # plt.savefig("rand_1.png")
 
         time_pipeline = time.time() - tic
 
