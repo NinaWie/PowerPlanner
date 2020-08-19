@@ -136,9 +136,9 @@ for MAX_EDGES in [500000, 750000, 1000000, 2500000]:
             )
 
 NORM_PIPES = []
-for sample_factor in [5, 6]:
-    for D1 in [40, 50, 70]:
-        for D2 in [0, 20, 30]:
+for sample_factor in [3, 4]:
+    for D1 in [40, 70]:
+        for D2 in [20]:
             if D2 == 0:
                 second_factor = 1
             else:
@@ -147,9 +147,9 @@ for sample_factor in [5, 6]:
                 [(sample_factor, D1), (second_factor, D2), (1, 0)]
             )
 
-PIPELINES = NORM_PIPES + RAND_PIPES
-randomness = [0 for _ in range(len(NORM_PIPES))
-              ] + [1 for _ in range(len(RAND_PIPES))]
+PIPELINES = RAND_PIPES + NORM_PIPES
+randomness = [1 for _ in range(len(RAND_PIPES))
+              ] + [0 for _ in range(len(NORM_PIPES))]
 
 # PIPE = [(MAX_EDGES, D1), (MAX_EDGES, D2), (MAX_EDGES, 0)]
 for PIPE, random in zip(PIPELINES, randomness):
@@ -166,7 +166,7 @@ for PIPE, random in zip(PIPELINES, randomness):
     output = []
 
     if random:
-        nr_iters = 100
+        nr_iters = 50
         graphclass = graphs.RandomWeightedGraph
     else:
         nr_iters = 1
