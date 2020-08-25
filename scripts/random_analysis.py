@@ -128,7 +128,7 @@ D2 = 50
 random = True
 
 RAND_PIPES = []
-for MAX_EDGES in [500000, 750000, 1000000, 2500000]:
+for MAX_EDGES in [2000000, 2800000, 3000000, 3300000]:
     for D1 in [100, 150, 200]:
         for D2 in [0, 50, 75]:
             RAND_PIPES.append(
