@@ -128,12 +128,11 @@ D2 = 50
 random = True
 
 RAND_PIPES = []
-for MAX_EDGES in [2000000, 2800000, 3000000, 3300000]:
-    for D1 in [100, 150, 200]:
-        for D2 in [0, 50, 75]:
-            RAND_PIPES.append(
-                [(MAX_EDGES, D1), (MAX_EDGES, D2), (MAX_EDGES, 0)]
-            )
+for f1 in [0.85, 0.9, 0.95]:
+    for f2 in [0.55, 0.65, 0.75]:
+        for D1 in [40, 60, 80]:
+            for D2 in [0, 20, 30]:
+                RAND_PIPES.append([(f1, D1), (f2, D2), (0, 0)])
 
 NORM_PIPES = []
 for sample_factor in [3, 4]:
@@ -173,7 +172,7 @@ for PIPE, random in zip(PIPELINES, randomness):
         graphclass = graphs.WeightedGraph
 
     # COMPUTE STATISTICS
-    for _ in range(nr_iters):
+    for iteri in range(nr_iters):
 
         graph = graphclass(belgium_inst, belgium_inst_corr, verbose=False)
         # set shift necessary in case of random graph automatic
@@ -200,6 +199,8 @@ for PIPE, random in zip(PIPELINES, randomness):
                 )
 
             edge_numbers.append(graph.n_edges)
+            if iteri == 0:
+                print(graph.n_edges)
 
             if dist == 0:
                 break
