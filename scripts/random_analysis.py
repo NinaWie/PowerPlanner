@@ -124,7 +124,7 @@ time_gt = time.time() - tic
 MAX_EDGES = 500000
 D1 = 100
 D2 = 50
-
+USE_PRIOR = True
 random = True
 
 RAND_PIPES = []
@@ -179,7 +179,14 @@ for PIPE, random in zip(PIPELINES, randomness):
         # probability estimation by edge bound
         graph.set_shift(cfg.start_inds, cfg.dest_inds, **vars(cfg))
 
-        corridor = np.ones(belgium_inst_corr.shape) * 0.5
+        if random and USE_PRIOR:
+            corridor = get_distance_surface(
+                belgium_inst_corr.shape, [[cfg.start_inds, cfg.dest_inds]],
+                mode="dilation",
+                n_dilate=300
+            )
+        else:
+            corridor = np.ones(belgium_inst_corr.shape) * 0.5
 
         edge_numbers = list()
 
@@ -190,7 +197,8 @@ for PIPE, random in zip(PIPELINES, randomness):
                 corridor,
                 cfg.start_inds,
                 cfg.dest_inds,
-                factor_or_n_edges=factor
+                factor_or_n_edges=factor,
+                mode="squared"
             )
             path_wg = []
             while len(path_wg) == 0:
@@ -222,7 +230,7 @@ for PIPE, random in zip(PIPELINES, randomness):
             correct.append(np.all(np.array(path_wg) == np.asarray(path_gt)))
         else:
             correct.append(False)
-        print("-----------", factor, dist, "correct:", correct)
+
         output.append([path_wg, path_costs_wg, cost_sum_wg])
 
         # print(
@@ -237,6 +245,6 @@ for PIPE, random in zip(PIPELINES, randomness):
         pickle.dump((output, max_nr_edges, times_pipeline, correct), outfile)
 
     logging(
-        os.path.join(OUT_DIR, ID), os.path.join(OUT_DIR, "random_results.csv"),
-        ID
+        os.path.join(OUT_DIR, ID),
+        os.path.join(OUT_DIR, "random_results_prior.csv"), ID
     )
