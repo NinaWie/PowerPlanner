@@ -62,18 +62,22 @@ class KSP:
         v_shortest = np.argsort(min_dists_2d.flatten())
         return min_dists_2d, v_shortest, min_shifts_2d
 
-    def laplace(self, k, radius=20, cost_add=0.01):
+    def laplace(self, k, thresh=20, cost_add=0.01, metric="eucl_max"):
         """
         Fast KSP method as tradeoff between diversity and cost
         (add additional cost to the paths found so far)
         Arguments:
-            self.graph.start_inds, self.graph.dest_inds, k: see other ksp methods
+            self.graph.start_inds, self.graph.dest_inds, k: see other methods
             radius: distance from the previous paths in which penalty is added
             cost_add: cost_add of 0.05 means that 5% of the best path costs is
                 the maximum costs that are added
         Returns:
             List of ksp with costs
         """
+        if metric != "eucl_max":
+            raise NotImplementedError(
+                "penalizing only possible with Yau-Hausdorff distance so far"
+            )
         tic = time.time()
         best_paths = [self.graph.best_path]
         (min_node_dists, _, min_shift_dists) = self.compute_min_node_dists()
@@ -91,7 +95,7 @@ class KSP:
                 min_node_dists.shape,
                 best_paths,
                 mode="dilation",
-                n_dilate=radius
+                n_dilate=thresh
             )
             corridor = corridor / np.max(corridor)
             min_node_dists = min_node_dists + corridor * factor
@@ -131,7 +135,7 @@ class KSP:
         max_costs = best_cost * cost_thresh - correction
         return max_costs
 
-    def dispersion_ksp(self, k, cost_thresh, dist_mode="jaccard"):
+    def dispersion_ksp(self, k, thresh, metric="jaccard"):
         """
         P-dispersion based algorithm to compute most diverse paths
         Arguments:
@@ -143,7 +147,7 @@ class KSP:
          min_shift_dists) = self.compute_min_node_dists()
         sorted_dists = min_node_dists.flatten()[v_shortest]
         _, _, best_cost = self.graph.transform_path(self.graph.best_path)
-        max_cost = best_cost * cost_thresh
+        max_cost = best_cost * thresh
         _, arr_len = min_node_dists.shape
         collected_path = []
         for j in range(len(v_shortest)):
@@ -165,7 +169,7 @@ class KSP:
             )
             collected_path.append(vertices_path)
 
-        dists = KspUtils.pairwise_dists(collected_path, mode=dist_mode)
+        dists = KspUtils.pairwise_dists(collected_path, mode=metric)
 
         # find the two which are most diverse (following 2-approx)
         max_dist_pair = np.argmax(dists)
@@ -183,25 +187,26 @@ class KSP:
         # transform path for output
         return [self.graph.transform_path(collected_path[p]) for p in div_ksp]
 
-    def most_diverse_jaccard(self, k, cost_thresh):
+    def most_diverse_jaccard(self, k, thresh):
         """
         See dispersion_ksp --> based on Jaccard metric
         """
-        return self.graph.dispersion_ksp(k, cost_thresh, dist_mode="jaccard")
+        return self.graph.dispersion_ksp(k, thresh, dist_mode="jaccard")
 
-    def most_diverse_eucl_max(self, k, cost_thresh):
+    def most_diverse_eucl_max(self, k, thresh):
         """
         See dispersion_ksp --> based on Yen-Hausdorff distance
         """
-        return self.graph.dispersion_ksp(k, cost_thresh, dist_mode="eucl_max")
+        return self.graph.dispersion_ksp(k, thresh, dist_mode="eucl_max")
 
-    def max_vertex_ksp(self, k, min_dist=8):
+    def find_ksp(self, k, thresh, metric="eucl_max"):
         """
         K shortest path with greedily adding the next shortest vertex
         with sufficient eucledian distance from the previous paths
 
         Arguments:
-            self.graph.start_inds, self.graph.dest_inds: vertices --> list with two entries
+            self.graph.start_inds, self.graph.dest_inds: vertices
+            --> list with two entries
             k: int: number of paths to output
             min_dist: eucledian distance in pixels which is the minimum max
                 dist of the next path to add
@@ -225,45 +230,60 @@ class KSP:
             # counter large enough --> expand
             (x2, x3) = v_shortest[j] // arr_len, v_shortest[j] % arr_len
 
-            # compute eucledian distances
-            eucl_dist = [
-                np.linalg.norm(np.array([x2, x3]) - tup) for tup in tup_path
-            ]
-            if np.min(eucl_dist) > min_dist:
-                expanded += 1
+            if "max" in metric:
+                # compute eucledian distances
+                eucl_dist = [
+                    np.linalg.norm(np.array([x2, x3]) - tup)
+                    for tup in tup_path
+                ]
+                # don't need to expand the path directly, only if selected
+                if np.min(eucl_dist) > thresh:
+                    x1 = min_shift_dists[x2, x3]
+                    vertices_path = self.graph._combined_paths(
+                        self.graph.start_inds, self.graph.dest_inds, x1,
+                        [x2, x3]
+                    )
+                    for v in vertices_path:
+                        v_in = [np.all(v == elem) for elem in tup_path]
+                        if not np.any(v_in):
+                            tup_path.append(v)
+                    expanded += 1
+            else:
                 x1 = min_shift_dists[x2, x3]
-                # if self.graph.dists_ba[x1, x2, x3] == 0:
-                # print("inc edge to self.graph.dest_inds")
-                # = 0 for inc edges of self.graph.dest_inds_inds (init of dists_ba)
-                #  continue
                 vertices_path = self.graph._combined_paths(
                     self.graph.start_inds, self.graph.dest_inds, x1, [x2, x3]
                 )
+                eucl_dist = [
+                    KspUtils.path_distance(
+                        prev_path, vertices_path, mode=metric
+                    ) for prev_path in best_paths
+                ]
+                expanded += 1
+            if np.min(eucl_dist) > thresh:
                 # assert np.any([np.array([x2,x3])==v for v in vertices_path])
                 best_paths.append(vertices_path)
-                for v in vertices_path:
-                    v_in = [np.all(v == elem) for elem in tup_path]
-                    if not np.any(v_in):
-                        tup_path.append(v)
 
                 if len(best_paths) >= k:
                     print(j, "expanded", expanded)
                     break
         self.graph.time_logs["ksp"] = round(time.time() - tic, 3)
         if self.graph.verbose:
-            print("max vertex time:", self.graph.time_logs["ksp"])
+            print("find ksp time:", self.graph.time_logs["ksp"])
         return [self.graph.transform_path(path) for path in best_paths]
 
-    def find_ksp(self, k, overlap=0.5):
+    def min_set_intersection(self, k, thresh=0.5, metric=None):
         """
         Greedy Find KSP algorithm
 
         Arguments:
-            self.graph.start_inds, self.graph.dest_inds: vertices --> list with two entries
+            self.graph.start_inds, self.graph.dest_inds: vertices -->
+            list with two entries
             k: int: number of paths to output
             overlap: ratio of vertices that are allowed to be contained in the
                 previously computed SPs
         """
+        if metric is not None:
+            raise NotImplementedError("no metrics implemented for max set alg")
         tic = time.time()
 
         best_paths = [self.graph.best_path]
@@ -295,7 +315,7 @@ class KSP:
             # TODO: similarities
             already = np.array([tuple(u) in sp_set for u in vertices_path])
             # if similarity < threshold, add
-            if np.sum(already) < len(already) * overlap:
+            if np.sum(already) < len(already) * thresh:
                 best_paths.append(vertices_path)
                 tup_path = [tuple(p) for p in vertices_path]
                 sp_set.update(tup_path)

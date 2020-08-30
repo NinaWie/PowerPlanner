@@ -87,6 +87,7 @@ class ImplicitLG():
         shift_angles = [angle_360(s, vec) for s in shifts]
         # sort the shifts
         self.shifts = np.asarray(shifts)[np.argsort(shift_angles)]
+        self.shift_tuples = self.shifts
 
         # construct bresenham lines
         shift_lines = List()

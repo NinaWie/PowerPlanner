@@ -79,12 +79,12 @@ def save_path_cost_csv(
         # compute_shift shift
         path = np.asarray(path)
         shift_to_orig = (kwargs["orig_start"] / scale).astype(int) - path[0]
-        print("shift", shift_to_orig)
-        print(
-            "correct start ", kwargs["orig_start"], start_shift_x,
-            start_shift_y
-        )
-        print("correct dest ", kwargs["orig_dest"], dest_shift_x, dest_shift_y)
+        # print("shift", shift_to_orig)
+        # print(
+        #     "correct start ", kwargs["orig_start"], start_shift_x,
+        #     start_shift_y
+        # )
+        # print("correct dest ", kwargs["orig_dest"], dest_shift_x, dest_shift_y)
         shifted_path = path + shift_to_orig
         power_path = shifted_path * scale
 
@@ -102,7 +102,7 @@ def save_path_cost_csv(
                 check_patch = big_inst[i:i + scale, j:j + scale]
                 min_x, min_y = np.where(check_patch == np.min(check_patch))
                 new_path.append([i + min_x[0], j + min_y[0]])
-                print("prev:", i, j, "new", [i + min_x[0], j + min_y[0]])
+                # print("prev:", i, j, "new", [i + min_x[0], j + min_y[0]])
             power_path = np.asarray(new_path)
 
         # scaled_path = np.asarray(path) * kwargs["scale"]
