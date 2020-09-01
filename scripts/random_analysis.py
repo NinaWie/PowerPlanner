@@ -124,7 +124,7 @@ time_gt = time.time() - tic
 USE_PRIOR = False
 
 # PIPE = [(MAX_EDGES, D1), (MAX_EDGES, D2), (MAX_EDGES, 0)]
-PIPELINES = [[1]]
+PIPELINES = []
 for factor1 in [2, 3, 4, 5]:
     for factor2 in [1, 2]:
         if factor1 <= factor2:
@@ -138,15 +138,24 @@ print("PIPELINES:", PIPELINES)
 useprior_meaning = [
     ["simple downsampling", "watershed"], ["no prior", "prior"]
 ]
+edge_remain_dict = {
+    1: [1],
+    2: [0.35, 0.45, 0.5, 0.6],
+    3: [0.16, 0.19],
+    4: [0.1],
+    5: [0.05]
+}
 
-for EDGE_REMAIN in [0.2, 0.4]:
-    max_remaining_edges = edges_gt * EDGE_REMAIN
-    for PIPE in PIPELINES:
+for PIPE in PIPELINES:
+    for EDGE_REMAIN in edge_remain_dict[PIPE[0]]:
+        max_remaining_edges = edges_gt * EDGE_REMAIN
+        print("------------- NEW PIPELINE -----------------------------")
+        print(PIPE, "max remaining", max_remaining_edges)
         for random in [0, 1]:
             for USE_PRIOR in [0, 1]:
-                print(" ------------------- NEW PIPELINE -------------------")
+                print(" ------------- new random or prior -------------")
                 print(
-                    "PIPELINE", PIPE, "random:", random,
+                    "random:", (["deterministic", "random"])[int(random)],
                     useprior_meaning[random][USE_PRIOR], "at most",
                     max_remaining_edges
                 )
