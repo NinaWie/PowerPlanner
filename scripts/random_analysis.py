@@ -15,7 +15,7 @@ from power_planner.evaluate_path import save_path_cost_csv
 from power_planner import graphs
 
 
-def logging(dat_fp, csv_fp, ID):
+def logging(dat_fp, csv_fp, ID, USE_PRIOR):
     # MAX_EDGES = 5000000
     with open(dat_fp, "rb") as outfile:
         (output, max_nr_edges, times_pipeline, correct) = pickle.load(outfile)
@@ -65,7 +65,7 @@ def logging(dat_fp, csv_fp, ID):
             ]
         ), 2
     ).tolist()
-    list_of_elem = [ID, INST] + res_list
+    list_of_elem = [ID, INST] + res_list + [USE_PRIOR]
     with open(csv_fp, 'a+', newline='') as write_obj:
         # Create a writer object from csv module
         csv_writer = writer(write_obj)
@@ -170,7 +170,7 @@ for PIPE in PIPELINES:
 
                 if random:
                     mult_factor = 10
-                    nr_iters = 1  # TODO
+                    nr_iters = 30  # TODO
                     graphclass = graphs.RandomWeightedGraph
                 else:
                     mult_factor = 13
@@ -285,5 +285,6 @@ for PIPE in PIPELINES:
 
                 logging(
                     os.path.join(OUT_DIR, ID),
-                    os.path.join(OUT_DIR, "random_results.csv"), ID
+                    os.path.join(OUT_DIR, "random_results.csv"), ID,
+                    useprior_meaning[random][USE_PRIOR]
                 )
