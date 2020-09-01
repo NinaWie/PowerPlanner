@@ -121,130 +121,138 @@ path_groundtruth = np.array(path_gt)
 print("number of edges", edges_gt)
 time_gt = time.time() - tic
 
-MAX_EDGES = 500000
-D1 = 100
-D2 = 50
-USE_PRIOR = True
-random = True
-
-RAND_PIPES = []
-for f1 in [0.85, 0.9, 0.95]:
-    for f2 in [0.55, 0.65, 0.75]:
-        for D1 in [40, 60, 80]:
-            for D2 in [0, 20, 30]:
-                RAND_PIPES.append([(f1, D1), (f2, D2), (0, 0)])
-
-NORM_PIPES = []
-for sample_factor in [3, 4]:
-    for D1 in [40, 70]:
-        for D2 in [20]:
-            if D2 == 0:
-                second_factor = 1
-            else:
-                second_factor = 3
-            NORM_PIPES.append(
-                [(sample_factor, D1), (second_factor, D2), (1, 0)]
-            )
-
-PIPELINES = RAND_PIPES + NORM_PIPES
-randomness = [1 for _ in range(len(RAND_PIPES))
-              ] + [0 for _ in range(len(NORM_PIPES))]
+USE_PRIOR = False
 
 # PIPE = [(MAX_EDGES, D1), (MAX_EDGES, D2), (MAX_EDGES, 0)]
-for PIPE, random in zip(PIPELINES, randomness):
-    print(" ------------------- NEW PIPELINE -------------------")
-    ID = f"{INST[:2].upper()}_{PIPE}"
-    if os.path.exists(os.path.join(OUT_DIR, ID)):
-        print("already there")
-        continue
-    # PIPE = [(4,100), (2,25), (1,0)] did not work, and for 50 instead of 50 there were nans
-    print(PIPE)
-    max_nr_edges = []
-    times_pipeline = []
-    correct = []
-    output = []
-
-    if random:
-        nr_iters = 50
-        graphclass = graphs.RandomWeightedGraph
-    else:
-        nr_iters = 1
-        graphclass = graphs.WeightedGraph
-
-    # COMPUTE STATISTICS
-    for iteri in range(nr_iters):
-
-        graph = graphclass(belgium_inst, belgium_inst_corr, verbose=False)
-        # set shift necessary in case of random graph automatic
-        # probability estimation by edge bound
-        graph.set_shift(cfg.start_inds, cfg.dest_inds, **vars(cfg))
-
-        if random and USE_PRIOR:
-            corridor = get_distance_surface(
-                belgium_inst_corr.shape, [[cfg.start_inds, cfg.dest_inds]],
-                mode="dilation",
-                n_dilate=300
-            )
+PIPELINES = [[1]]
+for factor1 in [2, 3, 4, 5]:
+    for factor2 in [1, 2, 3]:
+        if factor1 <= factor2:
+            continue
+        if factor2 == 1:
+            PIPELINES.append([factor1, factor2])
         else:
-            corridor = np.ones(belgium_inst_corr.shape) * 0.5
+            PIPELINES.append([factor1, factor2, 1])
+print("PIPELINES:", PIPELINES)
 
-        edge_numbers = list()
+for PIPE in PIPELINES:
+    for random in [0, 1]:
+        print(" ------------------- NEW PIPELINE -------------------")
+        print(PIPE, "random", random)
+        # ID = f"{INST[:2].upper()}_{PIPE}"
+        # if os.path.exists(os.path.join(OUT_DIR, ID)):
+        #     print("already there")
+        #     continue
+        max_nr_edges = []
+        times_pipeline = []
+        correct = []
+        output = []
 
-        tic = time.time()
+        if random:
+            mult_factor = 10
+            nr_iters = 30  # TODO
+            graphclass = graphs.RandomWeightedGraph
+        else:
+            mult_factor = 13
+            nr_iters = 1
+            graphclass = graphs.WeightedGraph
 
-        for factor, dist in PIPE:
-            graph.set_corridor(
-                corridor,
-                cfg.start_inds,
-                cfg.dest_inds,
-                factor_or_n_edges=factor,
-                mode="squared"
-            )
-            path_wg = []
-            while len(path_wg) == 0:
-                path_wg, path_costs_wg, cost_sum_wg = graph.single_sp(
-                    **vars(cfg)
+        # COMPUTE STATISTICS
+        for iteri in range(nr_iters):
+            actual_pipe = []
+
+            graph = graphclass(belgium_inst, belgium_inst_corr, verbose=False)
+            # set shift necessary in case of random graph automatic
+            # probability estimation by edge bound
+            graph.set_shift(cfg.start_inds, cfg.dest_inds, **vars(cfg))
+
+            if random and USE_PRIOR:
+                corridor = get_distance_surface(
+                    belgium_inst_corr.shape, [[cfg.start_inds, cfg.dest_inds]],
+                    mode="dilation",
+                    n_dilate=200
                 )
+            else:
+                corridor = np.ones(belgium_inst_corr.shape) * 0.5
 
-            edge_numbers.append(graph.n_edges)
+            edge_numbers = list()
+
+            tic = time.time()
+
+            for pipe_step, factor in enumerate(PIPE):
+                if random:
+                    factor = 1 - (1 / factor**2)
+                graph.set_corridor(
+                    corridor,
+                    cfg.start_inds,
+                    cfg.dest_inds,
+                    factor_or_n_edges=factor  # ,
+                    # mode="squared"
+                )
+                path_wg = []
+                while len(path_wg) == 0:
+                    path_wg, path_costs_wg, cost_sum_wg = graph.single_sp(
+                        **vars(cfg)
+                    )
+
+                edge_numbers.append(graph.n_edges)
+
+                if factor == 1 or factor == 0:
+                    actual_pipe.append((1, 0))
+                    break
+                corridor = get_distance_surface(
+                    graph.hard_constraints.shape,
+                    [path_wg],
+                    mode="dilation",
+                    n_dilate=10  # dist
+                )
+                # estimated edges are pixels times neighbors
+                # divided by resolution squared
+                estimated_edges_10 = len(np.where(corridor > 0)[0]) * len(
+                    graph.shifts
+                ) / ((PIPE[pipe_step + 1])**2)
+                # print("estimated with distance 10:", estimated_edges_10)
+                now_dist = mult_factor * graph.n_edges / estimated_edges_10
+                # print("reduce corridor:", dist)
+                corridor = get_distance_surface(
+                    graph.hard_constraints.shape, [path_wg],
+                    mode="dilation",
+                    n_dilate=int(np.ceil(now_dist))
+                )
+                # print(
+                #     "estimated with distance ", int(np.ceil(now_dist)),
+                #     len(np.where(corridor > 0)[0]) * len(graph.shifts) /
+                #     ((PIPE[pipe_step + 1])**2)
+                # )
+                actual_pipe.append([factor, int(np.ceil(now_dist))])
+                graph.remove_vertices(corridor)
+
+            time_pipeline = time.time() - tic
+
             if iteri == 0:
-                print(graph.n_edges)
+                print("edge numbers:", edge_numbers)
+            times_pipeline.append(time_pipeline)
+            max_nr_edges.append(np.max(edge_numbers))
+            if len(path_wg) == len(path_gt):
+                correct.append(
+                    np.all(np.array(path_wg) == np.asarray(path_gt))
+                )
+            else:
+                correct.append(False)
 
-            if dist == 0:
-                break
-            corridor = get_distance_surface(
-                graph.hard_constraints.shape, [path_wg],
-                mode="dilation",
-                n_dilate=dist
+            output.append([path_wg, path_costs_wg, cost_sum_wg])
+
+        LEN_PIPE = len(PIPE)
+        ID = f"{INST[:2].upper()}_{actual_pipe}"
+
+        # ID = str(PIPE)  # f"{INST[:2].upper()} {PIPE}"
+        # f"random_results_{MAX_EDGES}_{LEN_PIPE}_{D1}_{D2}.dat"
+        with open(os.path.join(OUT_DIR, ID), "wb") as outfile:
+            pickle.dump(
+                (output, max_nr_edges, times_pipeline, correct), outfile
             )
-            graph.remove_vertices(corridor)
-            # plt.imshow((corridor > 0).astype(int) * graph.instance)
-            # plt.colorbar()
-            # plt.savefig("rand_1.png")
 
-        time_pipeline = time.time() - tic
-
-        times_pipeline.append(time_pipeline)
-        max_nr_edges.append(np.max(edge_numbers))
-        if len(path_wg) == len(path_gt):
-            correct.append(np.all(np.array(path_wg) == np.asarray(path_gt)))
-        else:
-            correct.append(False)
-
-        output.append([path_wg, path_costs_wg, cost_sum_wg])
-
-        # print(
-        #     np.max(edge_numbers), "equal gt?",
-        #     np.all(np.array(path_wg) == np.asarray(path_gt))
-        # )
-
-    LEN_PIPE = len(PIPE)
-    # ID = str(PIPE)  # f"{INST[:2].upper()} {PIPE}"
-    # f"random_results_{MAX_EDGES}_{LEN_PIPE}_{D1}_{D2}.dat"
-    with open(os.path.join(OUT_DIR, ID), "wb") as outfile:
-        pickle.dump((output, max_nr_edges, times_pipeline, correct), outfile)
-
-    logging(
-        os.path.join(OUT_DIR, ID),
-        os.path.join(OUT_DIR, "random_results_prior.csv"), ID
-    )
+        logging(
+            os.path.join(OUT_DIR, ID),
+            os.path.join(OUT_DIR, "random_results.csv"), ID
+        )
