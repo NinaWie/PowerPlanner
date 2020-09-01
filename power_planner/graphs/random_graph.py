@@ -136,7 +136,8 @@ class RandomWeightedGraph(WeightedKSP, RandomGraph):
         start_inds,
         dest_inds,
         factor_or_n_edges=0,
-        mode="gauss"
+        mode="gauss",
+        **kwargs
     ):
         """
         factor: in this case ratio of edges to remove

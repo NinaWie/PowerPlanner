@@ -55,7 +55,8 @@ class WeightedGraph(GeneralGraph):
         dest_inds,
         sample_func="mean",
         sample_method="simple",
-        factor_or_n_edges=1
+        factor_or_n_edges=1,
+        **kwargs
     ):
         tic = time.time()
         # set cost rest according to corridor
