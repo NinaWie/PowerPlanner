@@ -6,6 +6,7 @@ import time
 import numpy as np
 import warnings
 import matplotlib.pyplot as plt
+import psutil
 
 # utils imports
 try:
@@ -15,12 +16,20 @@ except ImportError:
 from power_planner import graphs
 from power_planner.ksp import KSP
 from power_planner.alternative_paths import AlternativePaths
+from power_planner.evaluate_path import save_path_cost_csv
 from power_planner.plotting import (
     plot_path_costs, plot_pipeline_paths, plot_path, plot_k_sp,
     plot_pareto_paths
 )
 from power_planner.utils.utils import (
     get_distance_surface, time_test_csv, load_config
+)
+print(
+    "memory start:",
+    round(
+        psutil.virtual_memory().percent / 100000000 *
+        psutil.virtual_memory().available, 2
+    )
 )
 
 parser = argparse.ArgumentParser()
@@ -30,7 +39,7 @@ parser.add_argument('-s', '--scale', help="resolution", type=int, default=2)
 args = parser.parse_args()
 
 # define out save name
-ID = "xytest_" + args.instance  # str(round(time.time() / 60))[-5:]
+ID = "process_data" + args.instance  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
@@ -49,7 +58,7 @@ PIPELINE = [(1, 0)]
 # PIPELINE = [(5000000, 100), (5000000, 0)]  # auto pipeline
 USE_KSP = 0
 
-GRAPH_TYPE = graphs.RandomWeightedGraph
+GRAPH_TYPE = graphs.ImplicitLG
 # LineGraph, WeightedGraph, RandomWeightedGraph, RandomLineGraph, ImplicitLG
 # ImplicitLgKSP, WeightedKSP
 print("graph type:", GRAPH_TYPE)
@@ -106,27 +115,69 @@ else:
         print("successfully saved data")
 
 print(cfg.pylon_dist_min, cfg.pylon_dist_max)
-cfg.angle_weight = 0.1
-cfg.edge_weight = 0.3
+cfg.pylon_dist_min = 15  # TODO
+cfg.pylon_dist_max = 25
+# cfg.edge_weight = 0.5
+
+print(
+    "memory after data loading:",
+    round(
+        psutil.virtual_memory().percent / 100000000 *
+        psutil.virtual_memory().available, 2
+    )
+)
 
 # DEFINE GRAPH AND ALGORITHM
 graph = GRAPH_TYPE(
     instance,
-    instance_corr  #, edge_instance=edge_cost, verbose=cfg.verbose
+    instance_corr,
+    edge_instance=edge_cost,
+    verbose=0  # cfg.verbose # TODO
 )
 
 # START PIPELINE
 tic = time.time()
-corridor = np.ones(instance_corr.shape) * 0.5  # start with all
-output_paths = []
-plot_surfaces = []
-time_infos = []
+print(
+    "memory after graph initialize",
+    round(
+        psutil.virtual_memory().percent / 100000000 *
+        psutil.virtual_memory().available, 2
+    )
+)
 
 path, path_costs, cost_sum = graph.single_sp(**vars(cfg))
-# path, path_costs, cost_sum = graph.sp_tree(**vars(cfg))
+# path, path_costs, cost_sum = graph.sp_trees(**vars(cfg))
 
-ksp = KSP(graph)
-alternatives = ksp.find_ksp(cfg.k)
+# ksp = KSP(graph)
+# alternatives = ksp.laplace(5)  # cfg.k or cfg.ksp
+
+# gives a single float value
+print(
+    "memory after single sp",
+    round(
+        psutil.virtual_memory().percent / 100000000 *
+        psutil.virtual_memory().available, 2
+    )
+)
+print("edges in graph:", graph.n_edges / 1000000)
+
+time_pipeline = round(time.time() - tic, 3)
+print("FINISHED PIPELINE:", time_pipeline)
+# print("path length", len(path))
+# SAVE timing test
+# time_test_csv(
+#     ID, cfg.csv_times, SCALE_PARAM, 1, GRAPH_TYPE, graph,
+#     [round(s, 3) for s in np.sum(path_costs, axis=0)], cost_sum, 0,
+#     time_pipeline, NOTES
+# )
+
+# save the costs
+# save_path_cost_csv(
+#     OUT_PATH, [k[0] for k in alternatives], instance, **vars(cfg)
+# )
+
+# KSP
+# plot_k_sp(alternatives, graph.instance, out_path=OUT_PATH)
 
 # SIMPLE
 plot_path(graph.instance, path, buffer=2, out_path=OUT_PATH + ".png")
@@ -141,19 +192,12 @@ plot_path_costs(
     out_path=OUT_PATH + "_costs.png"
 )
 
-time_pipeline = round(time.time() - tic, 3)
-print("FINISHED PIPELINE:", time_pipeline)
-print("path length", len(path))
-# SAVE timing test
-time_test_csv(
-    ID, cfg.csv_times, SCALE_PARAM, 1, GRAPH_TYPE, graph,
-    [round(s, 3) for s in np.sum(path_costs, axis=0)], cost_sum, 0,
-    time_pipeline, NOTES
-)
-
-graph.save_path_cost_csv(OUT_PATH, [path], **vars(cfg))
-
 # -------------------------- LONG FLEXIBLE VERSION ---------------------
+
+# corridor = np.ones(instance_corr.shape) * 0.5  # start with all
+# output_paths = []
+# plot_surfaces = []
+# time_infos = []
 
 # for (factor, dist) in PIPELINE:
 #     print("----------- PIPELINE", factor, dist, "---------------")

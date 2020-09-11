@@ -48,7 +48,9 @@ def logging(ID, graph, path, path_costs, cfg, time_pipeline, comp_path=None):
     n_categories = len(cfg.class_weights)
     path_costs = np.asarray(path_costs)
     summed_costs = np.around(np.sum(path_costs[:, -n_categories:], axis=0), 2)
-    weighted_sum = round(np.dot(summed_costs, cfg.class_weights), 2)
+    weighted_sum = round(
+        np.dot(summed_costs, graph.cost_weights[-n_categories:]), 2
+    )
     n_pixels = np.sum(instance_corr > 0)
 
     # csv_header = ["ID", "instance", "resolution", "graph", "number pixels"
@@ -96,10 +98,10 @@ PATH_FILES = "data"
 # Iterate overall graphs
 graph_names = ["Normal graph", "Implicit line graph", "Line graph"]
 for g, GRAPH_TYPE in enumerate(
-    [graphs.WeightedGraph, graphs.ImplicitLG, graphs.LineGraph]
+    [graphs.ImplicitLG, graphs.ImplicitLG, graphs.LineGraph]
 ):
     for INST in ["belgium", "de", "ch"]:  # TODO
-        for SCALE_PARAM in [5, 2]:
+        for SCALE_PARAM in [5, 2, 1]:
             print("")
             print("---------------------------------------------------")
             print("---------------", INST, SCALE_PARAM, "-------------")
@@ -122,13 +124,15 @@ for g, GRAPH_TYPE in enumerate(
             for a, angle_weight in enumerate([0.05, 0.1, 0.3]):  # TODO
                 print("PROCESS ", graph_names[g], angle_weight)
                 cfg.edge_weight = 0
-                cfg.angle_weight = angle_weight
+                if graph_names[g] == "Normal graph":
+                    cfg.angle_weight = 0
+                else:
+                    cfg.angle_weight = angle_weight
                 cfg.csv_times = "graph_compare.csv"
-
                 # ID
                 graphtype = graph_names[g]
-                ID = f"  {graph_names[g]}_{SCALE_PARAM}_{INST}_{int(angle_weight*100)}"
-                OUT_PATH = OUT_PATH_orig + ID
+                ID = f"{graph_names[g]}_{SCALE_PARAM}_{INST}_{int(angle_weight*100)}"
+                OUT_PATH = os.path.join(OUT_DIR, ID + ".csv")
 
                 graph_gt = GRAPH_TYPE(instance, instance_corr, verbose=0)
                 graph_gt.set_shift(cfg.start_inds, cfg.dest_inds, **vars(cfg))
@@ -138,7 +142,7 @@ for g, GRAPH_TYPE in enumerate(
                 )
                 print("will have ", estimated_edges, "edges")
                 # ABORT if too many edges
-                if estimated_edges > 1000000000:
+                if estimated_edges > 2000000000:
                     print("ABORT bc of memory!")
                     logs = [
                         ID, INST, SCALE_PARAM * 10, instance_vertices,

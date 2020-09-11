@@ -226,7 +226,8 @@ class KSP:
                 # we always check a path only if it is the x-th appearance
                 # print(counter)
                 continue
-
+            if sorted_dists[j] == np.inf:
+                break
             # counter large enough --> expand
             (x2, x3) = v_shortest[j] // arr_len, v_shortest[j] % arr_len
 
@@ -301,6 +302,8 @@ class KSP:
             if sorted_dists[j] == sorted_dists[j - 1]:
                 # on the same path as the vertex before
                 continue
+            if sorted_dists[j] == np.inf:
+                break
             (x2, x3) = v_shortest[j] // arr_len, v_shortest[j] % arr_len
             x1 = min_shift_dists[x2, x3]
 

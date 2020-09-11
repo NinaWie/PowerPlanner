@@ -462,21 +462,25 @@ class ImplicitLG():
         self.start_inds = kwargs["start_inds"]
         self.dest_inds = kwargs["dest_inds"]
         self.set_shift(self.start_inds, self.dest_inds, **kwargs)
-        print("1) Initialize shifts and instance (corridor)")
+        if self.verbose:
+            print("1) Initialize shifts and instance (corridor)")
         self.set_edge_costs(**kwargs)
         self.instance = self.instance**power
         # add vertices
         self.add_nodes()
-        print("2) Initialize distances to inf and predecessors")
+        if self.verbose:
+            print("2) Initialize distances to inf and predecessors")
         self.add_edges(**kwargs)
-        print("3) Compute source shortest path tree")
-        print("number of vertices and edges:", self.n_nodes, self.n_edges)
+        if self.verbose:
+            print("3) Compute source shortest path tree")
+            print("number of vertices and edges:", self.n_nodes, self.n_edges)
 
         # get actual best path
         path, path_costs, cost_sum = self.get_shortest_path(
             self.start_inds, self.dest_inds
         )
-        print("4) shortest path", cost_sum)
+        if self.verbose:
+            print("4) shortest path", cost_sum)
         return path, path_costs, cost_sum
 
     def sp_trees(self, **kwargs):
