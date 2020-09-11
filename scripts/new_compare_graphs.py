@@ -43,14 +43,19 @@ def logging(ID, graph, path, path_costs, cfg, time_pipeline, comp_path=None):
             KspUtils.path_distance(path, comp_path, mode="eucl_mean") *
             cfg.scale * 10
         )
-    # SAVE timing test
+    # get unnormalized costs
     angle_cost = round(np.sum(CostUtils.compute_angle_costs(path)), 2)
     n_categories = len(cfg.class_weights)
     path_costs = np.asarray(path_costs)
+    # get normalization weights
+    ang_weight_norm = cfg.angle_weight * np.sum(cfg.class_weights)
+    all_cost_weights = np.array([ang_weight_norm] + list(cfg.class_weights))
+    all_cost_weights = all_cost_weights / np.sum(all_cost_weights)
+    print([ang_weight_norm] + list(cfg.class_weights), all_cost_weights)
+    # compute normalized path costs
     summed_costs = np.around(np.sum(path_costs[:, -n_categories:], axis=0), 2)
-    weighted_sum = round(
-        np.dot(summed_costs, graph.cost_weights[-n_categories:]), 2
-    )
+    weighted_sum = round(np.dot(summed_costs, all_cost_weights[1:]), 2)
+    together = all_cost_weights[0] * angle_cost + weighted_sum
     n_pixels = np.sum(instance_corr > 0)
 
     # csv_header = ["ID", "instance", "resolution", "graph", "number pixels"
@@ -61,8 +66,8 @@ def logging(ID, graph, path, path_costs, cfg, time_pipeline, comp_path=None):
         ID, INST, SCALE_PARAM * 10, n_pixels, graphtype, graph.n_nodes,
         graph.n_edges, time_pipeline, graph.time_logs["add_nodes"],
         graph.time_logs["add_all_edges"], graph.time_logs["shortest_path"],
-        cfg.angle_weight, angle_cost, summed_costs, weighted_sum, mean_eucl,
-        max_eucl
+        cfg.angle_weight, angle_cost, summed_costs, weighted_sum, together,
+        mean_eucl, max_eucl
     ]
     with open(cfg.csv_times, 'a+', newline='') as write_obj:
         # Create a writer object from csv module
@@ -97,11 +102,11 @@ PATH_FILES = "data"
 
 # Iterate overall graphs
 graph_names = ["Normal graph", "Implicit line graph", "Line graph"]
-for g, GRAPH_TYPE in enumerate(
-    [graphs.ImplicitLG, graphs.ImplicitLG, graphs.LineGraph]
-):
-    for INST in ["belgium", "de", "ch"]:  # TODO
-        for SCALE_PARAM in [5, 2, 1]:
+for INST in ["belgium", "de", "ch"]:
+    for g, GRAPH_TYPE in enumerate(
+        [graphs.WeightedGraph, graphs.ImplicitLG, graphs.LineGraph]
+    ):
+        for SCALE_PARAM in [5, 2, 1]:  # TODO
             print("")
             print("---------------------------------------------------")
             print("---------------", INST, SCALE_PARAM, "-------------")
@@ -121,64 +126,59 @@ for g, GRAPH_TYPE in enumerate(
 
             OUT_PATH_orig = OUT_PATH
 
-            for a, angle_weight in enumerate([0.05, 0.1, 0.3]):  # TODO
-                print("PROCESS ", graph_names[g], angle_weight)
-                cfg.edge_weight = 0
-                if graph_names[g] == "Normal graph":
-                    cfg.angle_weight = 0
-                else:
-                    cfg.angle_weight = angle_weight
-                cfg.csv_times = "graph_compare.csv"
-                # ID
-                graphtype = graph_names[g]
-                ID = f"{graph_names[g]}_{SCALE_PARAM}_{INST}_{int(angle_weight*100)}"
-                OUT_PATH = os.path.join(OUT_DIR, ID + ".csv")
+            # for a, angle_weight in enumerate([0.2 ]):  # TODO
+            # print("PROCESS ", graph_names[g], angle_weight)
+            cfg.edge_weight = 0
+            # cfg.angle_weight = angle_weight
+            cfg.csv_times = "../outputs/graph_compare.csv"
+            # ID
+            graphtype = graph_names[g]
+            ID = f"{graph_names[g]}_{SCALE_PARAM}_{INST}_{int(cfg.angle_weight*100)}"
+            OUT_PATH = os.path.join(OUT_DIR, ID + ".csv")
 
-                graph_gt = GRAPH_TYPE(instance, instance_corr, verbose=0)
-                graph_gt.set_shift(cfg.start_inds, cfg.dest_inds, **vars(cfg))
+            graph_gt = GRAPH_TYPE(instance, instance_corr, verbose=0)
+            graph_gt.set_shift(cfg.start_inds, cfg.dest_inds, **vars(cfg))
 
-                estimated_edges = instance_vertices * len(
-                    graph_gt.shift_tuples
-                )
-                print("will have ", estimated_edges, "edges")
-                # ABORT if too many edges
-                if estimated_edges > 2000000000:
-                    print("ABORT bc of memory!")
-                    logs = [
-                        ID, INST, SCALE_PARAM * 10, instance_vertices,
-                        graphtype, instance_vertices, estimated_edges
-                    ]
-                    with open(cfg.csv_times, 'a+', newline='') as write_obj:
-                        # Create a writer object from csv module
-                        csv_writer = writer(write_obj)
-                        # Add contents of list as last row in the csv file
-                        csv_writer.writerow(logs)
-                    break
-                tic = time.time()
-                path_gt, path_costs_gt, cost_sum_gt = graph_gt.single_sp(
-                    **vars(cfg)
-                )
+            estimated_edges = instance_vertices * len(graph_gt.shift_tuples)
+            print("will have ", estimated_edges, "edges")
+            # ABORT if too many edges
+            if estimated_edges > 1000000000:
+                print("ABORT bc of memory!")
+                logs = [
+                    ID, INST, SCALE_PARAM * 10, instance_vertices, graphtype,
+                    instance_vertices, estimated_edges
+                ]
+                with open(cfg.csv_times, 'a+', newline='') as write_obj:
+                    # Create a writer object from csv module
+                    csv_writer = writer(write_obj)
+                    # Add contents of list as last row in the csv file
+                    csv_writer.writerow(logs)
+                break
+            tic = time.time()
+            path_gt, path_costs_gt, cost_sum_gt = graph_gt.single_sp(
+                **vars(cfg)
+            )
 
-                print("vertices:", graph_gt.n_nodes, "edges", graph_gt.n_edges)
+            print("vertices:", graph_gt.n_nodes, "edges", graph_gt.n_edges)
 
-                time_pipeline = round(time.time() - tic, 3)
-                print("DONE SP")
+            time_pipeline = round(time.time() - tic, 3)
+            print("DONE SP")
 
-                if g == 0:
-                    path_bl = path_gt
+            if g == 0:
+                path_bl = path_gt
 
-                logging(
-                    ID,
-                    graph_gt,
-                    path_gt,
-                    path_costs_gt,
-                    cfg,
-                    time_pipeline,
-                    comp_path=path_bl
-                )
+            logging(
+                ID,
+                graph_gt,
+                path_gt,
+                path_costs_gt,
+                cfg,
+                time_pipeline,
+                comp_path=path_bl
+            )
 
-                save_path_cost_csv(OUT_PATH, [path_gt], instance, **vars(cfg))
+            save_path_cost_csv(OUT_PATH, [path_gt], instance, **vars(cfg))
 
-                if g == 0 and a == 0:
-                    # angle weight only needs to be varied for the implicit lg
-                    break
+            # if g == 0 and a == 0:
+            # angle weight only needs to be varied for the implicit lg
+            #    break
