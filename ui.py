@@ -38,6 +38,7 @@ class ImageFromArray(Widget):
         self.set_array(img)
 
     def set_array(self, img_in):
+        # img_in = img_in[20:-20, 20:-20, :3]
         self.current_in_img = img_in
         img_in = np.flip(np.swapaxes(img_in, 1, 0), axis=0).astype(np.uint8)
         h, w, _ = img_in.shape
@@ -120,7 +121,7 @@ class DemoApp(App):
         self.load_data = Button(
             text='Load data',
             on_press=self.loadData,
-            size_hint=(right_bar_size, 1)
+            size_hint=(right_bar_size + 0.05, 1)
         )
         data_box.add_widget(self.filepath)
         data_box.add_widget(self.load_data)
@@ -148,18 +149,12 @@ class DemoApp(App):
 
         # Sliders
         self.slider_box = BoxLayout(
-            orientation='vertical',
-            spacing=20,
-            size_hint=(None, 1),
-            width=Window.width * slider_bar_size
+            orientation='vertical', width=Window.width * slider_bar_size
         )
 
         # additional buttons
         button_box = BoxLayout(
-            orientation='vertical',
-            spacing=50,
-            size_hint=(None, 1),
-            width=Window.width * right_bar_size
+            orientation='vertical', width=Window.width * right_bar_size
         )
 
         # Define right side buttons
@@ -198,7 +193,7 @@ class DemoApp(App):
 
         # make horizontal box with canvas and buttons
         canv_box = BoxLayout(orientation='horizontal')
-        self.img_widget = ImageFromArray(400, 500)
+        self.img_widget = ImageFromArray(600, 500)
         # for scroll function, add the comment - but not working well
         self.scatter_widget = Scatter()  # ResizableDraggablePicture()
         self.scatter_widget.add_widget(self.img_widget)
@@ -213,7 +208,7 @@ class DemoApp(App):
 
         return superBox
 
-    def _mark_start_dest(self, buffer=5):
+    def _mark_start_dest(self, buffer=2):
         (x, y) = tuple(self.config.graph.start_inds)
         self.disp_inst[x - buffer:x + buffer + 1, y - buffer:y + buffer +
                        1] = [255, 255, 0]
@@ -276,8 +271,8 @@ class DemoApp(App):
             self.sliders_initialized = 1
 
         # UPDATE VALUES ACCORDING TO CONFIG
-        self.angle_slider.value = self.cfg.ANGLE_WEIGHT
-        self.edge_slider.value = self.cfg.EDGE_WEIGHT
+        self.angle_slider.value = self.cfg.angle_weight
+        self.edge_slider.value = self.cfg.edge_weight
         normed_weights = np.asarray(self.cfg.class_weights
                                     ) / np.sum(self.cfg.class_weights)
         for i in range(len(normed_weights)):
@@ -298,6 +293,8 @@ class DemoApp(App):
     def single_sp(self, instance, buffer=1):
         new_class_weights = [slider.value for slider in self.weight_sliders]
         self.cfg.class_weights = new_class_weights
+        self.cfg.angle_weight = self.angle_slider.value
+        self.cfg.edge_weight = self.edge_slider.value
         # new_img = (np.random.rand(1000, 400, 3) * 150)
         # self.img_widget.set_array(new_img)
         path, _, _ = self.graph.single_sp(**vars(self.cfg))
@@ -310,8 +307,8 @@ class DemoApp(App):
     def sp_tree(self, instance, buffer=1):
         new_class_weights = [slider.value for slider in self.weight_sliders]
         self.cfg.class_weights = new_class_weights
-        self.cfg.ANGLE_WEIGHT = self.angle_slider.value
-        self.cfg.EDGE_WEIGHT = self.edge_slider.value
+        self.cfg.angle_weight = self.angle_slider.value
+        self.cfg.edge_weight = self.edge_slider.value
         # set edge cost (must be repeated because of angle weight)
         path, _, _ = self.graph.sp_trees(**vars(self.cfg))
         # plot the path
@@ -324,14 +321,14 @@ class DemoApp(App):
         self.alternative_button.disabled = False
         print("Done shortest path trees")
 
-    def ksp(self, instance, buffer=2):
+    def ksp(self, instance, buffer=1):
         ksp = KSP(self.graph)
-        ksp_output = ksp.max_vertex_ksp(5, min_dist=15)
+        ksp_output = ksp.laplace(5, thresh=20)
         paths = [k[0] for k in ksp_output]
         plotted_inst = self.disp_inst.copy()
         for i in range(len(paths) - 1, -1, -1):
             path = paths[i]
-            val = 255 - i * 50
+            val = 255 - i * 30
             plotted_inst = self.path_plotter(
                 plotted_inst, path, [val, val, val], buffer=buffer
             )

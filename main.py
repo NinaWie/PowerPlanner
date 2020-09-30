@@ -114,11 +114,6 @@ else:
             pickle.dump(data_out, outfile)
         print("successfully saved data")
 
-print(cfg.pylon_dist_min, cfg.pylon_dist_max)
-cfg.pylon_dist_min = 15  # TODO
-cfg.pylon_dist_max = 25
-# cfg.edge_weight = 0.5
-
 print(
     "memory after data loading:",
     round(

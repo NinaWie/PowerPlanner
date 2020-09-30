@@ -68,7 +68,7 @@ class ImplicitLG():
         pylon_dist_min=3,
         pylon_dist_max=5,
         max_angle=np.pi / 2,
-        max_angle_lg=np.pi / 4,
+        max_angle_lg=np.pi / 2,
         **kwargs
     ):
         """
@@ -173,7 +173,7 @@ class ImplicitLG():
         self,
         layer_classes=["resistance"],
         class_weights=[1],
-        angle_weight=0.5,
+        angle_weight=0.1,
         **kwargs
     ):
         """
