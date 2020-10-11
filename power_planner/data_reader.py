@@ -187,20 +187,15 @@ class DataReader():
         else:
             hard_cons_rows = self.class_csv[self.class_csv[
                 "weight_" + str(self.scenario)] == "Forbidden"]
+
         # read in corresponding tifs
         hard_constraints = []
         for fname in hard_cons_rows["Layer Name"]:
             file_path = os.path.join(self.path, "tif_layers", fname + ".tif")
-            # TODO!!
             if os.path.exists(file_path):
                 constraint = self.read_tif(file_path)
-                if len(constraint[0]) == 3725:
-                    print(
-                        fname, constraint.shape,
-                        np.unique(constraint, return_counts=True)
-                    )
-                    constraint = constraint[:, :-1]
                 constraint = self._resize_raster(constraint)
+                # print(fname, constraint.shape)
                 if "Scenario" in fname:
                     hard_constraints.append((constraint == 1).astype(int))
                 else:
@@ -211,6 +206,7 @@ class DataReader():
         print("hard constraints shape", np.asarray(hard_constraints).shape)
         # no forbidden areas - return all ones
         if len(hard_constraints) == 0:
+            print("default: no forbidden areas, all 1")
             return np.ones(self.raster_size)
         # intersection of all of the hard constraints
         hard_constraints = np.all(
@@ -250,13 +246,6 @@ class DataReader():
                 )
                 if os.path.exists(file_path):
                     costs_raw = self.read_tif(file_path)
-                    # TODO!!
-                    if len(costs_raw[0]) == 3725:
-                        print(
-                            fname, costs_raw.shape,
-                            np.unique(costs_raw, return_counts=True)
-                        )
-                        costs_raw = costs_raw[:, :-1]
                     # binarize single tif layer so it can be weighted
                     # -1  because in tifs the costly areas are black
                     # costs = np.absolute(normalize(costs) - 1)
@@ -395,8 +384,11 @@ class DataReader():
         hard_cons = self.get_hard_constraints()
         hard_constraints = project_region * hard_cons
 
+        print("read forbidden areas:", project_region.shape, hard_cons.shape)
+
         # Construct instance and edge instance
         instance = self.get_costs_per_class(oneclass=self.config.one_class)
+        print("read instance:", instance.shape)
         if "weight_" + str(self.scenario) + "_edge" in self.class_csv.columns:
             print("EDGE COL EXISTS --> constructing edge instance")
             edge_inst = self.get_costs_per_class(
@@ -465,9 +457,7 @@ class DataReader():
                 with rasterio.open(file_path, 'r') as ds:
                     arr = ds.read()[0]
                 # binarize single tif layer so it can be weighted
-                # -1  because in tifs the costly areas are black
-                if len(arr) == 3078:
-                    arr = arr[:3078, :3724]
+                # -1  because in tifs the costly areas are bla
                 # add to hard constraints or general instance
                 if row["weight_" + str(scenario)] == "Forbidden":
                     constraint = (arr.astype(int) != 1).astype(int)

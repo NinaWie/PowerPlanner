@@ -23,7 +23,7 @@ args = parser.parse_args()
 # define out save name
 ID = "xytest_" + args.instance  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
-OUT_PATH = os.path.join(OUT_DIR, ID)
+OUT_PATH_DUMPS = os.path.join(OUT_DIR, ID)
 
 SCALE_PARAM = args.scale
 SCENARIO = 1
@@ -36,10 +36,10 @@ for SCALE_PARAM in [1, 2, 5]:
 
     SAVE_PICKLE = 1
 
-    # define IO paths
-    PATH_FILES = f"../data/instance_{INST}.nosync"
+    # define IO paths - CHANGE HERE FOR OTHER INPUT DIRS
+    PATH_FILES = f"../data/jura.nosync"  # instance_{INST}
     IOPATH = os.path.join(
-        PATH_FILES, f"{INST}_data_{SCENARIO}_{SCALE_PARAM}.dat"
+        OUT_PATH_DUMPS, f"{INST}_data_{SCENARIO}_{SCALE_PARAM}.dat"
     )
 
     # LOAD CONFIGURATION
@@ -69,6 +69,14 @@ for SCALE_PARAM in [1, 2, 5]:
     plt.figure(figsize=(8, 5))
     plt.imshow(np.sum(instance, axis=0) + visualize_corr)
     plt.colorbar()
-    plt.savefig(f"surface_s100_i100_{INST}_{SCALE_PARAM}.png")
+    plt.savefig(
+        os.path.join(
+            OUT_PATH_DUMPS, f"surface_s100_i100_{INST}_{SCALE_PARAM}.png"
+        )
+    )
     plt.imshow(np.mean(edge_cost, axis=0))
-    plt.savefig(f"edgecost_s100_i100_{INST}_{SCALE_PARAM}.png")
+    plt.savefig(
+        os.path.join(
+            OUT_PATH_DUMPS, f"edgecost_s100_i100_{INST}_{SCALE_PARAM}.png"
+        )
+    )

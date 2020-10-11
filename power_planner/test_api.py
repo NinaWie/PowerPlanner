@@ -1,8 +1,9 @@
 import unittest
 import numpy as np
-from types import SimpleNamespace
 import matplotlib.pyplot as plt
-from power_planner.algorithms import *
+from power_planner.algorithms import (
+    optimal_pylon_spotting, optimal_route, ksp_pylons, ksp_routes
+)
 
 
 def plot_paths(instance, paths, buffer=0, out_path="test_path.png"):
@@ -37,7 +38,7 @@ class TestAPI(unittest.TestCase):
     def test_optimal_route(self) -> None:
         path = optimal_route(
             self.test_instance,
-            self.cfg,
+            self.cfg.copy(),
         )
         self.assertTrue(len(path) > 0)
         self.assertListEqual(list(path[0]), list(self.cfg["start_inds"]))
@@ -52,7 +53,7 @@ class TestAPI(unittest.TestCase):
     def test_optimal_pylon_spotting(self) -> None:
         path = optimal_pylon_spotting(
             self.test_instance,
-            self.cfg,
+            self.cfg.copy(),
         )
         self.assertTrue(len(path) > 0)
         self.assertListEqual(list(path[0]), list(self.cfg["start_inds"]))
@@ -65,12 +66,12 @@ class TestAPI(unittest.TestCase):
         )
 
     def test_ksp_routes(self) -> None:
-        paths = ksp_routes(self.test_instance, self.cfg, 5)
+        paths = ksp_routes(self.test_instance, self.cfg.copy(), 5)
         self.assertTrue(len(paths) == 5)
         plot_paths(self.test_instance, paths, out_path="test_route_ksp.png")
 
     def test_ksp_pylons(self) -> None:
-        paths = ksp_pylons(self.test_instance, self.cfg, 5)
+        paths = ksp_pylons(self.test_instance, self.cfg.copy(), 5)
         self.assertTrue(len(paths) == 5)
         plot_paths(self.test_instance, paths, out_path="test_pylon_ksp.png")
 

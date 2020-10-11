@@ -39,7 +39,7 @@ parser.add_argument('-s', '--scale', help="resolution", type=int, default=2)
 args = parser.parse_args()
 
 # define out save name
-ID = "process_data" + args.instance  # str(round(time.time() / 60))[-5:]
+ID = "de_new_data_20_laplace_" + args.instance  # str(round(time.time() / 60))[-5:]
 OUT_DIR = os.path.join("..", "outputs")
 OUT_PATH = os.path.join(OUT_DIR, ID)
 
@@ -65,96 +65,40 @@ print("graph type:", GRAPH_TYPE)
 # summarize: mean/max/min, remove: all/surrounding, sample: simple/watershed
 NOTES = "None"  # "mean-all-simple"
 
-LOAD = 1
-if args.cluster:
-    LOAD = 1
-SAVE_PICKLE = 1
-
-# define IO paths
-if LOAD:
-    PATH_FILES = os.path.join("data")
-else:
-    # PATH_FILES = "/Volumes/Nina Backup/data_master_thesis/large_instance"
-    PATH_FILES = f"../data/instance_{INST}.nosync"
+PATH_FILES = os.path.join("data")
 IOPATH = os.path.join(PATH_FILES, f"{INST}_data_{SCENARIO}_{SCALE_PARAM}.dat")
 
-# LOAD CONFIGURATION
-if not LOAD:
-    cfg = load_config(
-        os.path.join(PATH_FILES, f"{INST}_config.json"),
-        scale_factor=SCALE_PARAM
-    )
-
-# READ DATA
-if LOAD:
-    # load from pickle
-    with open(IOPATH, "rb") as infile:
-        data = pickle.load(infile)
-        try:
-            (instance, edge_cost, instance_corr, config) = data
-            cfg = config.graph
-            start_inds = cfg.start_inds
-            dest_inds = cfg.dest_inds
-        except ValueError:
-            warnings.warn("Edge weights not available - taking normal costs")
-            (instance, instance_corr, start_inds, dest_inds) = data.data
-            edge_cost = instance.copy()
-else:
-    # read in files
-    data = DataReader(PATH_FILES, SCENARIO, SCALE_PARAM, cfg)
-    instance, edge_cost, instance_corr, config = data.get_data()
-    # get graph processing specific cfg
-    cfg = config.graph
-    start_inds = cfg.start_inds
-    dest_inds = cfg.dest_inds
-    # save
-    if SAVE_PICKLE:
-        data_out = (instance, edge_cost, instance_corr, config)
-        with open(IOPATH, "wb") as outfile:
-            pickle.dump(data_out, outfile)
-        print("successfully saved data")
-
-print(
-    "memory after data loading:",
-    round(
-        psutil.virtual_memory().percent / 100000000 *
-        psutil.virtual_memory().available, 2
-    )
-)
+with open(IOPATH, "rb") as infile:
+    data = pickle.load(infile)
+    try:
+        (instance, edge_cost, instance_corr, config) = data
+        cfg = config.graph
+        start_inds = cfg.start_inds
+        dest_inds = cfg.dest_inds
+    except ValueError:
+        warnings.warn("Edge weights not available - taking normal costs")
+        (instance, instance_corr, start_inds, dest_inds) = data.data
+        edge_cost = instance.copy()
 
 # DEFINE GRAPH AND ALGORITHM
 graph = GRAPH_TYPE(
-    instance,
-    instance_corr,
-    edge_instance=edge_cost,
-    verbose=0  # cfg.verbose # TODO
+    instance, instance_corr, edge_instance=edge_cost, verbose=cfg.verbose
 )
 
 # START PIPELINE
 tic = time.time()
-print(
-    "memory after graph initialize",
-    round(
-        psutil.virtual_memory().percent / 100000000 *
-        psutil.virtual_memory().available, 2
-    )
+# path, path_costs, cost_sum = graph.single_sp(**vars(cfg))
+path, path_costs, cost_sum = graph.sp_trees(**vars(cfg))
+
+ksp = KSP(graph)
+alternatives = ksp.laplace(
+    5,
+    thresh=70,
+    cost_add=0.05,
 )
 
-path, path_costs, cost_sum = graph.single_sp(**vars(cfg))
-# path, path_costs, cost_sum = graph.sp_trees(**vars(cfg))
-
-# ksp = KSP(graph)
-# alternatives = ksp.laplace(5)  # cfg.k or cfg.ksp
-
-# gives a single float value
-print(
-    "memory after single sp",
-    round(
-        psutil.virtual_memory().percent / 100000000 *
-        psutil.virtual_memory().available, 2
-    )
-)
-print("edges in graph:", graph.n_edges / 1000000)
+# gives a single  value
+print("edges in graph (in mio):", graph.n_edges / 1000000)
 
 time_pipeline = round(time.time() - tic, 3)
 print("FINISHED PIPELINE:", time_pipeline)
@@ -167,12 +111,12 @@ print("FINISHED PIPELINE:", time_pipeline)
 # )
 
 # save the costs
-# save_path_cost_csv(
-#     OUT_PATH, [k[0] for k in alternatives], instance, **vars(cfg)
-# )
+save_path_cost_csv(
+    OUT_PATH, [k[0] for k in alternatives], instance, **vars(cfg)
+)
 
 # KSP
-# plot_k_sp(alternatives, graph.instance, out_path=OUT_PATH)
+plot_k_sp(alternatives, graph.instance, out_path=OUT_PATH)
 
 # SIMPLE
 plot_path(graph.instance, path, buffer=2, out_path=OUT_PATH + ".png")

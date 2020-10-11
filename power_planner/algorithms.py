@@ -1,30 +1,13 @@
 import numpy as np
 from power_planner import graphs
 from power_planner.ksp import KSP
-from power_planner.plotting import plot_path, plot_k_sp
 import time
-from types import SimpleNamespace
 
 VERBOSE = 0
 
-# def transform_instance_decorator(method):
-#     """
-#     Decorator to transform np array into instance and corridor seperated
-#     """
-
-#     def instance_wrapper(instance, *args):
-#         # make forbidden region array
-#         project_region = np.ones(instance.shape)
-#         project_region[np.isnan(instance)] = 0
-
-#         # modify instance to have a 3-dimensional input as required
-#         max_val = np.max(instance[~np.isnan(instance)])
-#         instance[np.isnan(instance)] = max_val
-#         instance = np.array([instance])
-#         # change new_args here
-#         return method(instance, *args)
-
-#     return instance_wrapper
+__all__ = [
+    "optimal_route", "optimal_pylon_spotting", "ksp_routes", "ksp_pylons"
+]
 
 
 def transform_instance(instance, fillval=np.max):
@@ -114,6 +97,7 @@ def run_ksp(graph, cfg, k, thresh=10, algorithm=KSP.find_ksp):
     # compute k shortest paths
     ksp_processor = KSP(graph)
     ksp_out = algorithm(ksp_processor, k, thresh=thresh)
+    # extract path itself
     ksp_paths = [k[0] for k in ksp_out]
     return ksp_paths
 
@@ -139,6 +123,7 @@ def ksp_routes(instance, cfg, k, thresh=10, algorithm=KSP.find_ksp):
     cfg["pylon_dist_min"] = 1
     cfg["pylon_dist_max"] = 1.5
 
+    # run algorithm
     return run_ksp(graph, cfg, k, thresh=thresh, algorithm=algorithm)
 
 
@@ -157,22 +142,5 @@ def ksp_pylons(instance, cfg, k, thresh=10, algorithm=KSP.find_ksp):
     instance, project_region = transform_instance(instance)
     # initialize graph
     graph = graphs.ImplicitLG(instance, project_region, verbose=VERBOSE)
+    # run algorithm
     return run_ksp(graph, cfg, k, thresh=thresh, algorithm=algorithm)
-
-
-# if __name__ == "__main__":
-#     test_instance = np.random.rand(100, 100)
-#     num_nans = 100
-#     forb_x = (np.random.rand(num_nans) * 100).astype(int)
-#     forb_y = (np.random.rand(num_nans) * 100).astype(int)
-#     test_instance[forb_x, forb_y] = np.nan
-
-#     # create configuration
-#     cfg = SimpleNamespace()
-#     cfg.start_inds = np.array([6, 6])
-#     cfg.dest_inds = np.array([94, 90])
-#     cfg.max_angle_lg = np.pi / 2
-
-#     path = optimal_route(test_instance, cfg)  # , 5)
-#     print(path)
-#     plot_path(test_instance, path, buffer=0, out_path="test_optimal_route.png")
