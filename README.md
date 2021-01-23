@@ -1,10 +1,15 @@
 [![Build Status](https://travis-ci.org/NinaWie/PowerPlanner.svg?branch=master)](https://travis-ci.org/NinaWie/PowerPlanner)
 
+
 # Optimizing power infrastructure layout
 
 ![GUI](assets/GUI.png "UI for optimal power line layout")
 
 Given resistance costs for a raster of geo locations, the goal is to compute the optimal power line layout from a given start point to a given end point. The approach is to represent raster cells as vertices in a graph, place edges between them based on the minimal and maximal distance of the power towers, and define edge costs based on the underlying cost surface.
+
+## News
+
+This repo contains all code of my master thesis on power infrastructure planning. A much more usable version of the framework is available on [PyPI](https://pypi.org/project/lion-sp/) or in this [repo](https://github.com/NinaWie/lion) as a package called LION. LION provides an interface to all main algorithms and has fewer dependencies (no GUI etc like in this repo). However, this repo here provide more functions than LION, including a GUI, baseline algorithms, visualization functions, etc, so install this repo if you are interested in any of those functions.
 
 ## Installation
 
@@ -40,18 +45,18 @@ Note: If this environment is active, then the UI can not be used as `kivy` is no
 
 ## Optimal power infrastructure planning
 
-### UI
+#### UI
 
 A small python GUI serves as a demo app for the toolbox. Start the UI by running
 ```sh
 python ui.py
 ```
 
-### Demo notebook
+#### Demo notebook
 
 In the [demo](demo.ipynb) notebook, the most important functions are explained and visualizations show the input data and outputs for each processing step.
 
-### Codebase
+#### Codebase
 
 If you want to run one instance without UI, execute 
 ```sh
@@ -66,9 +71,21 @@ Optional arguments:
 
 Specify other hyperparameters in the config file of the instance (example will be added soon).
 
-## Algorithms
+#### Algorithms
 
 ![Angle](assets/cost_angle_visualization.png "Visualization of LCP computation")
 
 Different types of costs are considered and weighted: Angle costs, edge costs (cost for putting a cable above a particular position), and vertex costs (cost to place a pylon).
 An algorithm was developed to deal with angle costs, which is not possible with normal shortest path algorithms (e.g. Dijkstra). The code can be found as ```sp_dag``` or ```sp_bf``` dependent whether it is a directed acyclic graph or not, and is implemented in `numba` for efficiency.
+
+## Cite
+
+If you use this code in a publication, please cite the following paper:
+```
+@article{wiedemann2021optimization,
+  title={An Optimization Framework for Power Infrastructure Planning},
+  author={Wiedemann, Nina and Adjiashvili, David},
+  journal={arXiv preprint arXiv:2101.03388},
+  year={2021}
+}
+```
